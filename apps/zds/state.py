@@ -218,7 +218,7 @@ class ZdsState(rx.State):
 
     @rx.var
     def week_overview_url(self) -> str:
-        return f"/week/{self.current_week_id}"
+        return f"/zds/week/{self.current_week_id}"
 
     # =========================================================================
     # Week list
@@ -275,7 +275,7 @@ class ZdsState(rx.State):
     def open_week(self, week_id: str):
         """From the index — navigate to the week overview."""
         self.current_week_id = week_id
-        return rx.redirect(f"/week/{week_id}")
+        return rx.redirect(f"/zds/week/{week_id}")
 
     def on_week_overview_load(self):
         """Called on_mount for /week/[week_id] (week overview page)."""
@@ -358,7 +358,7 @@ class ZdsState(rx.State):
     def select_night(self, night_id: str):
         """Navigate to a specific night's deployment editor."""
         self.show_break_sheet = False
-        return rx.redirect(f"/week/{self.current_week_id}/day/{night_id}")
+        return rx.redirect(f"/zds/week/{self.current_week_id}/day/{night_id}")
 
     # =========================================================================
     # Print generation
