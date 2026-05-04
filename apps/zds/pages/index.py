@@ -2,6 +2,7 @@
 
 import reflex as rx
 from ..state import ZdsState
+from ..components.zds_header import zds_header
 
 
 def _week_card(week: dict) -> rx.Component:
@@ -161,24 +162,14 @@ def _schedule_upload_section() -> rx.Component:
 
 def index() -> rx.Component:
     return rx.box(
-        # Top nav
-        rx.hstack(
-            rx.vstack(
-                rx.heading("GLCR · Grave Deployment", size="6"),
-                rx.text("Zone Sheet Viewer & Editor", size="2", color="#6b7280"),
-                gap="0",
-            ),
-            rx.spacer(),
-            rx.button(
+        zds_header(
+            title="GLCR · Grave Deployment",
+            subtitle="Zone Sheet Viewer & Editor",
+            right=rx.button(
                 rx.icon("plus", size=14), "New Week",
                 color_scheme="blue",
                 on_click=ZdsState.open_new_week_modal,
             ),
-            width="100%", align="center",
-            padding="20px 32px",
-            border_bottom="1px solid #e5e7eb",
-            background="white",
-            position="sticky", top="0", z_index="10",
         ),
         # Content
         rx.vstack(

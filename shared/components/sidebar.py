@@ -4,6 +4,7 @@ components/sidebar.py — Shared sidebar navigation
 
 import reflex as rx
 from shared.base import AppState
+from shared.components.app_switcher import app_switcher
 from apps.glcr.state.today import TodayState
 
 NAV_ITEMS = [
@@ -41,6 +42,8 @@ def _nav_item(icon: str, label: str, route: str) -> rx.Component:
 
 def sidebar() -> rx.Component:
     return rx.el.aside(
+        # App switcher (GLCR / ZDS)
+        app_switcher(),
         # Brand
         rx.el.div(
             rx.el.div(class_name="brand-mark"),
