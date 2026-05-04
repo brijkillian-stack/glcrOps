@@ -208,5 +208,6 @@ def index() -> rx.Component:
         _new_week_modal(),
         background="#f9fafb",
         min_height="100vh",
-        on_mount=ZdsState.load_weeks,
+        # Page-load is wired in apps/zds/routes.py (on_load=[ZdsState.load_weeks]).
+        # Don't add a duplicate on_mount here or Supabase gets hit twice.
     )
