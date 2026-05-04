@@ -1,0 +1,106 @@
+"""
+state/health.py — HealthState
+
+Loads system health metrics from the health_metrics_v view.
+"""
+
+import reflex as rx
+from .base import AppState
+from shared.db import get_health_metrics
+
+
+class HealthState(AppState):
+    # ── Health data ───────────────────────────────────────────────────────────
+    total_notes: int = 0
+    total_entities: int = 0
+    total_events: int = 0
+    total_tasks: int = 0
+    last_note_captured_at: str = ""
+    schema_version: str = ""
+    notes_with_embedding: int = 0
+    notes_without_embedding: int = 0
+    entities_with_embedding: int = 0
+    entities_without_embedding: int = 0
+    search_log_total_rows: int = 0
+    search_log_zero_hit_count: int = 0
+    advisor_warning_count: int = 0
+
+    # ── Page state ────────────────────────────────────────────────────────────
+    loading: bool = True
+    error: str = ""
+
+    # ── Computed vars ─────────────────────────────────────────────────────────
+
+    @rx.var
+    def embedding_coverage_pct(self) -> str:
+        """Percentage of notes with embeddings."""
+        if self.total_notes == 0:
+            return "—"
+        pct = (self.notes_with_embedding / self.total_notes) * 100
+        return f"{pct:.0f}%"
+
+    @rx.var
+    def embedding_entity_label(self) -> str:
+        """Subtitle for embedding coverage card."""
+        return f"{self.entities_with_embedding}/{self.entities_without_embedding + self.entities_with_embedding} entities embedded"
+
+    @rx.var
+    def last_note_relative_time(self) -> str:
+        """Format last_note_captured_at as relative time."""
+        if not self.last_note_captured_at:
+            return "—"
+        try:
+            from datetime import datetime, timezone, timedelta
+            ts = self.last_note_captured_at.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            now = datetime.now(timezone.utc)
+            delta = now - dt
+            seconds = delta.total_seconds()
+
+            if seconds < 60:
+                return "now"
+            elif seconds < 3600:
+                mins = int(seconds / 60)
+                return f"{mins}m ago"
+            elif seconds < 86400:
+                hours = int(seconds / 3600)
+                return f"{hours}h ago"
+            else:
+                days = int(seconds / 86400)
+                return f"{days}d ago"
+        except Exception:
+            return self.last_note_captured_at[:10]
+
+    # ── Events ────────────────────────────────────────────────────────────────
+
+    @rx.event
+    async def load_health(self):
+        """Load health metrics from the database."""
+        self.loading = True
+        self.error = ""
+        yield
+
+        try:
+            data = get_health_metrics()
+            self.total_notes = data.get("total_notes", 0)
+            self.total_entities = data.get("total_entities", 0)
+            self.total_events = data.get("total_events", 0)
+            self.total_tasks = data.get("total_tasks", 0)
+            self.last_note_captured_at = data.get("last_note_captured_at", "")
+            self.schema_version = data.get("schema_version", "")
+            self.notes_with_embedding = data.get("notes_with_embedding", 0)
+            self.notes_without_embedding = data.get("notes_without_embedding", 0)
+            self.entities_with_embedding = data.get("entities_with_embedding", 0)
+            self.entities_without_embedding = data.get("entities_without_embedding", 0)
+            self.search_log_total_rows = data.get("search_log_total_rows", 0)
+            self.search_log_zero_hit_count = data.get("search_log_zero_hit_count", 0)
+            self.advisor_warning_count = data.get("advisor_warning_count", 0)
+        except Exception as exc:
+            self.error = str(exc)
+        finally:
+            self.loading = False
+
+    @rx.event
+    async def reload_health(self):
+        """Manual refresh button."""
+        yield HealthState.load_health

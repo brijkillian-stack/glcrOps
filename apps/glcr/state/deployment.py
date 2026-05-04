@@ -1,0 +1,121 @@
+"""
+state/deployment.py — DeploymentState
+
+Eligibility roster grid.  All TMs × all 28 slots, with inline toggle
+that writes immediately to Supabase.  Slot-group tabs and active-only
+filter narrow the view.
+"""
+
+import reflex as rx
+from shared.base import AppState
+from shared.db import get_deployment_roster, update_tm_eligibility, ELIGIBILITY_SLOTS
+
+
+class DeploymentState(AppState):
+
+    # ── Raw data ──────────────────────────────────────────────────────────────
+    roster: list[dict] = []
+
+    # ── UI state ──────────────────────────────────────────────────────────────
+    loading: bool = True
+    active_only: bool = True
+    slot_group: str = "Zones"    # "Zones" | "Men's RR" | "Women's RR" | "Support" | "All"
+    search_query: str = ""
+
+    # Per-cell save feedback (tm_id + ":" + slot while saving)
+    saving_cell: str = ""
+
+    # Tonight's Crew — list of tm_ids scheduled for tonight
+    tonight_crew: list[str] = []
+
+    # ── Computed vars ─────────────────────────────────────────────────────────
+
+    @rx.var
+    def filtered_roster(self) -> list[dict]:
+        rows = self.roster
+        if self.active_only:
+            rows = [r for r in rows if r.get("active", True)]
+        if self.search_query:
+            q = self.search_query.lower()
+            rows = [r for r in rows if q in r.get("name", "").lower()]
+        return rows
+
+    @rx.var
+    def tm_count(self) -> int:
+        return len(self.filtered_roster)
+
+    @rx.var
+    def group_label(self) -> str:
+        return self.slot_group
+
+    @rx.var
+    def crew_count(self) -> int:
+        return len(self.tonight_crew)
+
+    @rx.var
+    def crew_names(self) -> list[str]:
+        """Display names of tonight's crew, sorted."""
+        crew_set = set(self.tonight_crew)
+        names = [r["name"] for r in self.roster if r.get("id") in crew_set]
+        return sorted(names)
+
+    # ── Events ────────────────────────────────────────────────────────────────
+
+    @rx.event
+    async def load_roster(self):
+        self.loading = True
+        yield
+        self.roster = get_deployment_roster()
+        self.loading = False
+
+    @rx.event
+    def set_active_only(self, val: bool):
+        self.active_only = val
+
+    @rx.event
+    def set_slot_group(self, val: str):
+        self.slot_group = val
+
+    @rx.event
+    def set_search(self, val: str):
+        self.search_query = val
+
+    @rx.event
+    def toggle_crew(self, tm_id: str):
+        """Add or remove a TM from tonight's crew."""
+        if tm_id in self.tonight_crew:
+            self.tonight_crew = [t for t in self.tonight_crew if t != tm_id]
+        else:
+            self.tonight_crew = [*self.tonight_crew, tm_id]
+
+    @rx.event
+    def clear_crew(self):
+        self.tonight_crew = []
+
+    @rx.event
+    async def toggle_elig(self, tm_id: str, slot: str):
+        """
+        Flip the eligible bool for (tm_id, slot) in-state immediately
+        (flat key elig_{slot}), then persist to Supabase.
+        """
+        elig_key = f"elig_{slot}"
+
+        # 1. Optimistic update — flip the flat key in the matching row
+        new_roster: list[dict] = []
+        new_elig: dict = {}
+        for row in self.roster:
+            if row["id"] == tm_id:
+                new_val = not row.get(elig_key, False)
+                updated = {**row, elig_key: new_val}
+                new_roster.append(updated)
+                # Rebuild full slot→bool dict for Supabase
+                new_elig = {s: updated.get(f"elig_{s}", False) for s in ELIGIBILITY_SLOTS}
+            else:
+                new_roster.append(row)
+        self.roster = new_roster
+
+        # 2. Persist to Supabase
+        self.saving_cell = f"{tm_id}:{slot}"
+        yield
+        update_tm_eligibility(tm_id, new_elig)
+        self.saving_cell = ""

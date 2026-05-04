@@ -1,0 +1,118 @@
+"""
+state/recap.py — ShiftRecapState
+
+Manages the Shift Recap page: a chronological shift timeline on the left
+and a generated plain-text email draft on the right.
+"""
+
+from datetime import date
+import reflex as rx
+from .base import AppState
+from shared.db import get_shift_timeline, generate_shift_recap
+
+
+class ShiftRecapState(AppState):
+    # Date the recap covers (defaults to today on load)
+    shift_date: str = ""
+
+    # Chronological list of tonight's notes
+    timeline: list[dict] = []
+
+    # Generated plain-text recap draft (editable)
+    draft: str = ""
+
+    loading:    bool = True
+    generating: bool = False
+    copy_done:  bool = False   # flash feedback on copy
+
+    # ── Computed vars ─────────────────────────────────────────────────────────
+
+    @rx.var
+    def timeline_count(self) -> int:
+        return len(self.timeline)
+
+    @rx.var
+    def date_display(self) -> str:
+        if not self.shift_date:
+            return ""
+        try:
+            from datetime import datetime
+            dt = datetime.strptime(self.shift_date, "%Y-%m-%d")
+            return dt.strftime("%A, %B %-d")
+        except Exception:
+            return self.shift_date
+
+    @rx.var
+    def draft_ready(self) -> bool:
+        return bool(self.draft.strip())
+
+    @rx.var
+    def email_subject(self) -> str:
+        if not self.shift_date:
+            return "Grave Shift Recap"
+        try:
+            from datetime import datetime
+            dt = datetime.strptime(self.shift_date, "%Y-%m-%d")
+            return f"Grave Shift Recap — {dt.strftime('%A, %B %-d')}"
+        except Exception:
+            return f"Grave Shift Recap — {self.shift_date}"
+
+    @rx.var
+    def mailto_href(self) -> str:
+        """Pre-composed mailto: link for opening recap in Outlook."""
+        import urllib.parse
+        to = "Group - Operations Department"
+        subj = urllib.parse.quote(self.email_subject)
+        # Truncate body to stay within mailto length limits (~2000 chars)
+        body_text = self.draft[:1800] if self.draft else ""
+        if self.draft and len(self.draft) > 1800:
+            body_text += "\n\n[Truncated — paste full recap from dashboard]"
+        body = urllib.parse.quote(body_text)
+        return f"mailto:?subject={subj}&body={body}"
+
+    # ── Events ────────────────────────────────────────────────────────────────
+
+    @rx.event
+    async def load_recap(self):
+        """Load timeline for today's shift date. Auto-generates draft if timeline is non-empty."""
+        if not self.shift_date:
+            self.shift_date = date.today().isoformat()
+        self.loading = True
+        yield
+        self.timeline = get_shift_timeline(self.shift_date)
+        self.loading = False
+        # Auto-generate if there are entries and no draft yet
+        if self.timeline and not self.draft.strip():
+            yield ShiftRecapState.generate_draft
+
+    @rx.event
+    async def change_date(self, value: str):
+        """Switch to a different shift date and reload timeline."""
+        self.shift_date = value
+        self.draft = ""
+        self.loading = True
+        yield
+        self.timeline = get_shift_timeline(self.shift_date)
+        self.loading = False
+
+    @rx.event
+    async def generate_draft(self):
+        """Generate the recap draft from the current shift date's data."""
+        self.generating = True
+        yield
+        self.draft = generate_shift_recap(self.shift_date)
+        self.generating = False
+
+    @rx.event
+    def set_draft(self, value: str):
+        """Allow direct editing of the draft textarea."""
+        self.draft = value
+
+    @rx.event
+    async def copy_draft(self):
+        """Flash copy feedback — actual clipboard write happens client-side."""
+        self.copy_done = True
+        yield rx.set_clipboard(self.draft)
+        import asyncio
+        await asyncio.sleep(1.5)
+        self.copy_done = False

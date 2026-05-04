@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: glcr-memory
+    runtime: docker
+    plan: standard          # $7/mo, always-on
+    region: ohio            # Closest to Michigan
+    healthCheckPath: /
+    envVars:
+      - key: SUPABASE_URL
+        value: https://iazgrcainbokkdqunkok.supabase.co
+      - key: SUPABASE_ANON_KEY
+        sync: false         # Set in Render dashboard (anon public key)
+      - key: SUPABASE_SERVICE_KEY
+        sync: false         # Set in Render dashboard (service_role — secret)
+      - key: SUPABASE_AUTH_REDIRECT
+        sync: false         # Update to https://<your-render-url>/auth/callback
+                            # AFTER first deploy when Render gives you the URL.

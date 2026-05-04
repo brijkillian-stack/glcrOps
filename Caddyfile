@@ -1,0 +1,42 @@
+{
+    auto_https off
+    admin off
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
+
+:{$PORT} {
+    log
+
+    # ─── Basic auth gate ────────────────────────────────────────────────────
+    # Username + bcrypt hash come from Render env vars BASIC_AUTH_USER /
+    # BASIC_AUTH_HASH (set them in the Render dashboard). The /health path
+    # is excluded so Render's port-scanner can keep checking us.
+    @needs_auth not path /health
+    basic_auth @needs_auth {
+        {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+    }
+
+    # ─── Routes ─────────────────────────────────────────────────────────────
+
+    # Health endpoint for Render's port scan (no auth, no proxy).
+    handle /health {
+        respond "ok" 200
+    }
+
+    # Reflex backend: WebSocket events, RPC, uploads, healthchecks, auth.
+    @backend path /_event /_event/* /ping /ping/* /_upload /_upload/* /_health /_health/* /_all_routes /_all_routes/* /auth-codespace /auth-codespace/*
+    handle @backend {
+        reverse_proxy localhost:8000
+    }
+
+    # Static frontend (pre-exported).
+    handle {
+        root * /app/.web/build/client
+        try_files {path} {path}/ /index.html
+        file_server
+    }
+}

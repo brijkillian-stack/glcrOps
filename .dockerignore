@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.Python
+
+# Reflex build artifacts
+.web
+.states
+.next
+node_modules
+
+# Environment files
+.env
+.env.local
+.env.prod
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Tests (optional — remove if you want tests in the image)
+tests
+*.pytest_cache
+.coverage
+
+# Documentation
+*.md
+docs
+
+# Misc
+.cache
+*.log

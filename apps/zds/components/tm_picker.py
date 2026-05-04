@@ -1,0 +1,196 @@
+"""TM picker drawer — slides in when a zone/RR/aux card is clicked."""
+
+import reflex as rx
+from ..state import ZdsState
+
+_LOCK_GOLD = "#b45309"
+
+
+def _preference_star(tm: dict) -> rx.Component:
+    """Gold star when the TM's preferences include the currently-open slot."""
+    return rx.cond(
+        ZdsState.picker_slot_key != "",
+        rx.cond(
+            # preferences is a list[str] — check if picker_slot_key is in it
+            # Reflex list Vars support .contains()
+            tm["preferences"].contains(ZdsState.picker_slot_key),
+            rx.icon("star", size=12, color="#d97706",
+                    fill="#d97706", flex_shrink="0",
+                    title="Preferred zone"),
+            rx.fragment(),
+        ),
+        rx.fragment(),
+    )
+
+
+def _pool_badge(tm: dict) -> rx.Component:
+    """Coloured schedule-pool badge: GRAVE / PM OL / AM OL (hidden when off-schedule)."""
+    return rx.cond(
+        tm["on_schedule"],
+        rx.box(
+            rx.cond(
+                tm["schedule_pool"] == "grave",
+                rx.text("GRAVE", size="1", weight="bold",
+                        color="#065f46", letter_spacing="0.05em"),
+                rx.cond(
+                    tm["schedule_pool"] == "pm_ol",
+                    rx.text("PM OL", size="1", weight="bold",
+                            color="#92400e", letter_spacing="0.05em"),
+                    rx.text("AM OL", size="1", weight="bold",
+                            color="#1e3a8a", letter_spacing="0.05em"),
+                ),
+            ),
+            padding="1px 5px",
+            border_radius="3px",
+            background=rx.cond(
+                tm["schedule_pool"] == "grave", "#d1fae5",
+                rx.cond(tm["schedule_pool"] == "pm_ol", "#fef3c7", "#dbeafe"),
+            ),
+            flex_shrink="0",
+        ),
+        rx.fragment(),
+    )
+
+
+def _tm_row(tm: dict) -> rx.Component:
+    """Single TM row inside the picker."""
+    return rx.hstack(
+        # Preference star (gold, left-most)
+        _preference_star(tm),
+        # Name + pool
+        rx.vstack(
+            rx.hstack(
+                rx.text(tm["display_name"], font_weight="600", size="3"),
+                # Schedule pool badge (GRAVE / PM OL / AM OL)
+                _pool_badge(tm),
+                # "Already assigned" badge
+                rx.cond(
+                    tm["is_assigned"],
+                    rx.badge(
+                        tm["assigned_to"],
+                        color_scheme="amber",
+                        variant="soft",
+                        font_size="9px",
+                        padding="1px 5px",
+                    ),
+                    rx.fragment(),
+                ),
+                align="center", gap="6px", flex_wrap="wrap",
+            ),
+            rx.text(tm["grave_pool"], size="1", color="#6b7280"),
+            align="start", gap="0", flex="1",
+        ),
+        rx.spacer(),
+        # Skill score badge
+        rx.box(
+            rx.text(tm["skill_str"], size="1", weight="bold", color="white"),
+            background=tm["skill_color"],
+            padding="1px 6px", border_radius="full",
+            flex_shrink="0",
+        ),
+        # Assign button — dimmed when already assigned elsewhere
+        rx.button(
+            rx.cond(tm["is_assigned"], "Move", "Assign"),
+            size="1",
+            color_scheme=rx.cond(tm["is_assigned"], "gray", "blue"),
+            variant="soft",
+            on_click=ZdsState.assign_tm(tm["id"]),
+        ),
+        align="center", width="100%",
+        padding="8px 12px",
+        border_radius="6px",
+        background=rx.cond(tm["is_assigned"], "#fffbeb", "transparent"),
+        _hover={"background": rx.cond(tm["is_assigned"], "#fef3c7", "#f0f9ff")},
+        cursor="pointer",
+    )
+
+
+def tm_picker_drawer() -> rx.Component:
+    return rx.drawer.root(
+        rx.drawer.overlay(z_index="40"),
+        rx.drawer.portal(
+            rx.drawer.content(
+                # Header
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Assign TM", weight="bold", size="4"),
+                        rx.text(ZdsState.picker_label, size="2", color="#6b7280"),
+                        align="start", gap="0",
+                    ),
+                    rx.spacer(),
+                    rx.icon_button(
+                        rx.icon("x"),
+                        variant="ghost",
+                        on_click=ZdsState.close_picker,
+                    ),
+                    width="100%", align="center",
+                    padding="16px 16px 12px",
+                    border_bottom="1px solid #e5e7eb",
+                ),
+                # Search
+                rx.box(
+                    rx.input(
+                        placeholder="Search by name…",
+                        value=ZdsState.tm_search,
+                        on_change=ZdsState.set_tm_search,
+                        width="100%",
+                        auto_focus=True,
+                    ),
+                    padding="12px 16px 6px",
+                ),
+                # Legend
+                rx.hstack(
+                    rx.icon("star", size=10, color="#d97706", fill="#d97706"),
+                    rx.text("Preferred", size="1", color="#9ca3af"),
+                    rx.separator(orientation="vertical", height="10px"),
+                    rx.box(width="8px", height="8px", background="#fffbeb",
+                           border="1px solid #fbbf24", border_radius="2px"),
+                    rx.text("Placed", size="1", color="#9ca3af"),
+                    rx.separator(orientation="vertical", height="10px"),
+                    rx.box(width="22px", height="12px", background="#d1fae5",
+                           border_radius="2px"),
+                    rx.text("Scheduled", size="1", color="#9ca3af"),
+                    padding="0 16px 8px",
+                    gap="4px", align="center",
+                ),
+                # TM list
+                rx.scroll_area(
+                    rx.vstack(
+                        rx.foreach(ZdsState.filtered_tms, _tm_row),
+                        gap="0", width="100%",
+                    ),
+                    flex="1",
+                    overflow_y="auto",
+                ),
+                # Footer — clear slot
+                rx.box(
+                    rx.button(
+                        rx.icon("user-x", size=14),
+                        "Clear slot",
+                        variant="ghost",
+                        color_scheme="red",
+                        size="2",
+                        width="100%",
+                        on_click=[
+                            ZdsState.clear_slot(ZdsState.picker_slot_id),
+                            ZdsState.close_picker(),
+                        ],
+                    ),
+                    padding="12px 16px",
+                    border_top="1px solid #e5e7eb",
+                ),
+                # Drawer styles
+                top="0", right="0",
+                height="100%",
+                width="360px",
+                background="white",
+                display="flex",
+                flex_direction="column",
+                box_shadow="-4px 0 24px rgba(0,0,0,0.12)",
+                z_index="50",
+            ),
+        ),
+        direction="right",
+        open=ZdsState.show_picker,
+        on_open_change=ZdsState.close_picker,
+    )

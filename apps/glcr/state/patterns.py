@@ -1,0 +1,79 @@
+"""
+state/patterns.py — PatternsState
+
+Powers the Patterns page: three trend panels —
+  1. Call-out frequency by TM
+  2. Zone / area flag counts from floor walks
+  3. Score velocity (TMs with rising or falling skill scores)
+"""
+
+import reflex as rx
+from shared.base import AppState
+from shared.db import get_patterns_data
+
+
+class PatternsState(AppState):
+    # ── Data ──────────────────────────────────────────────────────────────────
+    callouts:     list[dict] = []
+    zone_flags:   list[dict] = []
+    score_movers: list[dict] = []
+
+    loading:     bool = True
+    window_days: int  = 30   # analysis window: 30 | 60 | 90
+
+    # ── Computed vars ─────────────────────────────────────────────────────────
+
+    @rx.var
+    def callout_count(self) -> int:
+        return len(self.callouts)
+
+    @rx.var
+    def zone_flag_count(self) -> int:
+        return len(self.zone_flags)
+
+    @rx.var
+    def mover_count(self) -> int:
+        return len(self.score_movers)
+
+    @rx.var
+    def has_callouts(self) -> bool:
+        return len(self.callouts) > 0
+
+    @rx.var
+    def has_zone_flags(self) -> bool:
+        return len(self.zone_flags) > 0
+
+    @rx.var
+    def has_movers(self) -> bool:
+        return len(self.score_movers) > 0
+
+    @rx.var
+    def window_label(self) -> str:
+        return f"Last {self.window_days} days"
+
+    # ── Events ────────────────────────────────────────────────────────────────
+
+    @rx.event
+    async def load_patterns(self):
+        self.loading = True
+        yield
+        data = get_patterns_data(self.window_days)
+        self.callouts     = data.get("callouts", [])
+        self.zone_flags   = data.get("zone_flags", [])
+        self.score_movers = data.get("score_movers", [])
+        self.loading = False
+
+    @rx.event
+    async def set_window(self, days: str):
+        """Switch analysis window (called from select element — value is a string)."""
+        try:
+            self.window_days = int(days)
+        except (ValueError, TypeError):
+            self.window_days = 30
+        self.loading = True
+        yield
+        data = get_patterns_data(self.window_days)
+        self.callouts     = data.get("callouts", [])
+        self.zone_flags   = data.get("zone_flags", [])
+        self.score_movers = data.get("score_movers", [])
+        self.loading = False
