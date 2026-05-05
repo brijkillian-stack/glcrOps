@@ -39,31 +39,58 @@ _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _PNG_MIME = "image/png"
 
 
+# Process-level flag — once we've successfully verified or created the bucket,
+# don't keep poking at it on every Storage call.
+_BUCKET_VERIFIED: bool = False
+
+
 def ensure_schedules_bucket() -> None:
     """Idempotently create the `schedules` bucket if it doesn't exist.
 
-    Safe to call on every upload — Supabase's create_bucket throws if the
-    bucket already exists, so we catch that and proceed.
+    Defensive: never raises. If the existence check or create call fails
+    (e.g. RLS on storage.buckets prevents listing), we log + continue.
+    Downstream `list/upload/download` calls have their own error paths
+    and will surface a more useful error than "couldn't introspect bucket
+    existence".
     """
+    global _BUCKET_VERIFIED
+    if _BUCKET_VERIFIED:
+        return
+
     sb = get_client()
     try:
         existing = sb.storage.list_buckets()
         names = {b.name if hasattr(b, "name") else b.get("name") for b in existing}
         if SCHEDULES_BUCKET in names:
+            _BUCKET_VERIFIED = True
             return
+        # Bucket genuinely doesn't show up — try to create it.
         sb.storage.create_bucket(
             SCHEDULES_BUCKET,
             options={"public": False, "file_size_limit": 25 * 1024 * 1024},
         )
         log.info("Created Supabase Storage bucket: %s", SCHEDULES_BUCKET)
+        _BUCKET_VERIFIED = True
     except Exception as exc:
-        # If the bucket got created between list_buckets and create_bucket,
-        # we'll see a "Bucket already exists" error — safe to swallow.
         msg = str(exc).lower()
+        # "already exists" / "duplicate" means it's there — safe to mark verified.
         if "already exists" in msg or "duplicate" in msg:
+            _BUCKET_VERIFIED = True
+            return
+        # RLS / 403 / list-buckets restrictions: the bucket is almost certainly
+        # there (we created it earlier with the service key), the API just
+        # won't tell us so. Mark verified so we don't keep retrying on every
+        # Storage call, and let downstream ops surface their own errors.
+        if "403" in msg or "row-level security" in msg or "unauthorized" in msg:
+            log.warning(
+                "Couldn't introspect schedules bucket (likely Storage RLS); "
+                "trusting it exists and proceeding. Original: %s", exc,
+            )
+            _BUCKET_VERIFIED = True
             return
         log.exception("Failed to ensure schedules bucket: %s", exc)
-        raise
+        # Even on unexpected errors — don't raise. The page should render;
+        # the Storage panel will simply show empty.
 
 
 def delete_schedule(filename: str) -> bool:
@@ -100,16 +127,22 @@ def list_schedules() -> list[dict]:
     """Return all schedules in the bucket, newest first.
 
     Each entry has at minimum: name, updated_at (str), created_at, metadata.
+    Returns [] on any error rather than raising so the index page renders
+    gracefully even if Storage is flaky.
     """
     ensure_schedules_bucket()
-    sb = get_client()
-    items = sb.storage.from_(SCHEDULES_BUCKET).list(
-        path="",
-        options={
-            "limit": 200,
-            "sortBy": {"column": "updated_at", "order": "desc"},
-        },
-    )
+    try:
+        sb = get_client()
+        items = sb.storage.from_(SCHEDULES_BUCKET).list(
+            path="",
+            options={
+                "limit": 200,
+                "sortBy": {"column": "updated_at", "order": "desc"},
+            },
+        )
+    except Exception as exc:
+        log.exception("Failed to list schedules: %s", exc)
+        return []
     # The SDK sometimes returns a "placeholder" entry .emptyFolderPlaceholder —
     # filter it out.
     return [it for it in (items or []) if it.get("name") and not it["name"].startswith(".")]
