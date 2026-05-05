@@ -115,8 +115,8 @@ class AppState(rx.State):
     async def save_capture(self):
         """Write the capture form to Supabase, then refresh Today data."""
         import uuid
-        from ..db import save_note
-        from .today import TodayState
+        from shared.db import save_note
+        from apps.glcr.state.today import TodayState
 
         if not self.capture_content.strip():
             return  # nothing to save

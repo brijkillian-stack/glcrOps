@@ -58,7 +58,7 @@ class GrokState(rx.State):
     @rx.event
     def new_conversation(self):
         """Start a fresh conversation."""
-        from ..db import list_recent_conversations
+        from shared.db import list_recent_conversations
 
         self.conversation_id = str(uuid4())
         self.messages = []
@@ -77,7 +77,7 @@ class GrokState(rx.State):
     @rx.event
     def load_conversation(self, conv_id: str):
         """Load a saved conversation by ID."""
-        from ..db import get_conversation_messages
+        from shared.db import get_conversation_messages
 
         try:
             msgs = get_conversation_messages(conv_id)
@@ -126,7 +126,7 @@ class GrokState(rx.State):
         yield  # Push user message + spinner to client immediately
 
         # Import Grok streaming client
-        from ..ai import grok_chat_stream
+        from shared.ai import grok_chat_stream
 
         # Build message history for API (user + assistant only, no tool messages in the calls)
         full_messages = [
