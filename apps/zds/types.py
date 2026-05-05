@@ -77,6 +77,12 @@ class ZoneSlot(TypedDict):
     display_tasks: list[str]   # custom_tasks from DB, or defaults from TASKS_*
     is_locked: bool            # position lock — protects TM from accidental clear
     has_duplicate: bool        # True when this TM is also assigned to another slot tonight
+    # Phase J — call-off / scheduling warning
+    # "ok"             → TM scheduled and present
+    # "called_off"     → TM is in call_offs table for this night
+    # "not_scheduled"  → TM is assigned but not in any schedule pool tonight
+    # Empty string for unfilled slots.
+    warning_status: str
 
 
 class RRSlot(TypedDict):
@@ -103,6 +109,9 @@ class RRSlot(TypedDict):
     womens_has_duplicate: bool
     womens_group: int          # break group (1/2/3); 0 = none
     display_tasks: list[str]   # from mens slot (shared for the bank)
+    # Phase J — call-off / scheduling warning per side
+    mens_warning_status: str   # "ok" | "called_off" | "not_scheduled" | ""
+    womens_warning_status: str
 
 
 class BreakRow(TypedDict):

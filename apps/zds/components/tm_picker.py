@@ -60,9 +60,26 @@ def _tm_row(tm: dict) -> rx.Component:
         # Name + pool
         rx.vstack(
             rx.hstack(
-                rx.text(tm["display_name"], font_weight="600", size="3"),
+                rx.text(
+                    tm["display_name"],
+                    font_weight="600", size="3",
+                    text_decoration=rx.cond(tm["is_called_off"], "line-through", "none"),
+                    color=rx.cond(tm["is_called_off"], "#9ca3af", "inherit"),
+                ),
                 # Schedule pool badge (GRAVE / PM OL / AM OL)
                 _pool_badge(tm),
+                # CALLED OFF badge — Phase J
+                rx.cond(
+                    tm["is_called_off"],
+                    rx.badge(
+                        "CALLED OFF",
+                        color_scheme="red",
+                        variant="solid",
+                        font_size="9px",
+                        padding="1px 5px",
+                    ),
+                    rx.fragment(),
+                ),
                 # "Already assigned" badge
                 rx.cond(
                     tm["is_assigned"],
@@ -88,13 +105,29 @@ def _tm_row(tm: dict) -> rx.Component:
             padding="1px 6px", border_radius="full",
             flex_shrink="0",
         ),
-        # Assign button — dimmed when already assigned elsewhere
-        rx.button(
-            rx.cond(tm["is_assigned"], "Move", "Assign"),
-            size="1",
-            color_scheme=rx.cond(tm["is_assigned"], "gray", "blue"),
-            variant="soft",
-            on_click=ZdsState.assign_tm(tm["id"]),
+        # Action button:
+        #   - Already assigned to another slot → Swap (Phase I) — moves both ways
+        #   - Not yet placed                   → Assign — single write
+        # The Swap button is violet to distinguish from blue Assign, and shows
+        # the source slot label so Brian knows what's flipping out.
+        rx.cond(
+            tm["is_assigned"],
+            rx.button(
+                rx.icon("arrow-left-right", size=12),
+                "Swap with ", tm["assigned_to"],
+                size="1",
+                color_scheme="violet",
+                variant="soft",
+                on_click=ZdsState.swap_tms(tm["id"]),
+                title="Move this TM here, move whoever is here into their old slot",
+            ),
+            rx.button(
+                "Assign",
+                size="1",
+                color_scheme="blue",
+                variant="soft",
+                on_click=ZdsState.assign_tm(tm["id"]),
+            ),
         ),
         align="center", width="100%",
         padding="8px 12px",

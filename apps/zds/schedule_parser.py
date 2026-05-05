@@ -138,6 +138,72 @@ def _match_name(first: str, last: str, lookup: dict[str, list[str]]) -> Optional
     return candidates[0]   # fallback: first match
 
 
+# ── Lightweight date extractor ────────────────────────────────────────────────
+# Used by Phase H "create week from schedule" flow on the /zds/ index page.
+# Reads ONLY the Sheet3 header dates — skips pool parsing for speed.
+
+def peek_schedule_dates(source) -> Optional[dict]:
+    """Extract the seven dates (and derived week_ending) from a schedule xlsx.
+
+    Args:
+        source: Either a Path to a local xlsx file or raw bytes.
+
+    Returns:
+        {
+          "dates": ["2026-05-01", "2026-05-02", ..., "2026-05-07"],  # sorted asc
+          "week_ending": "2026-05-07",                               # last date
+        }
+        or None if the file isn't parseable / is missing Sheet3.
+    """
+    import io
+    try:
+        if isinstance(source, (bytes, bytearray)):
+            wb = openpyxl.load_workbook(io.BytesIO(source), data_only=True, read_only=True)
+        else:
+            wb = openpyxl.load_workbook(str(source), data_only=True, read_only=True)
+    except Exception:
+        return None
+
+    if "Sheet3" not in wb.sheetnames:
+        wb.close()
+        return None
+
+    ws3 = wb["Sheet3"]
+    hrows = list(ws3.iter_rows(
+        min_row=_DAY_NAME_ROW, max_row=_DATE_ROW, values_only=True
+    ))
+    wb.close()
+    if len(hrows) < 2:
+        return None
+
+    date_row = hrows[1]
+    parsed: list[date] = []
+    for dval in date_row:
+        if not dval:
+            continue
+        try:
+            if isinstance(dval, (date, datetime)):
+                d = dval.date() if isinstance(dval, datetime) else dval
+            else:
+                s = str(dval).strip()
+                m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+                if not m:
+                    continue
+                d = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+            parsed.append(d)
+        except Exception:
+            continue
+
+    if not parsed:
+        return None
+
+    parsed.sort()
+    return {
+        "dates":       [d.isoformat() for d in parsed],
+        "week_ending": parsed[-1].isoformat(),
+    }
+
+
 # ── Main parser ───────────────────────────────────────────────────────────────
 
 def parse_daily_pools(

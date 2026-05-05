@@ -117,6 +117,17 @@ class ZdsState(rx.State):
     night_pm_ol_pool: list[str] = []
     night_am_ol_pool: list[str] = []
 
+    # ── Call-offs for the CURRENTLY open night (Phase J) ──────────────────────
+    # Display names of TMs marked as called off for this night. Drives:
+    #   - Schedule tab strikethrough
+    #   - Slot warning indicator on the deployment grid
+    night_called_off: list[str] = []
+
+    # display_name → tm_id lookup (populated alongside schedule pools).
+    # The Schedule tab UI shows names from the parsed xlsx, but the call_offs
+    # table is keyed by tm_id, so we need this bridge.
+    tm_name_to_id: dict = {}
+
     # ── TM Picker ─────────────────────────────────────────────────────────────
     show_picker:     bool = False
     picker_slot_id:  str = ""
@@ -133,6 +144,12 @@ class ZdsState(rx.State):
     show_new_week:   bool = False
     new_week_ending: str = ""
     new_week_label:  str = ""
+
+    # ── Unlinked schedules (Phase H) ──────────────────────────────────────────
+    # Schedules in Storage that don't yet have a Week record (or whose Week
+    # has no schedule_path linked yet). One-click "Create Zone Sheet" turns
+    # them into a real week + 7 nights.
+    unlinked_schedules: list[dict] = []
 
     # ── Task inline edit ──────────────────────────────────────────────────────
     task_edit_slot_id: str = ""
@@ -240,9 +257,69 @@ class ZdsState(rx.State):
         self.error = ""
         try:
             self.weeks = database.fetch_weeks()
+            # Phase H — also surface schedules that don't have a Zone Sheet yet
+            try:
+                self.unlinked_schedules = database.list_unlinked_schedules()
+            except Exception as ex:
+                # Storage may be unreachable in local dev — non-fatal
+                print(f"[load_weeks] list_unlinked_schedules: {ex}")
+                self.unlinked_schedules = []
         except Exception as e:
             self.error = str(e)
         finally:
+            self.loading = False
+
+    def create_week_from_schedule(self, filename: str):
+        """Phase H — given a schedule xlsx in Storage, create a Week + 7 Nights
+        for it and navigate to the new week's overview."""
+        if not filename:
+            return
+        self.loading = True
+        self.error = ""
+        try:
+            # Find the matching unlinked entry to grab its parsed dates.
+            entry = next(
+                (u for u in self.unlinked_schedules if u["filename"] == filename),
+                None,
+            )
+            if not entry:
+                self.error = f"Schedule {filename} not in unlinked list — refresh and retry."
+                self.loading = False
+                return
+
+            # If the entry already has a matching_week (existing week with no
+            # schedule_path), just link them. Otherwise create a new week.
+            if entry.get("matching_week"):
+                existing_week_id = entry["matching_week"]["id"]
+                ok = database.update_week_schedule_path(existing_week_id, filename)
+                if not ok:
+                    self.error = "Failed to link schedule to existing week."
+                    self.loading = False
+                    return
+                self.unlinked_schedules = database.list_unlinked_schedules()
+                self.weeks = database.fetch_weeks()
+                self.loading = False
+                return rx.redirect(f"/zds/week/{existing_week_id}")
+
+            # No existing week — create one.
+            week = database.create_week_with_nights(
+                week_ending=entry["week_ending"],
+                dates=entry["dates"],
+                schedule_path=filename,
+                label=f"Week ending {entry['week_ending']}",
+            )
+            new_week_id = week.get("id", "")
+            if not new_week_id:
+                self.error = "Failed to create week."
+                self.loading = False
+                return
+            # Refresh local state
+            self.unlinked_schedules = database.list_unlinked_schedules()
+            self.weeks = database.fetch_weeks()
+            self.loading = False
+            return rx.redirect(f"/zds/week/{new_week_id}")
+        except Exception as e:
+            self.error = str(e)
             self.loading = False
 
     def open_new_week_modal(self):
@@ -345,6 +422,13 @@ class ZdsState(rx.State):
             self.schedule_pools = pools
             path = schedule_parser.get_latest_schedule_path()
             self.schedule_file_name = path.name if path else ""
+            # Phase J — display_name → tm_id lookup so the Schedule tab can
+            # call mark_called_off / unmark_called_off with just a name.
+            self.tm_name_to_id = {
+                e.get("display_name", ""): e["id"]
+                for e in entities
+                if e.get("display_name") and e.get("id")
+            }
             if self.current_night_id:
                 self._update_night_pools()
         except Exception as e:
@@ -356,6 +440,11 @@ class ZdsState(rx.State):
         Inputs/ dir (for immediate parser reload) AND Supabase Storage (so
         the schedule survives container restarts on Render), then refresh
         the pool data.
+
+        Phase H: also auto-link the new file to an existing Week record if
+        one already exists for the same week_ending and has no schedule_path.
+        And refresh the unlinked-schedules list so the index page picks up
+        any new "creatable" entries.
         """
         from . import schedule_parser
         from shared import storage
@@ -374,7 +463,26 @@ class ZdsState(rx.State):
             except Exception as exc:
                 # Don't fail the UI on Storage error — just log and surface.
                 self.error = f"Saved locally; Storage sync failed: {exc}"
+
+            # 3. Phase H — auto-link to a matching week if there's an unlinked one.
+            try:
+                peek = schedule_parser.peek_schedule_dates(upload_data)
+                if peek:
+                    we = peek["week_ending"]
+                    for w in database.fetch_weeks():
+                        if w["week_ending"] == we and not w.get("schedule_path"):
+                            database.update_week_schedule_path(w["id"], file.filename)
+                            break
+            except Exception as exc:
+                print(f"[upload] auto-link failed: {exc}")
+
         self._reload_schedule()
+        # Phase H — refresh the index page's unlinked + week lists
+        try:
+            self.unlinked_schedules = database.list_unlinked_schedules()
+            self.weeks = database.fetch_weeks()
+        except Exception:
+            pass
 
     def select_night(self, night_id: str):
         """Navigate to a specific night's deployment editor."""
@@ -428,6 +536,22 @@ class ZdsState(rx.State):
         self.current_night_id = night_id
         self.loading = True
         try:
+            # Phase J — fetch call-offs for this night BEFORE building slot dicts,
+            # so we can stamp warning_status onto each filled slot.
+            night_date = ""
+            for n in self.nights:
+                if n["id"] == night_id:
+                    night_date = n.get("night_date", "")
+                    break
+            if night_date:
+                try:
+                    self.night_called_off = database.fetch_called_off_names_for_night(night_date)
+                except Exception as exc:
+                    print(f"[_load_night] call-offs fetch: {exc}")
+                    self.night_called_off = []
+            else:
+                self.night_called_off = []
+
             all_slots = database.fetch_zone_assignments(night_id)
             self.zone_slots = [s for s in all_slots if s["slot_type"] == "zone"]
             self.aux_slots  = [s for s in all_slots if s["slot_type"] == "aux"]
@@ -483,6 +607,36 @@ class ZdsState(rx.State):
             self.overlap_rows = database.fetch_overlap_assignments(night_id)
             # Extract schedule pool lists for this night
             self._update_night_pools()
+
+            # Phase J — stamp warning_status on every filled slot.
+            # "called_off"    if TM display_name is in self.night_called_off
+            # "not_scheduled" if TM is assigned but not in any pool tonight
+            #                 (and pools are populated — empty pools mean no
+            #                 schedule uploaded yet, so suppress this warning)
+            scheduled_set = (
+                set(self.night_grave_pool)
+                | set(self.night_pm_ol_pool)
+                | set(self.night_am_ol_pool)
+            )
+            called_off_set = set(self.night_called_off)
+            pools_known = bool(scheduled_set)
+
+            def _classify(name: str) -> str:
+                if not name or name == "Unfilled":
+                    return ""
+                if name in called_off_set:
+                    return "called_off"
+                if pools_known and name not in scheduled_set:
+                    return "not_scheduled"
+                return "ok"
+
+            for s in self.zone_slots:
+                s["warning_status"] = _classify(s.get("display_name") or s.get("tm_name", ""))
+            for s in self.aux_slots:
+                s["warning_status"] = _classify(s.get("display_name") or s.get("tm_name", ""))
+            for rr in self.rr_slots:
+                rr["mens_warning_status"]   = _classify(rr.get("mens_name", ""))
+                rr["womens_warning_status"] = _classify(rr.get("womens_name", ""))
         except Exception as e:
             self.error = str(e)
         finally:
@@ -519,29 +673,51 @@ class ZdsState(rx.State):
             tms = database.fetch_eligible_tms_for_slot(
                 slot_key, rr_side if rr_side else None
             )
-            # Build a fast tm_id → slot_label map for this night
-            tm_slot_map: dict[str, str] = {}
+            # Build a fast tm_id → (slot_label, slot_id, slot_locked) map for this night.
+            # Phase I: Swap needs the source slot_id so we can rewrite the originating
+            # placement. We also need to know if the source slot is locked — swap
+            # must refuse if either side is locked.
+            tm_slot_map: dict[str, tuple[str, str, bool]] = {}
             for s in self.zone_slots:
                 if s.get("tm_id"):
-                    tm_slot_map[s["tm_id"]] = s["label"]
+                    tm_slot_map[s["tm_id"]] = (s["label"], s["id"], bool(s.get("is_locked")))
             for s in self.aux_slots:
                 if s.get("tm_id"):
-                    tm_slot_map[s["tm_id"]] = s["label"]
+                    tm_slot_map[s["tm_id"]] = (s["label"], s["id"], bool(s.get("is_locked")))
             for rr in self.rr_slots:
                 if rr.get("mens_tm_id"):
-                    tm_slot_map[rr["mens_tm_id"]] = f"{rr['label']} M"
+                    tm_slot_map[rr["mens_tm_id"]] = (
+                        f"{rr['label']} M",
+                        rr.get("mens_slot_id", ""),
+                        bool(rr.get("mens_is_locked")),
+                    )
                 if rr.get("womens_tm_id"):
-                    tm_slot_map[rr["womens_tm_id"]] = f"{rr['label']} W"
+                    tm_slot_map[rr["womens_tm_id"]] = (
+                        f"{rr['label']} W",
+                        rr.get("womens_slot_id", ""),
+                        bool(rr.get("womens_is_locked")),
+                    )
             # Annotate each TM with their current assignment for this night
             for tm in tms:
-                assigned = tm_slot_map.get(tm["id"], "")
-                tm["is_assigned"] = bool(assigned)
-                tm["assigned_to"] = assigned
+                entry = tm_slot_map.get(tm["id"])
+                if entry:
+                    label, src_id, src_locked = entry
+                    tm["is_assigned"]      = True
+                    tm["assigned_to"]      = label
+                    tm["assigned_slot_id"] = src_id
+                    tm["assigned_locked"]  = src_locked
+                else:
+                    tm["is_assigned"]      = False
+                    tm["assigned_to"]      = ""
+                    tm["assigned_slot_id"] = ""
+                    tm["assigned_locked"]  = False
 
             # Annotate each TM with their schedule pool for tonight
-            grave_set = set(self.night_grave_pool)
-            pm_set    = set(self.night_pm_ol_pool)
-            am_set    = set(self.night_am_ol_pool)
+            # Phase J — also flag called-off TMs so the picker can warn
+            grave_set     = set(self.night_grave_pool)
+            pm_set        = set(self.night_pm_ol_pool)
+            am_set        = set(self.night_am_ol_pool)
+            called_off_set = set(self.night_called_off)
             for tm in tms:
                 dn = tm["display_name"]
                 if dn in grave_set:
@@ -556,6 +732,7 @@ class ZdsState(rx.State):
                 else:
                     tm["on_schedule"]   = False
                     tm["schedule_pool"] = "off"
+                tm["is_called_off"] = dn in called_off_set
 
             # Sort: scheduled TMs first (grave → pm_ol → am_ol → off),
             #       already-assigned slots sink to the bottom within each group
@@ -725,6 +902,150 @@ class ZdsState(rx.State):
         except Exception as e:
             self.error = str(e)
         self.close_picker()
+
+    def swap_tms(self, target_tm_id: str):
+        """Phase I — Swap a TM from their current slot into the picker's
+        target slot, simultaneously moving whoever was in the target slot
+        (if anyone) into the source's slot.
+
+        Refuses if either side is locked. Logs both legs of the swap to the
+        audit banner.
+        """
+        if not self.picker_slot_id:
+            return
+        target_slot_id = self.picker_slot_id  # the slot we tapped to open the picker
+
+        # Resolve the source slot from the eligible_tms metadata
+        tm_entry = next(
+            (tm for tm in self.eligible_tms if tm["id"] == target_tm_id),
+            None,
+        )
+        if not tm_entry:
+            self.error = "TM not found in picker list — refresh the picker."
+            self.close_picker()
+            return
+        source_slot_id = tm_entry.get("assigned_slot_id", "")
+        if not source_slot_id:
+            # Shouldn't happen — UI only shows Swap on currently-assigned TMs.
+            self.error = "Cannot swap: TM has no current placement."
+            self.close_picker()
+            return
+
+        # Lock guards on both legs
+        if tm_entry.get("assigned_locked"):
+            self.error = (
+                f"Source slot ({tm_entry.get('assigned_to', '?')}) is locked. "
+                "Unlock it first."
+            )
+            self.close_picker()
+            return
+        target_locked = False
+        for s in self.zone_slots + self.aux_slots:
+            if s["id"] == target_slot_id:
+                target_locked = s.get("is_locked", False)
+                break
+        # RR slots
+        if not target_locked:
+            for rr in self.rr_slots:
+                if rr.get("mens_slot_id") == target_slot_id and rr.get("mens_is_locked"):
+                    target_locked = True
+                if rr.get("womens_slot_id") == target_slot_id and rr.get("womens_is_locked"):
+                    target_locked = True
+        if target_locked:
+            self.error = "Target slot is locked. Unlock it first before swapping."
+            self.close_picker()
+            return
+
+        # Capture before-state for the audit log
+        target_label, target_prev_tm_id, target_prev_tm_name = self._describe_slot(target_slot_id)
+        source_label, _src_curr_id, _src_curr_name = self._describe_slot(source_slot_id)
+        target_tm_name = tm_entry["display_name"]
+
+        try:
+            # Two writes, in order:
+            #   1. Put target_tm into the picker's target slot
+            #   2. Put whoever was previously in the target slot (if anyone)
+            #      into the source slot. If the target was empty, just clear
+            #      the source.
+            database.update_zone_assignment(target_slot_id, target_tm_id)
+            database.update_zone_assignment(source_slot_id, target_prev_tm_id or None)
+
+            # Re-run break-wave engine + reload UI state for the night
+            self._do_engine_night(self.current_night_id)
+            self._load_night(self.current_night_id)
+
+            # Audit log — two entries, one per leg, so undo can revert both.
+            self._log_change(
+                kind="swap",
+                slot_id=target_slot_id,
+                target_label=target_label,
+                detail=(
+                    f"{target_tm_name} → {target_label}  ⇄  "
+                    f"{target_prev_tm_name or 'Unfilled'} → {source_label}"
+                ),
+                icon="arrow-left-right",
+                accent="#7c3aed",   # violet — distinguishes swap from assign/clear
+                prev_tm_id=target_prev_tm_id,
+            )
+        except Exception as e:
+            self.error = f"Swap failed: {e}"
+        self.close_picker()
+
+    # =========================================================================
+    # Call-offs (Phase J)
+    # =========================================================================
+
+    def toggle_call_off_by_name(self, display_name: str):
+        """Toggle call-off status for a TM identified by display_name.
+
+        Used by the Schedule tab where we only know the parsed name from the
+        xlsx, not the tm_id. Looks up the tm_id, then marks or unmarks based
+        on current state.
+        """
+        if not display_name:
+            return
+        tm_id = self.tm_name_to_id.get(display_name, "")
+        if not tm_id:
+            self.error = f"Couldn't find TM '{display_name}' in entities."
+            return
+        if display_name in self.night_called_off:
+            self.unmark_called_off(tm_id)
+        else:
+            self.mark_called_off(tm_id)
+
+    def mark_called_off(self, tm_id: str, reason: str = ""):
+        """Mark a TM as called off for the currently-open night."""
+        night_date = ""
+        for n in self.nights:
+            if n["id"] == self.current_night_id:
+                night_date = n.get("night_date", "")
+                break
+        if not night_date or not tm_id:
+            return
+        try:
+            ok = database.add_call_off(tm_id, night_date, reason)
+            if not ok:
+                self.error = "Failed to mark called off."
+                return
+            # Refresh — will recompute warning_status on every slot too
+            self._load_night(self.current_night_id)
+        except Exception as e:
+            self.error = str(e)
+
+    def unmark_called_off(self, tm_id: str):
+        """Remove a call-off mark for the currently-open night."""
+        night_date = ""
+        for n in self.nights:
+            if n["id"] == self.current_night_id:
+                night_date = n.get("night_date", "")
+                break
+        if not night_date or not tm_id:
+            return
+        try:
+            database.remove_call_off(tm_id, night_date)
+            self._load_night(self.current_night_id)
+        except Exception as e:
+            self.error = str(e)
 
     def clear_slot(self, slot_id: str):
         # Guard: refuse to clear a locked slot
@@ -1028,8 +1349,13 @@ class ZdsState(rx.State):
         from .engine_bridge import run_fill_engine
         from . import database
 
-        # Run the engine (uses auto-detected latest schedule file)
-        result = run_fill_engine()
+        # Phase H: prefer the schedule_path explicitly linked to this week.
+        # Falls back to mtime auto-pick (legacy behavior) only when no link exists.
+        linked_path = (self.week_info or {}).get("schedule_path") or ""
+        if linked_path:
+            result = run_fill_engine(schedule_file=linked_path)
+        else:
+            result = run_fill_engine()
 
         if result.get("error"):
             return f"Engine error: {result['error']}"

@@ -92,6 +92,90 @@ def _new_week_modal() -> rx.Component:
     )
 
 
+def _unlinked_schedule_row(item: dict) -> rx.Component:
+    """One row in the 'Schedules without Zone Sheet' list.
+
+    Item shape (from database.list_unlinked_schedules):
+        filename, week_ending, dates[7], matching_week | None
+    """
+    # Button label adapts: link existing week vs create a new one.
+    btn_label = rx.cond(
+        item["matching_week"],
+        "Link to existing week",
+        "Create Zone Sheet",
+    )
+    btn_icon = rx.cond(item["matching_week"], "link-2", "plus")
+    return rx.hstack(
+        rx.icon("calendar-clock", size=16, color="#0065BF"),
+        rx.vstack(
+            rx.text(
+                "Week ending ", item["week_ending"],
+                size="2", weight="bold",
+            ),
+            rx.text(item["filename"], size="1", color="#9ca3af"),
+            gap="0",
+            align="start",
+        ),
+        rx.spacer(),
+        rx.button(
+            rx.icon(btn_icon, size=13),
+            btn_label,
+            size="2",
+            color_scheme="blue",
+            variant="soft",
+            cursor="pointer",
+            on_click=ZdsState.create_week_from_schedule(item["filename"]),
+        ),
+        width="100%",
+        align="center",
+        padding="10px 14px",
+        background="white",
+        border="1px solid #dbeafe",
+        border_radius="8px",
+    )
+
+
+def _unlinked_schedules_section() -> rx.Component:
+    """Phase H — surfaces schedules in Storage that aren't yet linked to a Week."""
+    return rx.cond(
+        ZdsState.unlinked_schedules.length() > 0,
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("file-spreadsheet", size=15, color="#0065BF"),
+                    rx.text(
+                        "Schedules without a Zone Sheet",
+                        size="2", weight="bold",
+                    ),
+                    rx.spacer(),
+                    rx.badge(
+                        ZdsState.unlinked_schedules.length(),
+                        color_scheme="blue",
+                        variant="soft",
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.text(
+                    "Click to create a Zone Sheet from the schedule, "
+                    "or link the schedule to an existing week.",
+                    size="1", color="#9ca3af",
+                ),
+                rx.vstack(
+                    rx.foreach(ZdsState.unlinked_schedules, _unlinked_schedule_row),
+                    gap="6px", width="100%",
+                ),
+                gap="8px", width="100%",
+            ),
+            padding="14px 16px",
+            background="#eaf4ff",
+            border="1px solid #bfdbfe",
+            border_radius="10px",
+            width="100%",
+        ),
+        rx.fragment(),
+    )
+
+
 def _schedule_upload_section() -> rx.Component:
     """Card on the index page for uploading / replacing the weekly schedule file."""
     return rx.box(
@@ -184,6 +268,8 @@ def index() -> rx.Component:
                     ),
                     # Schedule upload card
                     _schedule_upload_section(),
+                    # Phase H — schedules with no Zone Sheet yet (creatable)
+                    _unlinked_schedules_section(),
                     rx.cond(
                         ZdsState.weeks.length() == 0,
                         rx.vstack(

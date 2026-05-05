@@ -38,6 +38,43 @@ def _lock_icon(slot_id, is_locked) -> rx.Component:
     )
 
 
+def _warning_badge(status) -> rx.Component:
+    """Phase J — Call-off / not-scheduled warning displayed below the TM name.
+
+    `status` is a Reflex Var; one of "ok", "called_off", "not_scheduled", or "".
+    """
+    return rx.cond(
+        status == "called_off",
+        rx.hstack(
+            rx.icon("octagon-x", size=10, color="white"),
+            rx.text("CALLED OFF", size="1", color="white",
+                    font_weight="800", letter_spacing="0.06em"),
+            background="#dc2626",
+            border_radius="3px",
+            padding="1px 6px",
+            align="center", gap="3px",
+            margin_top="2px",
+            display="inline-flex",
+        ),
+        rx.cond(
+            status == "not_scheduled",
+            rx.hstack(
+                rx.icon("triangle-alert", size=10, color="#7c2d12"),
+                rx.text("NOT SCHEDULED", size="1", color="#7c2d12",
+                        font_weight="800", letter_spacing="0.06em"),
+                background="#fed7aa",
+                border="1px solid #fb923c",
+                border_radius="3px",
+                padding="1px 6px",
+                align="center", gap="3px",
+                margin_top="2px",
+                display="inline-flex",
+            ),
+            rx.fragment(),
+        ),
+    )
+
+
 def _duplicate_banner() -> rx.Component:
     return rx.hstack(
         rx.icon("triangle-alert", size=9, color="#92400e"),
@@ -242,6 +279,8 @@ def zone_card(slot: dict) -> rx.Component:
             rx.cond(slot["has_trainee"], _trainee_chip(slot["trainee_name"]), rx.fragment()),
             # Duplicate warning
             rx.cond(slot["has_duplicate"], _duplicate_banner(), rx.fragment()),
+            # Phase J — call-off / not-scheduled warning
+            _warning_badge(slot["warning_status"]),
             on_click=ZdsState.open_picker(slot["id"], slot["slot_key"], "", slot["label"]),
             cursor="pointer",
             _hover={"opacity": "0.85"},
@@ -272,7 +311,8 @@ def rr_card(slot: dict) -> rx.Component:
       has_alert, alert_target, is_sweeper, sweeper_route, display_tasks
     """
     def _side(name, slot_id, side_label: str, rr_side: str,
-              group_num, is_filled, is_locked, has_duplicate) -> rx.Component:
+              group_num, is_filled, is_locked, has_duplicate,
+              warning_status) -> rx.Component:
         return rx.box(
             # Lock icon for this side
             rx.box(
@@ -320,6 +360,8 @@ def rr_card(slot: dict) -> rx.Component:
                     white_space="nowrap", overflow="hidden", text_overflow="ellipsis",
                 ),
                 rx.cond(has_duplicate, _duplicate_banner(), rx.fragment()),
+                # Phase J — call-off / not-scheduled badge
+                _warning_badge(warning_status),
                 align="start", gap="1",
                 cursor="pointer",
                 on_click=ZdsState.open_picker(slot_id, slot["slot_key"], rr_side,
@@ -343,11 +385,13 @@ def rr_card(slot: dict) -> rx.Component:
         rx.hstack(
             _side(slot["mens_name"],   slot["mens_slot_id"],   "Men's",   "mens",
                   slot["mens_group"],   slot["mens_is_filled"],
-                  slot["mens_is_locked"], slot["mens_has_duplicate"]),
+                  slot["mens_is_locked"], slot["mens_has_duplicate"],
+                  slot["mens_warning_status"]),
             rx.divider(orientation="vertical", height="36px", color="#e5e7eb"),
             _side(slot["womens_name"], slot["womens_slot_id"], "Women's", "womens",
                   slot["womens_group"], slot["womens_is_filled"],
-                  slot["womens_is_locked"], slot["womens_has_duplicate"]),
+                  slot["womens_is_locked"], slot["womens_has_duplicate"],
+                  slot["womens_warning_status"]),
             gap="8px", width="100%", align="start", margin_top="4px",
         ),
         rx.cond(
@@ -388,6 +432,8 @@ def aux_card(slot: dict) -> rx.Component:
                 margin_top="3px",
             ),
             rx.cond(slot["has_duplicate"], _duplicate_banner(), rx.fragment()),
+            # Phase J — call-off / not-scheduled badge
+            _warning_badge(slot["warning_status"]),
             on_click=ZdsState.open_picker(slot["id"], slot["slot_key"], "", slot["label"]),
             cursor="pointer",
             _hover={"opacity": "0.85"},

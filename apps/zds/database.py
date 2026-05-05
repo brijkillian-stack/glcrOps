@@ -93,14 +93,153 @@ def fetch_weeks() -> list[dict]:
     return res.data or []
 
 
-def create_week(week_ending: str, label: str) -> dict:
+def create_week(week_ending: str, label: str, schedule_path: Optional[str] = None) -> dict:
+    payload = {"week_ending": week_ending, "label": label, "status": "draft"}
+    if schedule_path:
+        payload["schedule_path"] = schedule_path
     res = (
         _client()
         .table("weeks")
-        .insert({"week_ending": week_ending, "label": label, "status": "draft"})
+        .insert(payload)
         .execute()
     )
     return res.data[0] if res.data else {}
+
+
+def update_week_schedule_path(week_id: str, schedule_path: str) -> bool:
+    """Link an existing week to a schedule xlsx in Storage."""
+    try:
+        (
+            _client()
+            .table("weeks")
+            .update({"schedule_path": schedule_path})
+            .eq("id", week_id)
+            .execute()
+        )
+        return True
+    except Exception:
+        return False
+
+
+def list_unlinked_schedules() -> list[dict]:
+    """Return schedules in Storage that aren't yet linked to a Week record.
+
+    For each storage file that has parseable dates, returns:
+        {
+          "filename":     "Weekly TM EOW 5-07.xlsx",
+          "week_ending":  "2026-05-07",
+          "dates":        ["2026-05-01", ..., "2026-05-07"],
+          "matching_week": {"id": "...", "label": "..."} | None,
+        }
+
+    A schedule is shown if:
+      - No Week with that week_ending exists, OR
+      - A Week exists for that week_ending but its schedule_path is NULL/empty.
+    Schedules already linked to their week are filtered out.
+    """
+    from shared import storage
+    from . import schedule_parser
+
+    schedules = storage.list_schedules()
+    if not schedules:
+        return []
+
+    # Index existing weeks by week_ending for O(1) lookup
+    weeks_by_date: dict[str, dict] = {
+        w["week_ending"]: w for w in fetch_weeks()
+    }
+    # Also index schedule_paths already in use so we never double-list
+    linked_paths: set[str] = {
+        w.get("schedule_path") for w in weeks_by_date.values()
+        if w.get("schedule_path")
+    }
+
+    unlinked: list[dict] = []
+    sb = _client()
+    for s in schedules:
+        name = s["name"]
+        if name in linked_paths:
+            continue   # this xlsx is already the canonical schedule for some week
+
+        # Download just enough bytes to peek the dates. The whole file is
+        # only ~30KB so just fetch it all rather than range-requesting.
+        try:
+            blob: bytes = sb.storage.from_("schedules").download(name)
+        except Exception:
+            continue
+        peek = schedule_parser.peek_schedule_dates(blob)
+        if not peek:
+            continue
+
+        we = peek["week_ending"]
+        match = weeks_by_date.get(we)
+        # If a week exists for this date AND it's already linked to a different
+        # schedule_path, skip (don't surface as a "create" option).
+        if match and match.get("schedule_path") and match["schedule_path"] != name:
+            continue
+
+        unlinked.append({
+            "filename":     name,
+            "week_ending":  we,
+            "dates":        peek["dates"],
+            "matching_week": (
+                {"id": match["id"], "label": match.get("label") or ""}
+                if match else None
+            ),
+        })
+
+    # Sort by week_ending ascending so upcoming weeks bubble up first
+    unlinked.sort(key=lambda u: u["week_ending"])
+    return unlinked
+
+
+def create_week_with_nights(
+    week_ending: str,
+    dates: list[str],
+    schedule_path: Optional[str] = None,
+    label: str = "",
+) -> dict:
+    """Atomically create a Week + its 7 Night rows, optionally linked to a
+    schedule xlsx in Storage. Returns the new Week dict."""
+    sb = _client()
+    payload = {"week_ending": week_ending, "label": label, "status": "draft"}
+    if schedule_path:
+        payload["schedule_path"] = schedule_path
+
+    # 1. Insert the week
+    week_res = sb.table("weeks").insert(payload).execute()
+    if not week_res.data:
+        raise RuntimeError(f"Failed to create week ending {week_ending}")
+    week = week_res.data[0]
+    week_id = week["id"]
+
+    # 2. Insert 7 nights — one per date in the schedule
+    DAY_NAMES = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday",
+                 4: "Friday", 5: "Saturday", 6: "Sunday"}
+    night_rows = []
+    from datetime import date as _date
+    for idx, d_str in enumerate(sorted(dates)):
+        try:
+            y, m, d = (int(p) for p in d_str.split("-"))
+            d_obj = _date(y, m, d)
+            day_name = DAY_NAMES[d_obj.weekday()]
+        except Exception:
+            day_name = ""
+        night_rows.append({
+            "week_id":    week_id,
+            "night_date": d_str,
+            "day_name":   day_name,
+            "day_num":    idx + 1,
+            "page_num":   idx + 1,
+            "in_rotation": 0,
+            "break_mode": "BY_BREAK_WAVE",
+            "status":     "draft",
+        })
+
+    if night_rows:
+        sb.table("nights").insert(night_rows).execute()
+
+    return week
 
 
 def fetch_week(week_id: str) -> dict:
@@ -148,6 +287,81 @@ def create_night(week_id: str, night_date: str, day_name: str,
         .execute()
     )
     return res.data[0] if res.data else {}
+
+
+# ── CALL-OFFS (Phase J) ───────────────────────────────────────────────────────
+# A call_off row marks a TM as unavailable for one specific night. Drives:
+#   - Schedule tab strikethrough on that TM's name
+#   - Deployment slot warning indicator if the TM is currently assigned anywhere
+# UNIQUE(tm_id, night_date) prevents double-marking.
+
+def fetch_call_offs_for_night(night_date: str) -> list[dict]:
+    """All call_offs for the given night_date, joined with display_name.
+
+    Returns list of: {tm_id, display_name, reason, created_at}
+    """
+    res = (
+        _client()
+        .table("call_offs")
+        .select("tm_id, reason, created_at, entities(display_name)")
+        .eq("night_date", night_date)
+        .execute()
+    )
+    out: list[dict] = []
+    for row in (res.data or []):
+        ent = row.get("entities") or {}
+        out.append({
+            "tm_id":       row["tm_id"],
+            "display_name": ent.get("display_name", ""),
+            "reason":      row.get("reason") or "",
+            "created_at":  row.get("created_at") or "",
+        })
+    return out
+
+
+def fetch_called_off_names_for_night(night_date: str) -> list[str]:
+    """Just the display_names called off for this night — fast lookup for the
+    UI strikethrough check."""
+    return [c["display_name"] for c in fetch_call_offs_for_night(night_date) if c["display_name"]]
+
+
+def add_call_off(tm_id: str, night_date: str, reason: str = "") -> bool:
+    """Mark a TM called off for a night. Idempotent (UNIQUE constraint dedupes)."""
+    try:
+        (
+            _client()
+            .table("call_offs")
+            .upsert(
+                {
+                    "tm_id":      tm_id,
+                    "night_date": night_date,
+                    "reason":     reason or None,
+                },
+                on_conflict="tm_id,night_date",
+            )
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[add_call_off] {e}")
+        return False
+
+
+def remove_call_off(tm_id: str, night_date: str) -> bool:
+    """Un-mark a TM as called off for a night."""
+    try:
+        (
+            _client()
+            .table("call_offs")
+            .delete()
+            .eq("tm_id", tm_id)
+            .eq("night_date", night_date)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[remove_call_off] {e}")
+        return False
 
 
 # ── ZONE ASSIGNMENTS ──────────────────────────────────────────────────────────

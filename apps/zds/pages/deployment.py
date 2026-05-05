@@ -289,7 +289,7 @@ def _schedule_pool_section(
             rx.text(time_range, size="1", color="#9ca3af"),
             width="100%", align="center", padding="4px 0 6px",
         ),
-        # Name chips
+        # Name chips — Phase J: clickable, strikethrough when called off
         rx.cond(
             names.length() == 0,
             rx.text("None scheduled", size="1", color="#d1d5db",
@@ -298,12 +298,38 @@ def _schedule_pool_section(
                 rx.foreach(
                     names,
                     lambda name: rx.box(
-                        rx.text(name, size="2", weight="medium", color=color),
-                        background=bg,
+                        rx.cond(
+                            ZdsState.night_called_off.contains(name),
+                            # CALLED-OFF state: red border, strikethrough, "×" icon
+                            rx.hstack(
+                                rx.icon("octagon-x", size=11, color="#dc2626"),
+                                rx.text(
+                                    name,
+                                    size="2", weight="medium", color="#9ca3af",
+                                    text_decoration="line-through",
+                                ),
+                                gap="4px", align="center",
+                            ),
+                            # SCHEDULED (and present) state: colored chip
+                            rx.text(name, size="2", weight="medium", color=color),
+                        ),
+                        background=rx.cond(
+                            ZdsState.night_called_off.contains(name),
+                            "#fef2f2",   # very light red
+                            bg,
+                        ),
                         border="1px solid",
-                        border_color=color,
+                        border_color=rx.cond(
+                            ZdsState.night_called_off.contains(name),
+                            "#fecaca",
+                            color,
+                        ),
                         border_radius="full",
                         padding="3px 10px",
+                        cursor="pointer",
+                        on_click=ZdsState.toggle_call_off_by_name(name),
+                        title="Click to toggle call-off status",
+                        _hover={"opacity": "0.8"},
                     ),
                 ),
                 wrap="wrap",
