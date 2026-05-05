@@ -138,6 +138,169 @@ def _match_name(first: str, last: str, lookup: dict[str, list[str]]) -> Optional
     return candidates[0]   # fallback: first match
 
 
+# ── Per-shift roster extractor (Phase L.2 enhancement) ───────────────────────
+# Reads ALL three sheets — Days, Swings, Graves — and returns who's working,
+# on PTO, on medical leave, etc. per shift per date. Powers the recap's
+# Team Updates auto-populate so Days/Swings/Graves call-outs and PTO are
+# all surfaced from one schedule file.
+
+# Off-cell reason taxonomy. We categorize so the recap can format the
+# right phrase ("on PTO", "on MDL", "scheduled off") rather than dumping
+# raw cell values.
+_PTO_VARIANTS = (
+    "PTO HOURLY",
+    "INCENTIVE PTO",
+    "FUTURE PTO APPROVED",
+    "PTO",
+)
+_MDL_VARIANTS = ("MDL", "MEDICAL LEAVE")
+_PLAIN_OFF = ("OFF",)
+
+
+def _classify_off_value(s: str) -> str:
+    """Bucket a non-time-range cell value into a leave category.
+
+    Returns one of: "scheduled_off" | "pto" | "mdl" | "other" | ""
+    "" means the cell is junk (a stray number, header echo, etc.) and
+    should be ignored entirely.
+    """
+    if not s:
+        return ""
+    upper = s.strip().upper()
+    if not upper:
+        return ""
+    if any(v in upper for v in _PTO_VARIANTS):
+        return "pto"
+    if any(v in upper for v in _MDL_VARIANTS):
+        return "mdl"
+    if upper in _PLAIN_OFF:
+        return "scheduled_off"
+    # Day name echoes from row 6 / 7 — ignore.
+    if upper in ("FRIDAY", "SATURDAY", "SUNDAY", "MONDAY",
+                 "TUESDAY", "WEDNESDAY", "THURSDAY"):
+        return ""
+    # Pure numbers / fragments — ignore.
+    digits = upper.replace(".", "").replace(",", "").strip()
+    if digits.isdigit():
+        return ""
+    return "other"
+
+
+def _detect_shift_label(ws) -> str:
+    """Read row 6 of the sheet to detect shift label ('day' / 'swing' / 'grave').
+    Returns "" if the sheet doesn't follow the expected GLCR template."""
+    try:
+        row6 = list(ws.iter_rows(min_row=6, max_row=6, values_only=True))[0]
+    except Exception:
+        return ""
+    for cell in row6:
+        if cell is None:
+            continue
+        s = str(cell).strip().upper()
+        if "DAY SHIFT" in s:
+            return "days"
+        if "SWING SHIFT" in s:
+            return "swings"
+        if "GRAVE SHIFT" in s:
+            return "graves"
+    return ""
+
+
+def peek_shift_rosters_for_date(source, target_date: str) -> dict:
+    """Return per-shift roster status for a single date.
+
+    Args:
+        source:      Path to a local xlsx file or raw bytes.
+        target_date: ISO date string ("2026-05-04") to look up.
+
+    Returns:
+        {
+          "days":   {"working": [...], "pto": [...], "mdl": [...], "other": [...]},
+          "swings": {...},
+          "graves": {...},
+        }
+        Names are display-name format ("Brian K" / "Cookie") — caller is
+        responsible for matching to entities if it needs tm_ids.
+        Returns empty buckets for shifts whose sheet is missing or unreadable.
+    """
+    import io
+    out = {
+        "days":   {"working": [], "pto": [], "mdl": [], "other": []},
+        "swings": {"working": [], "pto": [], "mdl": [], "other": []},
+        "graves": {"working": [], "pto": [], "mdl": [], "other": []},
+    }
+    try:
+        if isinstance(source, (bytes, bytearray)):
+            wb = openpyxl.load_workbook(io.BytesIO(source), data_only=True, read_only=True)
+        else:
+            wb = openpyxl.load_workbook(str(source), data_only=True, read_only=True)
+    except Exception:
+        return out
+
+    target = target_date.strip()
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        shift = _detect_shift_label(ws)
+        if not shift:
+            continue
+        # Find the column index whose row-7 cell parses to target_date.
+        try:
+            date_row = list(ws.iter_rows(min_row=7, max_row=7, values_only=True))[0]
+        except Exception:
+            continue
+        target_col = None
+        for ci, dval in enumerate(date_row):
+            if dval is None:
+                continue
+            try:
+                if isinstance(dval, (date, datetime)):
+                    d = dval.date() if isinstance(dval, datetime) else dval
+                else:
+                    s = str(dval).strip()
+                    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+                    if not m:
+                        continue
+                    d = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+                if d.isoformat() == target:
+                    target_col = ci
+                    break
+            except Exception:
+                continue
+        if target_col is None:
+            continue
+
+        # Walk data rows, classify each TM's cell for this date
+        for row in ws.iter_rows(min_row=8, max_row=ws.max_row, values_only=True):
+            if not row or len(row) <= max(3, target_col):
+                continue
+            first = str(row[2] or "").strip()
+            last = str(row[3] or "").strip()
+            if not first or first.lower() in ("first name", "none", ""):
+                continue
+            display = f"{first} {last[0]}".strip() if last else first
+            cell = row[target_col]
+            if cell is None:
+                continue
+            s = str(cell).strip()
+            # Time range = working
+            if " - " in s and ":" in s:
+                out[shift]["working"].append(display)
+                continue
+            cat = _classify_off_value(s)
+            if cat == "pto":
+                out[shift]["pto"].append(display)
+            elif cat == "mdl":
+                out[shift]["mdl"].append(display)
+            elif cat == "scheduled_off":
+                # Plain "OFF" = pre-scheduled day off, NOT a call-out;
+                # we exclude these from the recap entirely.
+                continue
+            elif cat == "other":
+                out[shift]["other"].append(f"{display} ({s})")
+    wb.close()
+    return out
+
+
 # ── Lightweight date extractor ────────────────────────────────────────────────
 # Used by Phase H "create week from schedule" flow on the /zds/ index page.
 # Reads ONLY the Sheet3 header dates — skips pool parsing for speed.

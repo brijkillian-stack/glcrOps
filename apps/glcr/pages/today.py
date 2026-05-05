@@ -14,7 +14,6 @@ from shared.components.sidebar import sidebar
 from shared.components.ui import kpi_card, brewing_card, feed_row, empty_state, skeleton_card
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
-from shared.components.area_check import area_check_modal, area_check_fab
 from ..components.tm_drawer import global_tm_drawer
 
 
@@ -323,9 +322,8 @@ def today_page() -> rx.Component:
             title="Capture (⌘N)",
             aria_label="Quick capture",
         ),
-        # Phase M — Quick Area Check FAB (bottom-left) + modal
-        area_check_fab(),
-        area_check_modal(),
+        # Area Check overlay is mounted globally via _with_grok in
+        # brijkillian_stack.py and triggered from the sidebar nav.
         global_tm_drawer(),
         command_palette(),
         capture_modal(),

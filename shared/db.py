@@ -776,6 +776,22 @@ def fetch_recent_area_checks(limit: int = 20) -> list[dict]:
         return []
 
 
+def _join_names(names: list[str]) -> str:
+    """English-style list join: ['A','B','C'] → 'A, B, and C'.
+
+    Used by the recap auto-populate to build readable lines like
+    'Barbie, Mary, and Sue on PTO.'
+    """
+    cleaned = [n for n in (s.strip() for s in names or []) if n]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"
+
+
 def get_recap_auto_populate(shift_date: str) -> dict:
     """Phase L.2 — Pull all the Supabase-backed data we can use to pre-fill
     sections of the morning shift recap.
@@ -791,6 +807,8 @@ def get_recap_auto_populate(shift_date: str) -> dict:
         }
     """
     out = {
+        "team_days":        "",
+        "team_swings":      "",
         "team_graves":      "",
         "team_beos":        "",
         "overlap_graves":   "",
@@ -799,23 +817,91 @@ def get_recap_auto_populate(shift_date: str) -> dict:
     try:
         sb = get_client()
 
-        # ── Call-offs for graves on this date ────────────────────────────────
+        # ── Call-offs (any shift) on this date ───────────────────────────────
         co_res = (
             sb.table("call_offs")
             .select("reason, entities(display_name)")
             .eq("night_date", shift_date)
             .execute()
         )
-        co_names = []
+        call_off_names: list[tuple[str, str]] = []
         for row in (co_res.data or []):
             ent = row.get("entities") or {}
             name = ent.get("display_name", "")
             reason = (row.get("reason") or "").strip()
             if name:
-                co_names.append(f"{name} called off." if not reason
-                                else f"{name} called off ({reason}).")
-        if co_names:
-            out["team_graves"] = " ".join(co_names)
+                call_off_names.append((name, reason))
+
+        # ── Per-shift PTO/MDL from the linked weekly schedule xlsx ───────────
+        # Pulls the latest schedule from local Inputs (or Storage), parses
+        # all three sheets, returns who's PTO/MDL on this exact date.
+        # Returns empty buckets if no schedule is loaded — that's fine,
+        # the recap still gets the call-off info merged below.
+        rosters: dict = {
+            "days":   {"working": [], "pto": [], "mdl": [], "other": []},
+            "swings": {"working": [], "pto": [], "mdl": [], "other": []},
+            "graves": {"working": [], "pto": [], "mdl": [], "other": []},
+        }
+        try:
+            from apps.zds import schedule_parser
+            path = schedule_parser.get_latest_schedule_path()
+            if path:
+                rosters = schedule_parser.peek_shift_rosters_for_date(
+                    path, shift_date,
+                ) or rosters
+        except Exception as exc:
+            print(f"[recap.shift_rosters] {exc}")
+
+        # Merge call-offs (which we don't tag by shift yet) with PTO/MDL.
+        # Heuristic: a TM's call-off applies to whichever shift they're
+        # SCHEDULED on for this date. If they appear on multiple shift's
+        # rosters (rare), they get listed under each.
+        co_by_shift: dict[str, list[str]] = {"days": [], "swings": [], "graves": []}
+        unmatched_callouts: list[str] = []
+        for name, reason in call_off_names:
+            placed = False
+            for shift in ("days", "swings", "graves"):
+                # Match by display_name appearing in any roster bucket
+                bucket_names = (
+                    rosters[shift]["working"]
+                    + rosters[shift]["pto"]
+                    + rosters[shift]["mdl"]
+                )
+                if any(name.startswith(bn.split()[0]) or bn.startswith(name.split()[0])
+                       for bn in bucket_names):
+                    suffix = f" ({reason})" if reason else ""
+                    co_by_shift[shift].append(f"{name} called off{suffix}.")
+                    placed = True
+                    break
+            if not placed:
+                suffix = f" ({reason})" if reason else ""
+                unmatched_callouts.append(f"{name} called off{suffix}.")
+
+        # Assemble per-shift summary string. Format mirrors Brian's email:
+        #   "Auggie called off."
+        #   "Michelle B is off, Barbie and Mary on PTO"
+        def _fmt_shift(shift: str) -> str:
+            lines: list[str] = []
+            lines.extend(co_by_shift[shift])
+            pto = rosters[shift]["pto"]
+            mdl = rosters[shift]["mdl"]
+            other = rosters[shift]["other"]
+            if pto:
+                lines.append(_join_names(pto) + " on PTO.")
+            if mdl:
+                lines.append(_join_names(mdl) + " on MDL.")
+            if other:
+                lines.append(_join_names(other) + " unscheduled.")
+            return " ".join(lines)
+
+        out["team_days"]   = _fmt_shift("days")
+        out["team_swings"] = _fmt_shift("swings")
+        out["team_graves"] = _fmt_shift("graves")
+        # If any call-off didn't match a roster, fall back into team_graves
+        # (most common case for grave shift supervisor).
+        if unmatched_callouts:
+            tail = " ".join(unmatched_callouts)
+            out["team_graves"] = (out["team_graves"] + " " + tail).strip()
 
         # ── Captures by content_type ─────────────────────────────────────────
         notes_res = (

@@ -40,6 +40,29 @@ def _nav_item(icon: str, label: str, route: str) -> rx.Component:
     )
 
 
+def _action_item(icon: str, label: str, on_click) -> rx.Component:
+    """Sidebar entry that fires an event handler instead of navigating.
+
+    Used for actions that open overlays (e.g. Area Check) but should live
+    in the nav for thumb-reach + visibility on every page.
+    """
+    return rx.el.button(
+        rx.el.span(icon, class_name="nav-icon"),
+        rx.el.span(label, class_name="nav-label"),
+        on_click=on_click,
+        class_name="nav-item",
+        # Match the rx.link defaults so the button looks like a nav item
+        style={
+            "background": "transparent",
+            "border": "none",
+            "width": "100%",
+            "textAlign": "left",
+            "cursor": "pointer",
+            "font": "inherit",
+        },
+    )
+
+
 def sidebar() -> rx.Component:
     return rx.el.aside(
         # App switcher (GLCR / ZDS)
@@ -55,6 +78,10 @@ def sidebar() -> rx.Component:
             *[_nav_item(icon, label, route) for icon, label, route in NAV_ITEMS],
             rx.el.div(class_name="nav-divider"),
             *[_nav_item(icon, label, route) for icon, label, route in NAV_EXTRA],
+            # Phase M — Area Check action lives in the nav for visibility
+            # on every page. It fires an overlay rather than navigating.
+            rx.el.div(class_name="nav-divider"),
+            _action_item("★", "Area Check", AppState.open_area_check),
             class_name="sidebar-nav",
         ),
         # Footer

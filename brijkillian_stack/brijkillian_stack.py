@@ -15,6 +15,7 @@ import reflex as rx
 from shared.auth import AuthState
 from shared.grok_state import GrokState
 from shared.components.grok_panel import grok_panel, grok_fab
+from shared.components.area_check import area_check_modal
 
 from apps.glcr.routes import ROUTES as GLCR_ROUTES, PUBLIC_ROUTES as GLCR_PUBLIC
 from apps.zds.routes import ROUTES as ZDS_ROUTES, PUBLIC_ROUTES as ZDS_PUBLIC
@@ -56,12 +57,17 @@ if ('serviceWorker' in navigator) {
 # (for GLCR protected pages; ZDS pages don't need Grok yet)
 
 def _with_grok(page_fn):
-    """Wrap a page component with Grok panel + FAB overlay."""
+    """Wrap a page component with Grok panel + Grok FAB + Area Check modal.
+
+    The Area Check overlay is mounted globally here so the sidebar's
+    "★ Area Check" action works on any protected GLCR page.
+    """
     def wrapped() -> rx.Component:
         return rx.fragment(
             page_fn(),
             grok_fab(),
             grok_panel(),
+            area_check_modal(),
         )
     wrapped.__name__ = f"{page_fn.__name__}_with_grok"
     return wrapped
