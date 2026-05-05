@@ -22,6 +22,9 @@ class Week(TypedDict):
     week_ending: str
     label: str
     status: str  # "draft" | "published" | "archived"
+    # Phase H — file in the schedules bucket this week is built from. Empty
+    # string when not linked yet. Used by the index page card + ZDS engine.
+    schedule_path: str
 
 
 class Night(TypedDict):

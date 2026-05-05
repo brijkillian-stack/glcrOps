@@ -107,18 +107,56 @@ def create_week(week_ending: str, label: str, schedule_path: Optional[str] = Non
 
 
 def update_week_schedule_path(week_id: str, schedule_path: str) -> bool:
-    """Link an existing week to a schedule xlsx in Storage."""
+    """Link an existing week to a schedule xlsx in Storage. Pass an empty
+    string to unlink (writes NULL)."""
     try:
+        value = schedule_path if (schedule_path or "").strip() else None
         (
             _client()
             .table("weeks")
-            .update({"schedule_path": schedule_path})
+            .update({"schedule_path": value})
             .eq("id", week_id)
             .execute()
         )
         return True
     except Exception:
         return False
+
+
+def unlink_schedule_from_week(week_id: str) -> bool:
+    """Phase P — clear the schedule_path on a week (one-click "Unlink")."""
+    return update_week_schedule_path(week_id, "")
+
+
+def reset_week_placements(week_id: str) -> int:
+    """Phase P — clear every TM assignment on the week's nights so the user
+    can re-run the engine fresh. Locked slots are also cleared (the user
+    asked to start over). Returns the number of slots cleared."""
+    if not week_id:
+        return 0
+    try:
+        sb = _client()
+        # Get all night ids for the week
+        n_res = sb.table("nights").select("id").eq("week_id", week_id).execute()
+        night_ids = [n["id"] for n in (n_res.data or [])]
+        if not night_ids:
+            return 0
+        # Clear every zone_assignments row's tm_id for these nights
+        za_res = (
+            sb.table("zone_assignments")
+            .update({
+                "tm_id": None,
+                "is_filled": False,
+                "is_empty": True,
+                "is_locked": False,
+            })
+            .in_("night_id", night_ids)
+            .execute()
+        )
+        return len(za_res.data or [])
+    except Exception as e:
+        print(f"[reset_week_placements] {e}")
+        return 0
 
 
 def list_unlinked_schedules() -> list[dict]:

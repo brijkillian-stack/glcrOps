@@ -463,6 +463,106 @@ class ZdsState(rx.State):
     def cancel_replace_schedule(self):
         self.replace_target_filename = ""
 
+    # ── Unlink + Reset (Phase P) ──────────────────────────────────────────────
+
+    def unlink_schedule_from_week(self, week_id: str):
+        """Clear the schedule_path link on a week."""
+        if not week_id:
+            return
+        try:
+            database.unlink_schedule_from_week(week_id)
+        except Exception as e:
+            self.error = f"Couldn't unlink: {e}"
+            return
+        # Refresh both lists so badges update
+        try:
+            self.weeks = database.fetch_weeks()
+            self.unlinked_schedules = database.list_unlinked_schedules()
+            self.load_managed_schedules()
+        except Exception:
+            pass
+
+    # State for the "Reset from new schedule upload" modal
+    reset_week_open:        bool = False
+    reset_week_target_id:   str  = ""
+    reset_week_target_label: str = ""
+
+    def open_reset_week_modal(self, week_id: str, label: str = ""):
+        """Open the modal for replacing a week's schedule with a fresh upload."""
+        if not week_id:
+            return
+        self.reset_week_open = True
+        self.reset_week_target_id = week_id
+        self.reset_week_target_label = label or week_id[:8]
+        # The next upload will OVERWRITE / link to this week. We re-purpose
+        # replace_target_filename below if the week already had a file.
+        for w in self.weeks:
+            if w["id"] == week_id:
+                self.replace_target_filename = w.get("schedule_path") or ""
+                break
+
+    def close_reset_week_modal(self):
+        self.reset_week_open = False
+        self.reset_week_target_id = ""
+        self.reset_week_target_label = ""
+        self.replace_target_filename = ""
+
+    async def handle_reset_week_upload(self, files: list[rx.UploadFile]):
+        """Phase P — drop a new xlsx onto the reset modal:
+          1. Save to Storage (overwrites if same filename, else creates)
+          2. Link the week to this new filename
+          3. Clear all zone_assignments + overrides on the week
+        """
+        from . import schedule_parser
+        from shared import storage
+
+        if not files or not self.reset_week_target_id:
+            return
+
+        upload_dir = schedule_parser.SCHEDULE_DIR
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        new_filename = ""
+        for file in files:
+            data = await file.read()
+            new_filename = file.filename
+            (upload_dir / new_filename).write_bytes(data)
+            try:
+                storage.upload_schedule(new_filename, data)
+            except Exception as exc:
+                self.error = f"Storage upload failed: {exc}"
+                return
+
+        # Old schedule_path so we can wipe its overrides
+        old_path = ""
+        for w in self.weeks:
+            if w["id"] == self.reset_week_target_id:
+                old_path = w.get("schedule_path") or ""
+                break
+
+        try:
+            # 1. Link week to new file
+            database.update_week_schedule_path(self.reset_week_target_id, new_filename)
+            # 2. Wipe overrides for the OLD schedule_path
+            if old_path and old_path != new_filename:
+                database.delete_overrides_for_schedule(old_path)
+            # 3. Clear all zone_assignments on this week
+            cleared = database.reset_week_placements(self.reset_week_target_id)
+            self.error = ""  # success — clear any previous error banner
+            print(f"[reset_week] linked {new_filename}, cleared {cleared} slots")
+        except Exception as e:
+            self.error = f"Reset failed: {e}"
+            return
+
+        # Refresh + close modal
+        self._reload_schedule()
+        try:
+            self.weeks = database.fetch_weeks()
+            self.unlinked_schedules = database.list_unlinked_schedules()
+            self.load_managed_schedules()
+        except Exception:
+            pass
+        self.close_reset_week_modal()
+
     def open_new_week_modal(self):
         self.show_new_week = True
 

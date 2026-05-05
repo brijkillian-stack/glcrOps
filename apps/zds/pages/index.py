@@ -6,51 +6,118 @@ from ..components.zds_header import zds_header
 
 
 def _week_card(week: dict) -> rx.Component:
-    # All values are Vars — use rx.cond, never Python `or`/`if` on them.
+    """A week row — title, status, linked schedule, primary + secondary actions.
+    Phase P: dense single-row layout with linked-schedule visibility + reset/unlink."""
     title = rx.cond(week["label"] != "", week["label"], week["week_ending"])
     status_color = rx.cond(
         week["status"] == "published", "green",
         rx.cond(week["status"] == "archived", "gray", "yellow")
     )
+    has_schedule = week["schedule_path"] != ""
     return rx.box(
-        rx.vstack(
-            rx.hstack(
-                rx.text(title, weight="bold", size="4"),
-                rx.spacer(),
-                rx.badge(
-                    week["status"],
-                    color_scheme=status_color,
-                    font_size="10px", padding="2px 8px", border_radius="full",
+        rx.hstack(
+            # Left: title + week_ending + linked schedule
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("calendar-days", size=15, color="#0065BF"),
+                    rx.text(title, weight="bold", size="3"),
+                    rx.badge(
+                        week["status"],
+                        color_scheme=status_color,
+                        size="1",
+                        style={"fontSize": "9px", "padding": "1px 6px"},
+                    ),
+                    gap="6px", align="center",
                 ),
-                width="100%", align="center",
+                rx.hstack(
+                    rx.text("Week ending ", week["week_ending"],
+                            size="1", color="#9ca3af"),
+                    rx.cond(
+                        has_schedule,
+                        rx.hstack(
+                            rx.icon("link-2", size=10, color="#059669"),
+                            rx.text(week["schedule_path"], size="1", color="#059669",
+                                    style={"fontFamily": "ui-monospace, monospace"}),
+                            gap="3px", align="center",
+                        ),
+                        rx.hstack(
+                            rx.icon("unlink", size=10, color="#9ca3af"),
+                            rx.text("no schedule linked", size="1",
+                                    color="#9ca3af", style={"fontStyle": "italic"}),
+                            gap="3px", align="center",
+                        ),
+                    ),
+                    gap="10px", align="center", flex_wrap="wrap",
+                ),
+                gap="2px", align="start", flex="1",
             ),
-            rx.text("Week ending ", week["week_ending"],
-                    size="2", color="#6b7280"),
+            rx.spacer(),
+            # Right: actions
             rx.hstack(
                 rx.button(
-                    rx.icon("layout-dashboard", size=14), "Open Sheet",
-                    size="2", color_scheme="blue",
+                    rx.icon("layout-dashboard", size=13), "Open",
+                    size="1", color_scheme="blue",
                     on_click=ZdsState.open_week(week["id"]),
                 ),
-                rx.cond(
-                    week["status"] == "draft",
-                    rx.button(
-                        rx.icon("check", size=14), "Publish",
-                        size="2", variant="ghost", color_scheme="green",
-                        on_click=ZdsState.update_week_status(week["id"], "published"),
+                rx.menu.root(
+                    rx.menu.trigger(
+                        rx.icon_button(
+                            rx.icon("ellipsis-vertical", size=14),
+                            variant="ghost", size="1", color_scheme="gray",
+                            cursor="pointer",
+                        ),
                     ),
-                    rx.fragment(),
+                    rx.menu.content(
+                        rx.menu.item(
+                            rx.hstack(
+                                rx.icon("upload", size=13, color="#0ea5e9"),
+                                rx.text("Reset from new upload"),
+                                gap="8px", align="center",
+                            ),
+                            on_click=ZdsState.open_reset_week_modal(week["id"], title),
+                        ),
+                        rx.cond(
+                            has_schedule,
+                            rx.menu.item(
+                                rx.hstack(
+                                    rx.icon("unlink", size=13, color="#9ca3af"),
+                                    rx.text("Unlink schedule"),
+                                    gap="8px", align="center",
+                                ),
+                                on_click=ZdsState.unlink_schedule_from_week(week["id"]),
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            week["status"] == "draft",
+                            rx.fragment(
+                                rx.menu.separator(),
+                                rx.menu.item(
+                                    rx.hstack(
+                                        rx.icon("check-check", size=13, color="#059669"),
+                                        rx.text("Publish"),
+                                        gap="8px", align="center",
+                                    ),
+                                    on_click=ZdsState.update_week_status(
+                                        week["id"], "published",
+                                    ),
+                                ),
+                            ),
+                            rx.fragment(),
+                        ),
+                    ),
                 ),
-                gap="8px", margin_top="8px",
+                gap="6px", align="center",
             ),
-            gap="4px", width="100%",
+            width="100%", align="center", gap="10px",
         ),
         background="white",
         border="1px solid #e5e7eb",
-        border_radius="10px",
-        padding="16px",
-        _hover={"box_shadow": "0 2px 12px rgba(0,0,0,0.08)"},
-        transition="box-shadow 0.15s ease",
+        border_radius="8px",
+        padding="10px 14px",
+        _hover={"box_shadow": "0 2px 8px rgba(0,0,0,0.06)",
+                "border_color": "#dbeafe"},
+        transition="all 0.15s ease",
         width="100%",
     )
 
@@ -183,18 +250,25 @@ def _humanize_size(n: int) -> str:
 
 
 def _managed_schedule_row(item: dict) -> rx.Component:
-    """One row in the Manage Schedules panel."""
-    is_delete_target = ZdsState.delete_target_filename == item["filename"]
+    """Phase P — single-row tight layout for a stored schedule."""
+    is_delete_target  = ZdsState.delete_target_filename  == item["filename"]
     is_replace_target = ZdsState.replace_target_filename == item["filename"]
+    is_linked         = item["linked_week_id"] != ""
     return rx.box(
         rx.hstack(
-            rx.icon("file-spreadsheet", size=16, color="#0065BF"),
+            rx.icon("file-spreadsheet", size=14, color="#0065BF"),
             rx.vstack(
                 rx.hstack(
-                    rx.text(item["filename"], size="2", weight="bold"),
+                    rx.text(item["filename"], size="2", weight="bold",
+                            style={"whiteSpace": "nowrap", "overflow": "hidden",
+                                   "textOverflow": "ellipsis"}),
                     rx.cond(
-                        item["linked_week_id"] != "",
-                        rx.badge("Linked", color_scheme="blue", variant="soft", font_size="9px"),
+                        is_linked,
+                        rx.hstack(
+                            rx.icon("link-2", size=10, color="#0369a1"),
+                            rx.text(item["linked_week_label"], size="1", color="#0369a1"),
+                            gap="3px", align="center",
+                        ),
                         rx.fragment(),
                     ),
                     rx.cond(
@@ -248,6 +322,19 @@ def _managed_schedule_row(item: dict) -> rx.Component:
                             on_click=ZdsState.request_replace_schedule(item["filename"]),
                         ),
                     ),
+                    # Phase P — Unlink action (only when this file is linked to a week)
+                    rx.cond(
+                        is_linked,
+                        rx.button(
+                            rx.icon("unlink", size=12), "Unlink",
+                            size="1", variant="ghost", color_scheme="gray",
+                            on_click=ZdsState.unlink_schedule_from_week(
+                                item["linked_week_id"],
+                            ),
+                            title="Detach this file from its linked week",
+                        ),
+                        rx.fragment(),
+                    ),
                     rx.button(
                         rx.icon("trash-2", size=12),
                         size="1", variant="ghost", color_scheme="red",
@@ -259,14 +346,14 @@ def _managed_schedule_row(item: dict) -> rx.Component:
             ),
             width="100%", align="center", gap="10px",
         ),
-        padding="10px 14px",
+        padding="8px 12px",
         background="white",
         border=rx.cond(
             is_delete_target,
             "1px solid #fecaca",
             rx.cond(is_replace_target, "1px solid #fbbf24", "1px solid #e5e7eb"),
         ),
-        border_radius="8px",
+        border_radius="6px",
     )
 
 
@@ -303,70 +390,126 @@ def _managed_schedules_section() -> rx.Component:
 
 
 def _schedule_upload_section() -> rx.Component:
-    """Card on the index page for uploading / replacing the weekly schedule file."""
+    """Phase P — compact single-row upload widget. The full management lives
+    in the Schedules in Storage panel below."""
     return rx.box(
-        rx.vstack(
-            # Row: icon + label + current file name
-            rx.hstack(
-                rx.icon("calendar-check", size=16, color="#6b7280"),
-                rx.vstack(
-                    rx.text("Weekly Schedule", size="2", weight="bold"),
+        rx.hstack(
+            rx.icon("calendar-check", size=14, color="#6b7280"),
+            rx.text("Weekly Schedule", size="2", weight="bold"),
+            rx.cond(
+                ZdsState.schedule_loaded,
+                rx.hstack(
+                    rx.text("·", size="1", color="#d1d5db"),
                     rx.text(
                         ZdsState.schedule_file_label,
-                        size="1", color="#9ca3af",
+                        size="1", color="#6b7280",
+                        style={"fontFamily": "ui-monospace, monospace"},
                     ),
-                    gap="0",
+                    rx.icon("circle-check", size=11, color="#059669"),
+                    gap="6px", align="center",
                 ),
-                rx.spacer(),
-                # Upload drop zone — styled as a button
-                rx.upload(
-                    rx.button(
-                        rx.icon("upload", size=13),
-                        rx.cond(
-                            ZdsState.schedule_loaded,
-                            "Replace Schedule",
-                            "Upload Schedule",
-                        ),
-                        size="2",
-                        variant="soft",
-                        color_scheme=rx.cond(ZdsState.schedule_loaded, "gray", "blue"),
-                        cursor="pointer",
+                rx.text(" — none loaded", size="1", color="#9ca3af",
+                        style={"fontStyle": "italic"}),
+            ),
+            rx.spacer(),
+            rx.upload(
+                rx.button(
+                    rx.icon("upload", size=12),
+                    rx.cond(ZdsState.schedule_loaded, "Replace", "Upload"),
+                    size="1",
+                    variant="soft",
+                    color_scheme=rx.cond(ZdsState.schedule_loaded, "gray", "blue"),
+                    cursor="pointer",
+                ),
+                id="schedule_upload",
+                accept={
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+                },
+                max_files=1,
+                on_drop=ZdsState.handle_schedule_upload(
+                    rx.upload_files(upload_id="schedule_upload")
+                ),
+                no_drag=True,
+            ),
+            width="100%", align="center", gap="8px", flex_wrap="wrap",
+        ),
+        background="white",
+        border="1px solid #e5e7eb",
+        border_radius="8px",
+        padding="10px 14px",
+        width="100%",
+    )
+
+
+def _reset_week_modal() -> rx.Component:
+    """Phase P — drop a fresh xlsx and reset the week to it. Wipes existing
+    placements + overrides on confirm."""
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title("Reset week from new upload"),
+            rx.vstack(
+                rx.text(
+                    "Drop a new schedule for ",
+                    rx.el.b(ZdsState.reset_week_target_label),
+                    ". This will:",
+                    size="2", color="#374151",
+                ),
+                rx.el.ul(
+                    rx.el.li(
+                        "Link this week to the uploaded file",
+                        style={"fontSize": "13px", "color": "#374151"},
                     ),
-                    id="schedule_upload",
+                    rx.el.li(
+                        "Clear every TM placement on the week (locks too)",
+                        style={"fontSize": "13px", "color": "#dc2626"},
+                    ),
+                    rx.el.li(
+                        "Wipe schedule overrides from the previous file",
+                        style={"fontSize": "13px", "color": "#dc2626"},
+                    ),
+                    style={"paddingLeft": "20px", "margin": "0"},
+                ),
+                rx.text(
+                    "Run the deployment engine afterward to repopulate.",
+                    size="1", color="#9ca3af", style={"fontStyle": "italic"},
+                ),
+                rx.upload(
+                    rx.box(
+                        rx.icon("upload-cloud", size=24, color="#0ea5e9"),
+                        rx.text("Drop xlsx here or click to choose",
+                                size="2", weight="medium", color="#0ea5e9"),
+                        style={
+                            "display": "flex", "flexDirection": "column",
+                            "alignItems": "center", "gap": "6px",
+                            "padding": "20px",
+                            "border": "2px dashed #7dd3fc",
+                            "borderRadius": "8px",
+                            "background": "#f0f9ff",
+                            "cursor": "pointer",
+                        },
+                    ),
+                    id="reset_week_upload",
                     accept={
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
                     },
                     max_files=1,
-                    on_drop=ZdsState.handle_schedule_upload(
-                        rx.upload_files(upload_id="schedule_upload")
+                    on_drop=ZdsState.handle_reset_week_upload(
+                        rx.upload_files(upload_id="reset_week_upload"),
                     ),
-                    no_drag=True,
-                ),
-                width="100%", align="center", gap="10px",
-            ),
-            # Loaded indicator
-            rx.cond(
-                ZdsState.schedule_loaded,
-                rx.hstack(
-                    rx.icon("circle-check", size=12, color="#059669"),
-                    rx.text("Schedule loaded — TM Picker shows scheduled TMs first",
-                            size="1", color="#059669"),
-                    gap="4px", align="center",
                 ),
                 rx.hstack(
-                    rx.icon("info", size=12, color="#9ca3af"),
-                    rx.text("Upload a schedule Excel to enable schedule-aware TM Picker",
-                            size="1", color="#9ca3af"),
-                    gap="4px", align="center",
+                    rx.dialog.close(
+                        rx.button("Cancel", variant="ghost",
+                                  on_click=ZdsState.close_reset_week_modal),
+                    ),
+                    gap="8px", justify="end", width="100%",
                 ),
+                gap="12px", width="100%",
             ),
-            gap="10px", width="100%",
+            max_width="480px",
         ),
-        background="white",
-        border="1px solid #e5e7eb",
-        border_radius="10px",
-        padding="16px",
-        width="100%",
+        open=ZdsState.reset_week_open,
+        on_open_change=ZdsState.close_reset_week_modal,
     )
 
 
@@ -420,6 +563,8 @@ def index() -> rx.Component:
             width="100%",
         ),
         _new_week_modal(),
+        # Phase P — Reset week from new upload modal
+        _reset_week_modal(),
         background="#f9fafb",
         min_height="100vh",
         # Page-load is wired in apps/zds/routes.py (on_load=[ZdsState.load_weeks]).
