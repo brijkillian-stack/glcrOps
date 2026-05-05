@@ -57,15 +57,17 @@ class ScheduleEditorState(rx.State):
     loading: bool = True
     error:   str  = ""
 
-    # ── Unknown-name reconciler (Phase O.4) ──────────────────────────────────
+    # ── Unknown-name reconciler (Phase O.4 / Q) ──────────────────────────────
     # Names from the xlsx that don't resolve to any entity. Each entry has
-    # {first, last, display, shift}. The UI surfaces them as a banner with
-    # "Create new" / "Match to existing" actions per row.
+    # {first, last, display, shift}.
     unresolved_names: list[dict] = []
-    # Per-row action state — which name is being processed, and (if matching)
-    # which existing entity is selected from the dropdown.
+    # Per-row action state — Phase Q: clicking an unresolved name opens a
+    # modal with search + Create-new + Match-to-existing.
     reconcile_target_display: str = ""
+    reconcile_target_first:   str = ""
+    reconcile_target_shift:   str = ""
     reconcile_match_tm_id:    str = ""
+    reconcile_search:         str = ""
     reconcile_saving:         bool = False
     # All TMs available as match targets (display_name + id)
     reconcile_options: list[dict] = []
@@ -345,8 +347,17 @@ class ScheduleEditorState(rx.State):
     # =========================================================================
 
     @rx.event
+    def open_reconcile_picker(self, display: str, first: str, shift: str):
+        """Phase Q — clicking an unresolved name opens the linker modal."""
+        self.reconcile_target_display = display or ""
+        self.reconcile_target_first   = first or ""
+        self.reconcile_target_shift   = shift or ""
+        self.reconcile_match_tm_id    = ""
+        self.reconcile_search         = ""
+
+    @rx.event
     def set_reconcile_target(self, display: str):
-        """User clicked Match on a row — open the dropdown for this row."""
+        """Backward-compat — still callable with just a display name."""
         self.reconcile_target_display = display or ""
         self.reconcile_match_tm_id = ""
 
@@ -355,9 +366,25 @@ class ScheduleEditorState(rx.State):
         self.reconcile_match_tm_id = tm_id or ""
 
     @rx.event
+    def set_reconcile_search(self, v: str):
+        self.reconcile_search = v
+
+    @rx.event
     def cancel_reconcile(self):
         self.reconcile_target_display = ""
-        self.reconcile_match_tm_id = ""
+        self.reconcile_target_first   = ""
+        self.reconcile_target_shift   = ""
+        self.reconcile_match_tm_id    = ""
+        self.reconcile_search         = ""
+
+    @rx.var
+    def filtered_reconcile_options(self) -> list[dict]:
+        """Apply the search filter to the entity list for the linker modal."""
+        q = (self.reconcile_search or "").strip().lower()
+        if not q:
+            return self.reconcile_options
+        return [o for o in self.reconcile_options
+                if q in (o.get("display_name") or "").lower()]
 
     @rx.event
     def reconcile_create_new(self, display: str, shift: str):

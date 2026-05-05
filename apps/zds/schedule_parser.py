@@ -366,6 +366,12 @@ def resolve_entity_display_name(
 
     Returns "" if no entity matches — caller should fall back to the
     xlsx-derived display.
+
+    Disambiguation when multiple candidates share a first name / alias:
+      1. Match by the second token of display_name ("Stephen H" → H)
+      2. Match by metadata.match_last_initial (for entities with single-word
+         display_names like "Steve" who need a hint to win over siblings)
+      3. First-match fallback
     """
     if not first:
         return ""
@@ -378,11 +384,18 @@ def resolve_entity_display_name(
     # Multiple candidates share this first name — disambiguate by last initial.
     ln_initial = (last or "").strip()[:1].upper()
     if ln_initial:
+        # Pass 1 — explicit hint from entity metadata (top-level or .metadata)
+        for e in candidates:
+            hint = (
+                (e.get("match_last_initial") or "")
+                or ((e.get("metadata") or {}).get("match_last_initial") or "")
+            ).strip().upper()
+            if hint and hint == ln_initial:
+                return (e.get("display_name") or "").strip()
+        # Pass 2 — display_name's second token ("Stephen H" → H)
         for e in candidates:
             dn = (e.get("display_name") or "").strip()
             parts = dn.split()
-            # Entity display_names are formatted "First" or "First L" — match
-            # on the second token's first letter.
             if len(parts) > 1 and parts[1][:1].upper() == ln_initial:
                 return dn
     # Fallback: first match

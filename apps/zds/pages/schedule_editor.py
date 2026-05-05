@@ -232,74 +232,178 @@ def _grid_header() -> rx.Component:
 
 # ── Unknown-name reconciler banner (Phase O.4) ───────────────────────────────
 
-def _option_row(opt: dict) -> rx.Component:
-    """One option in the Match-to-existing dropdown."""
-    return rx.el.option(opt["display_name"], value=opt["id"])
-
-
 def _unresolved_row(item: dict) -> rx.Component:
-    """One row inside the Unknown TMs banner."""
-    is_target = ScheduleEditorState.reconcile_target_display == item["display"]
-    return rx.box(
+    """One row inside the Unknown TMs banner — Phase Q: whole row is a button
+    that opens the linker modal."""
+    return rx.el.button(
         rx.hstack(
             rx.icon("user-round-search", size=14, color="#92400e"),
             rx.vstack(
                 rx.text(item["display"], size="2", weight="bold", color="#7c2d12"),
-                rx.text("Unknown — appears on the ",
-                        item["shift"], " sheet",
+                rx.text("Unknown — on the ", item["shift"],
+                        " sheet · click to link",
                         size="1", color="#92400e"),
                 gap="0", align="start", flex="1",
             ),
             rx.spacer(),
-            # Action area — adapts based on whether this row is the active match target
-            rx.cond(
-                is_target,
-                rx.hstack(
-                    rx.el.select(
-                        rx.foreach(ScheduleEditorState.reconcile_options, _option_row),
-                        value=ScheduleEditorState.reconcile_match_tm_id,
-                        on_change=ScheduleEditorState.set_reconcile_match_tm_id,
-                        style={
-                            "fontSize": "12px", "padding": "4px 8px",
-                            "border": "1px solid #d1d5db",
-                            "borderRadius": "6px", "minWidth": "160px",
-                        },
-                    ),
-                    rx.button(
-                        "Apply",
-                        size="1", color_scheme="amber",
-                        on_click=ScheduleEditorState.reconcile_apply_match(item["first"]),
-                        disabled=ScheduleEditorState.reconcile_match_tm_id == "",
-                    ),
-                    rx.button(
-                        "Cancel",
-                        size="1", variant="soft", color_scheme="gray",
-                        on_click=ScheduleEditorState.cancel_reconcile,
-                    ),
-                    gap="6px", align="center",
-                ),
-                rx.hstack(
-                    rx.button(
-                        rx.icon("user-plus", size=12), "Create new TM",
-                        size="1", variant="soft", color_scheme="green",
-                        on_click=ScheduleEditorState.reconcile_create_new(
-                            item["display"], item["shift"],
-                        ),
-                    ),
-                    rx.button(
-                        rx.icon("link-2", size=12), "Match to existing",
-                        size="1", variant="soft", color_scheme="amber",
-                        on_click=ScheduleEditorState.set_reconcile_target(item["display"]),
-                    ),
-                    gap="6px", align="center",
-                ),
-            ),
+            rx.icon("chevron-right", size=14, color="#92400e"),
             width="100%", align="center", gap="10px",
         ),
-        padding="8px 12px",
-        background="#fffbeb",
-        border="1px solid #fcd34d",
-        border_radius="6px",
+        on_click=ScheduleEditorState.open_reconcile_picker(
+            item["display"], item["first"], item["shift"],
+        ),
+        style={
+            "padding": "8px 12px",
+            "background": "#fffbeb",
+            "border": "1px solid #fcd34d",
+            "borderRadius": "6px",
+            "cursor": "pointer",
+            "width": "100%",
+            "textAlign": "left",
+        },
+        _hover={"background": "#fef3c7", "borderColor": "#f59e0b"},
+        title="Click to link this name to an existing TM or create a new one",
+    )
+
+
+def _link_option(opt: dict) -> rx.Component:
+    """One row in the Match-to-existing list inside the linker modal.
+
+    Reflex 0.9 chains event handlers when on_click is a list — first set
+    the match target, then apply.
+    """
+    return rx.el.button(
+        rx.hstack(
+            rx.icon("user", size=12, color="#0065BF"),
+            rx.text(opt["display_name"], size="2", weight="medium",
+                    color="#111827"),
+            rx.spacer(),
+            rx.icon("link-2", size=11, color="#0065BF"),
+            width="100%", align="center", gap="8px",
+        ),
+        on_click=[
+            ScheduleEditorState.set_reconcile_match_tm_id(opt["id"]),
+            ScheduleEditorState.reconcile_apply_match(
+                ScheduleEditorState.reconcile_target_first,
+            ),
+        ],
+        style={
+            "padding": "8px 10px",
+            "background": "white",
+            "border": "1px solid #e5e7eb",
+            "borderRadius": "6px",
+            "cursor": "pointer",
+            "width": "100%",
+            "textAlign": "left",
+        },
+        _hover={"background": "#eaf4ff", "borderColor": "#0065BF"},
+    )
+
+
+def _link_picker_modal() -> rx.Component:
+    """Phase Q — search + create modal for linking an unresolved xlsx name."""
+    return rx.cond(
+        ScheduleEditorState.reconcile_target_display != "",
+        rx.box(
+            rx.box(
+                on_click=ScheduleEditorState.cancel_reconcile,
+                style={
+                    "position": "fixed", "inset": "0",
+                    "background": "rgba(0,0,0,0.45)",
+                    "zIndex": "60",
+                },
+            ),
+            rx.box(
+                # Header
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Link unknown TM", size="1", color="#9ca3af",
+                                weight="bold", letter_spacing="0.06em",
+                                text_transform="uppercase"),
+                        rx.heading(
+                            ScheduleEditorState.reconcile_target_display,
+                            size="5",
+                        ),
+                        rx.text("Found on the ",
+                                ScheduleEditorState.reconcile_target_shift,
+                                " sheet · resolve by matching to an existing "
+                                "TM (recommended) or creating a new one.",
+                                size="1", color="#6b7280"),
+                        gap="2px", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.icon_button(
+                        rx.icon("x", size=14),
+                        variant="ghost",
+                        on_click=ScheduleEditorState.cancel_reconcile,
+                        cursor="pointer",
+                    ),
+                    width="100%", align="start",
+                ),
+                # Create-new shortcut
+                rx.button(
+                    rx.icon("user-plus", size=14),
+                    "Create new TM as “",
+                    ScheduleEditorState.reconcile_target_display,
+                    "”",
+                    on_click=ScheduleEditorState.reconcile_create_new(
+                        ScheduleEditorState.reconcile_target_display,
+                        ScheduleEditorState.reconcile_target_shift,
+                    ),
+                    color_scheme="green",
+                    size="2",
+                    width="100%",
+                    cursor="pointer",
+                ),
+                rx.divider(margin="14px 0 10px"),
+                # Search
+                rx.text("Or match to an existing TM:",
+                        size="1", color="#6b7280", weight="medium"),
+                rx.el.input(
+                    type="text",
+                    placeholder="Search by display name…",
+                    value=ScheduleEditorState.reconcile_search,
+                    on_change=ScheduleEditorState.set_reconcile_search,
+                    style={
+                        "width": "100%", "padding": "8px 10px",
+                        "fontSize": "13px",
+                        "border": "1px solid #d1d5db",
+                        "borderRadius": "6px",
+                        "outline": "none",
+                        "marginTop": "6px",
+                        "marginBottom": "8px",
+                    },
+                ),
+                # Filtered list
+                rx.scroll_area(
+                    rx.vstack(
+                        rx.foreach(
+                            ScheduleEditorState.filtered_reconcile_options,
+                            _link_option,
+                        ),
+                        gap="4px", width="100%",
+                    ),
+                    max_height="320px",
+                    width="100%",
+                ),
+                style={
+                    "position": "fixed",
+                    "top": "50%", "left": "50%",
+                    "transform": "translate(-50%, -50%)",
+                    "width": "min(520px, calc(100vw - 32px))",
+                    "background": "white",
+                    "border": "1px solid #e5e7eb",
+                    "borderRadius": "12px",
+                    "padding": "16px",
+                    "boxShadow": "0 24px 64px rgba(0,0,0,0.32)",
+                    "zIndex": "61",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "10px",
+                },
+            ),
+        ),
+        rx.fragment(),
     )
 
 
@@ -545,6 +649,8 @@ def schedule_editor_page() -> rx.Component:
             ),
         ),
         _cell_popover(),
+        # Phase Q — Click-to-link picker for unknown xlsx names
+        _link_picker_modal(),
         background="#f9fafb",
         min_height="100vh",
         on_mount=ScheduleEditorState.on_load,

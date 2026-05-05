@@ -525,6 +525,134 @@ def add_tm_modal() -> rx.Component:
     )
 
 
+def _merge_option_row(opt: dict) -> rx.Component:
+    """One option in the merge dropdown — display + legal name."""
+    return rx.el.option(
+        opt["display_name"],
+        " — ",
+        opt["full_name"],
+        value=opt["id"],
+    )
+
+
+def merge_modal() -> rx.Component:
+    """Phase Q — Merge profiles overlay."""
+    return rx.cond(
+        PeopleState.merge_open,
+        rx.el.div(
+            # Backdrop
+            rx.el.div(
+                on_click=PeopleState.close_merge_modal,
+                style={
+                    "position": "fixed", "inset": "0",
+                    "background": "rgba(0,0,0,0.45)",
+                    "zIndex": "60",
+                },
+            ),
+            # Panel
+            rx.el.div(
+                rx.el.div(
+                    rx.el.h3("Merge Profiles",
+                             style={"fontSize": "16px", "fontWeight": "700",
+                                    "color": "var(--fg-1)"}),
+                    rx.el.button(
+                        "✕",
+                        on_click=PeopleState.close_merge_modal,
+                        style={"background": "transparent", "border": "none",
+                               "fontSize": "18px", "color": "var(--fg-3)",
+                               "cursor": "pointer"},
+                    ),
+                    style={"display": "flex", "justifyContent": "space-between",
+                           "alignItems": "center", "marginBottom": "12px"},
+                ),
+                rx.el.p(
+                    "Pick a TM to merge ", rx.el.b("into "),
+                    rx.el.span(PeopleState.drawer_name,
+                               style={"color": "var(--accent-blue)",
+                                      "fontWeight": "700"}),
+                    ". The selected TM's aliases, score history, "
+                    "preferences, and FK references will fold into this one. "
+                    "The selected TM is then deleted.",
+                    style={"fontSize": "12px", "color": "var(--fg-3)",
+                           "marginBottom": "10px", "lineHeight": "1.5"},
+                ),
+                rx.el.label("Merge from", class_name="drawer-section-title"),
+                rx.el.select(
+                    rx.el.option("— select a TM —", value=""),
+                    rx.foreach(PeopleState.merge_options, _merge_option_row),
+                    value=PeopleState.merge_drop_id,
+                    on_change=PeopleState.set_merge_drop_id,
+                    style={
+                        "width": "100%", "fontSize": "13px",
+                        "padding": "8px 10px", "marginTop": "4px",
+                        "marginBottom": "10px",
+                        "border": "1px solid var(--border-subtle)",
+                        "borderRadius": "var(--r-md)",
+                        "background": "var(--surface-card)",
+                        "color": "var(--fg-1)",
+                        "outline": "none",
+                    },
+                ),
+                rx.el.div(
+                    rx.el.p(
+                        "⚠ This is irreversible — the selected TM is deleted "
+                        "after the merge. Aliases and history are combined; "
+                        "any conflicting fields default to ", rx.el.b(PeopleState.drawer_name), ".",
+                        style={"fontSize": "11px",
+                               "color": "var(--accent-flag)",
+                               "lineHeight": "1.5"},
+                    ),
+                    style={"padding": "8px 10px",
+                           "background": "var(--accent-flag-bg)",
+                           "border": "1px solid var(--accent-flag)",
+                           "borderRadius": "var(--r-md)",
+                           "marginBottom": "12px"},
+                ),
+                rx.cond(
+                    PeopleState.merge_error != "",
+                    rx.el.p(PeopleState.merge_error,
+                            style={"fontSize": "12px",
+                                   "color": "var(--accent-flag)",
+                                   "marginBottom": "10px"}),
+                    rx.fragment(),
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cancel",
+                        on_click=PeopleState.close_merge_modal,
+                        class_name="btn btn-ghost",
+                        style={"fontSize": "13px"},
+                    ),
+                    rx.el.button(
+                        rx.cond(PeopleState.merge_saving, "Merging…", "Merge"),
+                        on_click=PeopleState.confirm_merge,
+                        disabled=PeopleState.merge_saving,
+                        class_name="btn btn-primary",
+                        style={"fontSize": "13px",
+                               "background": "var(--accent-flag)",
+                               "borderColor": "var(--accent-flag)"},
+                    ),
+                    style={"display": "flex", "justifyContent": "flex-end",
+                           "gap": "8px"},
+                ),
+                style={
+                    "position": "fixed",
+                    "top": "50%", "left": "50%",
+                    "transform": "translate(-50%, -50%)",
+                    "width": "min(480px, calc(100vw - 32px))",
+                    "background": "var(--surface-card)",
+                    "border": "1px solid var(--border-subtle)",
+                    "borderRadius": "var(--r-lg)",
+                    "padding": "20px",
+                    "boxShadow": "0 24px 64px rgba(0,0,0,0.32)",
+                    "zIndex": "61",
+                },
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
 def profile_view() -> rx.Component:
     """Read-only profile view."""
     return rx.el.div(
@@ -585,6 +713,16 @@ def profile_view() -> rx.Component:
                           "and active People views. Restorable any time.",
                 ),
             ),
+            # Phase Q — Merge into another TM
+            rx.el.button(
+                "⇆ Merge…",
+                class_name="btn btn-ghost",
+                on_click=PeopleState.open_merge_modal,
+                style={"fontSize":"12px","padding":"6px 12px",
+                       "color":"var(--fg-3)"},
+                title="Merge this TM into another (combines aliases, history, "
+                      "and FK references; deletes this row).",
+            ),
             style={"display":"flex","gap":"8px","marginBottom":"16px",
                    "flexWrap":"wrap"},
         ),
@@ -609,6 +747,29 @@ def profile_edit_form() -> rx.Component:
     """Editable profile form."""
     return rx.el.div(
         rx.el.p("Edit Profile", style={"fontWeight":"600","fontSize":"14px","color":"var(--fg-1)","marginBottom":"14px"}),
+        # Phase Q — Display name (canonical reference everywhere)
+        rx.el.div(
+            rx.el.label("Display Name", class_name="nt-label"),
+            rx.el.input(
+                type="text",
+                value=PeopleState.edit_display_name,
+                on_change=PeopleState.set_edit_display_name,
+                class_name="nt-input",
+                placeholder="e.g. Steve",
+            ),
+            class_name="nt-field", style={"marginBottom":"10px"},
+        ),
+        rx.el.div(
+            rx.el.label("Legal / Full Name", class_name="nt-label"),
+            rx.el.input(
+                type="text",
+                value=PeopleState.edit_full_name,
+                on_change=PeopleState.set_edit_full_name,
+                class_name="nt-input",
+                placeholder="e.g. Stephen Edmunds",
+            ),
+            class_name="nt-field", style={"marginBottom":"10px"},
+        ),
         # Skill score input
         rx.el.div(
             rx.el.label("Skill Score (1–10)", class_name="nt-label"),
@@ -660,8 +821,14 @@ def profile_edit_form() -> rx.Component:
             rx.el.p("✓ Saved", style={"fontSize":"12px","color":"var(--accent-positive)","margin":"0 0 8px"}),
             rx.cond(
                 PeopleState.profile_status == "error",
-                rx.el.p("⚠ Save failed — check connection",
-                        style={"fontSize":"12px","color":"var(--accent-flag)","margin":"0 0 8px"}),
+                rx.el.p(
+                    rx.cond(
+                        PeopleState.profile_error != "",
+                        PeopleState.profile_error,
+                        "Save failed — check connection",
+                    ),
+                    style={"fontSize":"12px","color":"var(--accent-flag)","margin":"0 0 8px"},
+                ),
                 rx.fragment(),
             ),
         ),
@@ -1196,6 +1363,8 @@ def people_page() -> rx.Component:
         profile_drawer(),
         # Phase O.3 — Add TM modal
         add_tm_modal(),
+        # Phase Q — Merge Profiles modal
+        merge_modal(),
         command_palette(),
         capture_modal(),
         class_name=AppState.app_class_name,

@@ -519,6 +519,175 @@ def unarchive_tm(tm_id: str) -> bool:
     return set_tm_status(tm_id, "active")
 
 
+def update_tm_display_name(tm_id: str, display_name: str, full_name: Optional[str] = None) -> dict:
+    """Phase Q — rename a TM. Updates BOTH the canonical column and
+    metadata.display_name. Validates uniqueness (excluding self).
+
+    Returns {"ok": bool, "error": str}.
+    """
+    name = (display_name or "").strip()
+    if not (tm_id and name):
+        return {"ok": False, "error": "TM id + display name required."}
+    # Uniqueness — allow keeping the same name (no-op rename)
+    try:
+        clash = (
+            _client()
+            .table("entities")
+            .select("id")
+            .eq("entity_type", "tm")
+            .eq("display_name", name)
+            .neq("id", tm_id)
+            .limit(1)
+            .execute()
+        )
+        if clash.data:
+            return {"ok": False, "error": f"A TM named '{name}' already exists."}
+    except Exception as e:
+        return {"ok": False, "error": f"Uniqueness check failed: {e}"}
+
+    try:
+        # Read current metadata so we can also update display_name inside it.
+        cur = (
+            _client()
+            .table("entities")
+            .select("metadata, name")
+            .eq("id", tm_id)
+            .single()
+            .execute()
+        )
+        meta = (cur.data or {}).get("metadata") or {}
+        meta["display_name"] = name
+
+        update_payload: dict = {
+            "display_name": name,
+            "metadata":     meta,
+        }
+        # Only touch full legal name if explicitly provided
+        if full_name is not None:
+            update_payload["name"] = (full_name or "").strip()
+
+        (
+            _client()
+            .table("entities")
+            .update(update_payload)
+            .eq("id", tm_id)
+            .execute()
+        )
+        return {"ok": True, "error": ""}
+    except Exception as e:
+        return {"ok": False, "error": f"Save failed: {e}"}
+
+
+def merge_tm(keep_id: str, drop_id: str) -> dict:
+    """Phase Q — merge two TM entities.
+
+    keep_id wins everything (display_name, status, skill_score). drop_id's
+    aliases / score_history / accommodations / preferences / pair_affinities
+    are unioned into keep_id, then every FK reference is repointed
+    (zone_assignments, break_assignments, overlap_assignments, call_offs,
+    area_checks, schedule_overrides, note_entities), then drop_id is deleted.
+
+    Returns {"ok": bool, "error": str, "moved": dict}.
+    """
+    if not (keep_id and drop_id) or keep_id == drop_id:
+        return {"ok": False, "error": "Pick two different TMs to merge.",
+                "moved": {}}
+    try:
+        sb = _client()
+        # 1. Pull both entities so we can merge metadata
+        keep_res = sb.table("entities").select("*").eq("id", keep_id).single().execute()
+        drop_res = sb.table("entities").select("*").eq("id", drop_id).single().execute()
+        keep = keep_res.data or {}
+        drop = drop_res.data or {}
+        if not keep or not drop:
+            return {"ok": False, "error": "Couldn't load one of the TMs.", "moved": {}}
+
+        keep_meta = keep.get("metadata") or {}
+        drop_meta = drop.get("metadata") or {}
+
+        # Union helpers — preserve order, dedupe
+        def _union_dict_lists(a: list, b: list, key_fn) -> list:
+            seen = set()
+            out = []
+            for item in (a or []) + (b or []):
+                if not isinstance(item, dict):
+                    continue
+                k = key_fn(item)
+                if k in seen:
+                    continue
+                seen.add(k)
+                out.append(item)
+            return out
+
+        merged_meta = dict(keep_meta)
+        # Aliases — also include drop's display first-name token so the
+        # resolver still finds keep when seeing the dropped name.
+        merged_aliases = list(keep_meta.get("aliases") or [])
+        for a in (drop_meta.get("aliases") or []):
+            if a and a.lower() not in [x.lower() for x in merged_aliases]:
+                merged_aliases.append(a.lower())
+        drop_first = (drop.get("display_name") or "").strip().split()[0].lower()
+        if drop_first and drop_first not in [x.lower() for x in merged_aliases]:
+            merged_aliases.append(drop_first)
+        merged_meta["aliases"] = merged_aliases
+
+        merged_meta["score_history"] = _union_dict_lists(
+            keep_meta.get("score_history") or [],
+            drop_meta.get("score_history") or [],
+            key_fn=lambda d: (d.get("date", ""), d.get("reason", "")),
+        )
+        merged_meta["accommodations"] = _union_dict_lists(
+            keep_meta.get("accommodations") or [],
+            drop_meta.get("accommodations") or [],
+            key_fn=lambda d: (d.get("type", ""), d.get("target", "")),
+        )
+        merged_meta["preferences"] = _union_dict_lists(
+            keep_meta.get("preferences") or [],
+            drop_meta.get("preferences") or [],
+            key_fn=lambda d: (d.get("stance", ""), d.get("target", "")),
+        )
+        merged_meta["pair_affinities"] = _union_dict_lists(
+            keep_meta.get("pair_affinities") or [],
+            drop_meta.get("pair_affinities") or [],
+            key_fn=lambda d: d.get("with", ""),
+        )
+
+        # 2. Write merged metadata
+        sb.table("entities").update({"metadata": merged_meta}).eq("id", keep_id).execute()
+
+        # 3. Repoint FK references — every table that references entities.id
+        moved = {}
+        for table, col in [
+            ("zone_assignments",     "tm_id"),
+            ("break_assignments",    "tm_id"),
+            ("overlap_assignments",  "tm_id"),
+            ("call_offs",            "tm_id"),
+            ("area_checks",          "tm_id"),
+            ("schedule_overrides",   "tm_id"),
+            ("note_entities",        "entity_id"),
+        ]:
+            try:
+                upd = (
+                    sb.table(table)
+                    .update({col: keep_id})
+                    .eq(col, drop_id)
+                    .execute()
+                )
+                moved[table] = len(upd.data or [])
+            except Exception as ex:
+                # Continue on failure of any single table — partial merge is
+                # better than total failure.
+                print(f"[merge_tm] {table}.{col}: {ex}")
+                moved[table] = -1
+
+        # 4. Delete drop entity
+        sb.table("entities").delete().eq("id", drop_id).execute()
+
+        return {"ok": True, "error": "", "moved": moved}
+    except Exception as e:
+        return {"ok": False, "error": f"Merge failed: {e}", "moved": {}}
+
+
 def update_entity_aliases(entity_id: str, aliases: list[str]) -> bool:
     """Replace the metadata.aliases array on an entity."""
     if not entity_id:

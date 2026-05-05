@@ -65,8 +65,20 @@ class PeopleState(AppState):
     edit_score_reason:   str   = ""
     edit_status:         str   = "active"
     edit_loa_note:       str   = ""
+    # Phase Q — display + legal name now editable in the same form
+    edit_display_name:   str   = ""
+    edit_full_name:      str   = ""
     profile_saving:      bool  = False
     profile_status:      str   = ""   # "" | "saved" | "error"
+    profile_error:       str   = ""
+
+    # ── Merge profiles (Phase Q) ──────────────────────────────────────────────
+    merge_open:        bool      = False
+    merge_keep_id:     str       = ""    # the TM whose drawer is open (kept)
+    merge_drop_id:     str       = ""    # the TM picked from the dropdown
+    merge_options:     list[dict] = []   # all OTHER TMs as merge candidates
+    merge_saving:      bool      = False
+    merge_error:       str       = ""
 
     # ── Accommodation form ────────────────────────────────────────────────────
     accom_adding:      bool = False
@@ -374,12 +386,16 @@ class PeopleState(AppState):
     @rx.event
     def start_edit_profile(self):
         s = self.drawer_skill_score
-        self.edit_score        = str(int(s) if s == int(s) else s)
-        self.edit_score_reason = ""
-        self.edit_status       = self.drawer_status
-        self.edit_loa_note     = self.drawer_loa_note
-        self.editing_profile   = True
-        self.profile_status    = ""
+        self.edit_score         = str(int(s) if s == int(s) else s)
+        self.edit_score_reason  = ""
+        self.edit_status        = self.drawer_status
+        self.edit_loa_note      = self.drawer_loa_note
+        # Phase Q — pre-fill name fields from the drawer
+        self.edit_display_name  = self.drawer_name
+        self.edit_full_name     = self.drawer_full_name
+        self.editing_profile    = True
+        self.profile_status     = ""
+        self.profile_error      = ""
 
     @rx.event
     def cancel_edit_profile(self):
@@ -408,11 +424,34 @@ class PeopleState(AppState):
         if not self.can_save_profile:
             return
         self.profile_saving = True
+        self.profile_error  = ""
         yield
         try:
             new_score = float(self.edit_score)
             old_score = self.drawer_skill_score
             today     = date.today().isoformat()
+
+            new_display = (self.edit_display_name or "").strip()
+            new_full    = (self.edit_full_name    or "").strip()
+
+            # Phase Q — if the display_name or full legal name changed, write
+            # them via the dedicated helper (validates uniqueness, syncs
+            # column + metadata).
+            if (new_display and new_display != self.drawer_name) or (new_full != self.drawer_full_name):
+                from apps.zds.database import update_tm_display_name
+                res = update_tm_display_name(
+                    self.drawer_tm_id,
+                    new_display or self.drawer_name,
+                    full_name=new_full,
+                )
+                if not res.get("ok"):
+                    self.profile_error  = res.get("error", "Couldn't save name.")
+                    self.profile_status = "error"
+                    self.profile_saving = False
+                    return
+                # Reflect in drawer immediately
+                self.drawer_name      = new_display
+                self.drawer_full_name = new_full
 
             updates: dict = {
                 "status":   self.edit_status,
@@ -444,8 +483,10 @@ class PeopleState(AppState):
                 yield PeopleState.load_people
             else:
                 self.profile_status = "error"
-        except Exception:
+                self.profile_error  = "Failed to save metadata changes."
+        except Exception as e:
             self.profile_status = "error"
+            self.profile_error  = str(e)
         finally:
             self.profile_saving = False
 
@@ -748,3 +789,74 @@ class PeopleState(AppState):
         if ok:
             self.drawer_status = "active"
             self.people = get_people()
+
+    # ── Profile edit setters (Phase Q) ────────────────────────────────────────
+
+    @rx.event
+    def set_edit_display_name(self, v: str):
+        self.edit_display_name = v
+        self.profile_error = ""
+
+    @rx.event
+    def set_edit_full_name(self, v: str):
+        self.edit_full_name = v
+
+    # =========================================================================
+    # Merge Profiles (Phase Q)
+    # =========================================================================
+
+    @rx.event
+    def open_merge_modal(self):
+        """Open the merge picker for the currently-drawn TM."""
+        if not self.drawer_tm_id:
+            return
+        self.merge_open    = True
+        self.merge_keep_id = self.drawer_tm_id
+        self.merge_drop_id = ""
+        self.merge_error   = ""
+        # Build options = every other active TM
+        self.merge_options = sorted(
+            [
+                {"id": p["id"], "display_name": p["name"], "full_name": p["full_name"]}
+                for p in self.people
+                if p["id"] != self.drawer_tm_id
+            ],
+            key=lambda r: (r["display_name"] or "").lower(),
+        )
+
+    @rx.event
+    def close_merge_modal(self):
+        self.merge_open    = False
+        self.merge_drop_id = ""
+        self.merge_error   = ""
+
+    @rx.event
+    def set_merge_drop_id(self, v: str):
+        self.merge_drop_id = v
+        self.merge_error = ""
+
+    @rx.event
+    async def confirm_merge(self):
+        """Execute the merge — drop_id's data folds into keep_id, then drop_id is deleted."""
+        from apps.zds.database import merge_tm
+        if not (self.merge_keep_id and self.merge_drop_id):
+            self.merge_error = "Pick a TM to merge into this one."
+            return
+        if self.merge_keep_id == self.merge_drop_id:
+            self.merge_error = "Pick a different TM."
+            return
+        self.merge_saving = True
+        self.merge_error  = ""
+        yield
+        result = merge_tm(self.merge_keep_id, self.merge_drop_id)
+        self.merge_saving = False
+        if not result.get("ok"):
+            self.merge_error = result.get("error", "Merge failed.")
+            return
+        # Success — close merge modal AND drawer (the merged TM's drawer
+        # may have been the dropped one, so close to be safe and refresh).
+        self.merge_open    = False
+        self.merge_drop_id = ""
+        self.drawer_open   = False
+        # Refresh grid + drawer if still relevant
+        self.people = get_people()
