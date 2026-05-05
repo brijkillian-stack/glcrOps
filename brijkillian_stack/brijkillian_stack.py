@@ -91,6 +91,13 @@ app = rx.App(
         rx.el.meta(name="apple-mobile-web-app-status-bar-style", content="default"),
         rx.el.link(rel="apple-touch-icon", href="/icons/apple-touch-icon-180.png"),
         rx.el.script(_SW_REGISTRATION_SCRIPT),
+        # ── Phase K.1: PencilCanvas component assets ──────────────────────
+        # CSS loaded before JS so styles are ready when the canvas renders.
+        rx.el.link(rel="stylesheet", href="/pencil_canvas.css"),
+        # JS loaded once at boot; exposes window.PencilCanvas and auto-inits
+        # via MutationObserver when <script type="application/json" id="pc-config-*">
+        # data-islands appear in the DOM (rendered by pencil_canvas() component).
+        rx.el.script(src="/pencil_canvas.js"),
     ],
 )
 

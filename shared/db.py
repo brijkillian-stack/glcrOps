@@ -518,6 +518,9 @@ def get_people() -> list[dict]:
                 "status":         status,
                 "active":         active,
                 "rank":           rank,
+                # Phase O — surface shift assignment for the People page filter.
+                # grave_pool is the canonical metadata field — "Grave" / "PM" / "AM" / "Other".
+                "grave_pool":     (meta.get("grave_pool") or "").strip(),
             })
 
         people.sort(key=lambda p: (-p["skill_score"], p["name"]))
@@ -843,11 +846,18 @@ def get_recap_auto_populate(shift_date: str) -> dict:
             "graves": {"working": [], "pto": [], "mdl": [], "other": []},
         }
         try:
-            from apps.zds import schedule_parser
+            from apps.zds import schedule_parser, database as zds_db
             path = schedule_parser.get_latest_schedule_path()
             if path:
+                # Pull entities so the resolver can map xlsx legal names
+                # (Stephen, Christopher, …) to entity nicknames (Steve, Chris)
+                # via metadata.aliases.
+                try:
+                    ents = zds_db.fetch_all_tms()
+                except Exception:
+                    ents = []
                 rosters = schedule_parser.peek_shift_rosters_for_date(
-                    path, shift_date,
+                    path, shift_date, entities=ents,
                 ) or rosters
         except Exception as exc:
             print(f"[recap.shift_rosters] {exc}")
@@ -1551,6 +1561,9 @@ def get_tm_full_profile(tm_id: str) -> dict:
             "active_roster":   roster_entry.get("active", True),
             "tie_break_rank":  roster_entry.get("tie_break_rank", 99),
             "grave_pool":      roster_entry.get("grave_pool", "Grave"),
+            # Phase O — first-name aliases used by the schedule parser to map
+            # xlsx legal names to this entity's display_name.
+            "aliases":         list(meta.get("aliases") or []),
         }
     except Exception:
         print(f"[db] get_tm_full_profile error:\n{traceback.format_exc()}")

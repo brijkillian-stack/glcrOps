@@ -1,0 +1,366 @@
+/* =============================================================================
+   PencilCanvas — Phase K.1
+   Scoped styles for the reusable Apple Pencil 2 canvas component.
+   Imported as /pencil_canvas.css via head_components link tag.
+   Design tokens from the global :root (styles.css) are used throughout.
+   ============================================================================= */
+
+/* ── Wrapper ─────────────────────────────────────────────────────────────── */
+
+.pencil-canvas-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
+  line-height: 0;            /* kill phantom inline-block spacing */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ── Background image ──────────────────────────────────────────────────── */
+
+.pencil-canvas-bg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  border-radius: var(--r-md, 8px);
+  position: absolute;
+  inset: 0;
+}
+
+/* ── SVG overlay ─────────────────────────────────────────────────────────── */
+
+.pencil-canvas-svg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.pencil-canvas-svg-overlay > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Prior annotation layer images ─────────────────────────────────────── */
+
+.pencil-canvas-layer-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+/* ── Drawing canvas ─────────────────────────────────────────────────────── */
+
+.pencil-canvas-draw {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;         /* prevent iOS interpreting drags as scroll */
+  pointer-events: auto;
+  cursor: crosshair;
+  border-radius: var(--r-md, 8px);
+}
+
+/* ── Hover cursor (Apple Pencil 2 tip preview) ──────────────────────────── */
+
+.pencil-hover-cursor {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-blue, #0065BF);
+  background: rgba(0, 101, 191, 0.15);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  display: none;             /* hidden until JS shows it */
+  transition: opacity 60ms ease;
+}
+
+/*
+ * Hover cursor: only render on devices that support pointer hover.
+ * This gates the Pencil 2 tip preview to Pencil / trackpad / mouse,
+ * preventing a phantom cursor on finger-only devices.
+ */
+@media (hover: hover) {
+  .pencil-hover-cursor.visible {
+    display: block;
+  }
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+
+.pencil-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle, #EAE8E2);
+  border-radius: var(--r-lg, 12px);
+  box-shadow: var(--shadow-hover, 0 4px 12px rgba(20,20,20,0.08));
+  z-index: 10;
+  pointer-events: auto;
+  min-width: 52px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pencil-toolbar {
+    transition: opacity 160ms var(--ease, cubic-bezier(0.4,0,0.2,1)),
+                transform 160ms var(--ease, cubic-bezier(0.4,0,0.2,1));
+  }
+}
+
+.pencil-toolbar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.pencil-toolbar-divider {
+  width: 32px;
+  height: 1px;
+  background: var(--border-subtle, #EAE8E2);
+  margin: 2px 0;
+  flex-shrink: 0;
+}
+
+/* Tool buttons (pen / highlighter / eraser) */
+
+.pencil-tool-btn {
+  width: 44px;
+  height: 44px;
+  border: 2px solid transparent;
+  border-radius: var(--r-md, 8px);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pencil-tool-btn {
+    transition: background 120ms var(--ease, cubic-bezier(0.4,0,0.2,1)),
+                border-color 120ms var(--ease, cubic-bezier(0.4,0,0.2,1));
+  }
+}
+
+.pencil-tool-btn:hover {
+  background: var(--accent-blue-bg, #EAF4FF);
+}
+
+.pencil-tool-btn.active {
+  border-color: var(--accent-blue, #0065BF);
+  background: var(--accent-blue-bg, #EAF4FF);
+}
+
+.pencil-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Color swatches (pen mode only) */
+
+.pencil-colors-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.pencil-color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pencil-color-swatch {
+    transition: transform 120ms var(--ease, cubic-bezier(0.4,0,0.2,1)),
+                box-shadow 120ms var(--ease, cubic-bezier(0.4,0,0.2,1));
+  }
+}
+
+.pencil-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.pencil-color-swatch:focus-visible {
+  outline: 2px solid var(--accent-blue, #0065BF);
+  outline-offset: 2px;
+}
+
+.pencil-color-swatch.active {
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent-blue, #0065BF);
+}
+
+/* Stroke-width dots */
+
+.pencil-widths-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+}
+
+.pencil-width-dot {
+  border-radius: 50%;
+  background: var(--fg-1, #1A1A1A);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pencil-width-dot {
+    transition: box-shadow 120ms var(--ease, cubic-bezier(0.4,0,0.2,1));
+  }
+}
+
+.pencil-width-dot.active {
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent-blue, #0065BF);
+}
+
+/* Layer toggles */
+
+.pencil-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 120px;
+}
+
+.pencil-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 11px;
+  color: var(--fg-2, #4A4A4A);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.pencil-layer-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-blue, #0065BF);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* Action buttons (Save / Clear) */
+
+.pencil-action-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--r-md, 8px);
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pencil-action-btn {
+    transition: background 120ms var(--ease, cubic-bezier(0.4,0,0.2,1)),
+                opacity 120ms var(--ease, cubic-bezier(0.4,0,0.2,1));
+  }
+}
+
+.pencil-save-btn {
+  background: var(--accent-blue, #0065BF);
+  color: white;
+}
+
+.pencil-save-btn:hover:not(:disabled) {
+  background: #0052a3;
+}
+
+.pencil-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pencil-clear-btn {
+  background: var(--accent-flag-bg, #FEF1F1);
+  color: var(--accent-flag, #B91C1C);
+}
+
+.pencil-clear-btn:hover {
+  background: var(--accent-flag, #B91C1C);
+  color: white;
+}
+
+/* ── Narrow viewport: toolbar migrates to bottom center ─────────────────── */
+/* iPad split-view / narrow widths */
+
+@media (max-width: 600px) {
+  .pencil-toolbar {
+    top: auto;
+    right: auto;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: calc(100% - 24px);
+    min-width: unset;
+    padding: 6px 8px;
+  }
+
+  .pencil-toolbar-group {
+    flex-direction: row;
+  }
+
+  .pencil-toolbar-divider {
+    width: 1px;
+    height: 28px;
+    margin: 0 2px;
+  }
+
+  .pencil-colors-row {
+    flex-direction: row;
+  }
+
+  .pencil-widths-row {
+    flex-direction: row;
+    padding: 0 4px;
+  }
+}

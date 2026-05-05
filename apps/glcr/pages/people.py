@@ -33,16 +33,43 @@ def _pool_chip(label: str, value: str) -> rx.Component:
     )
 
 
+def _shift_chip(label: str, value: str) -> rx.Component:
+    """Phase O — shift filter chip (separate dimension from pool chip)."""
+    return rx.el.button(
+        label,
+        on_click=PeopleState.set_shift_filter(value),
+        class_name=rx.cond(
+            PeopleState.shift_filter == value,
+            "people-pool-chip active",
+            "people-pool-chip",
+        ),
+    )
+
+
 def people_controls() -> rx.Component:
     return rx.el.div(
-        # Left: pool filter chips
+        # Left: pool/status + shift filter chips
         rx.el.div(
-            _pool_chip("All",      "all"),
-            _pool_chip("Active",   "active"),
-            _pool_chip("LOA",      "loa"),
-            _pool_chip("Accom",    "accom"),
-            _pool_chip("Trainers", "trainer"),
-            class_name="people-pool-chips",
+            # Status row
+            rx.el.div(
+                _pool_chip("All",      "all"),
+                _pool_chip("Active",   "active"),
+                _pool_chip("Inactive", "inactive"),
+                _pool_chip("LOA",      "loa"),
+                _pool_chip("Accom",    "accom"),
+                _pool_chip("Trainers", "trainer"),
+                class_name="people-pool-chips",
+            ),
+            # Shift row
+            rx.el.div(
+                _shift_chip("All Shifts", "all"),
+                _shift_chip("Graves",     "graves"),
+                _shift_chip("Swings",     "swings"),
+                _shift_chip("Days",       "days"),
+                class_name="people-pool-chips",
+                style={"marginTop": "6px"},
+            ),
+            style={"display": "flex", "flexDirection": "column", "gap": "2px"},
         ),
         # Right: sort + view toggle
         rx.el.div(
@@ -76,6 +103,13 @@ def people_controls() -> rx.Component:
                     title="List view",
                 ),
                 class_name="view-toggle-group",
+            ),
+            # Phase O.3 — Add Team Member entry point
+            rx.el.button(
+                "＋ Add Team Member",
+                on_click=PeopleState.open_add_tm_modal,
+                class_name="btn btn-primary",
+                style={"fontSize": "12px", "padding": "6px 12px"},
             ),
             style={"display": "flex", "gap": "8px", "alignItems": "center"},
         ),
@@ -259,6 +293,224 @@ def _status_badge(status: str) -> rx.Component:
     return rx.el.span(label, class_name=cls)
 
 
+def _alias_chip(alias: str) -> rx.Component:
+    """One alias as a removable chip."""
+    return rx.el.span(
+        alias,
+        rx.el.button(
+            "×",
+            on_click=PeopleState.remove_alias(alias),
+            style={
+                "marginLeft": "4px", "background": "transparent",
+                "border": "none", "color": "var(--fg-3)",
+                "fontSize": "13px", "fontWeight": "700",
+                "cursor": "pointer", "padding": "0 2px",
+            },
+            title="Remove alias",
+        ),
+        style={
+            "display": "inline-flex", "alignItems": "center",
+            "padding": "2px 8px",
+            "background": "var(--accent-blue-bg)",
+            "color": "var(--accent-blue)",
+            "borderRadius": "999px",
+            "fontSize": "11px", "fontWeight": "600",
+            "letterSpacing": "0.02em",
+        },
+    )
+
+
+def _aliases_section() -> rx.Component:
+    """Phase O.2 — Aliases editor inside the Profile tab."""
+    return rx.el.div(
+        rx.el.div(
+            rx.el.span("Aliases", class_name="drawer-section-title"),
+            rx.cond(
+                PeopleState.aliases_status == "saved",
+                rx.el.span("✓ saved",
+                           style={"fontSize": "10px", "color": "var(--accent-positive)",
+                                  "marginLeft": "8px"}),
+                rx.fragment(),
+            ),
+            style={"display": "flex", "alignItems": "center"},
+        ),
+        rx.el.p(
+            "First-name variants the schedule parser maps to this TM "
+            "(e.g. Steve has alias 'stephen').",
+            style={"fontSize": "11px", "color": "var(--fg-mute)",
+                   "marginBottom": "8px"},
+        ),
+        rx.cond(
+            PeopleState.drawer_aliases.length() > 0,
+            rx.el.div(
+                rx.foreach(PeopleState.drawer_aliases, _alias_chip),
+                style={"display": "flex", "flexWrap": "wrap", "gap": "4px",
+                       "marginBottom": "8px"},
+            ),
+            rx.el.p("No aliases yet.", style={"fontSize": "11px",
+                                              "color": "var(--fg-mute)",
+                                              "fontStyle": "italic",
+                                              "marginBottom": "8px"}),
+        ),
+        rx.el.div(
+            rx.el.input(
+                type="text",
+                placeholder="Add an alias (e.g. stephen)",
+                value=PeopleState.new_alias_input,
+                on_change=PeopleState.set_new_alias_input,
+                style={
+                    "flex": "1", "fontSize": "12px",
+                    "padding": "5px 8px",
+                    "border": "1px solid var(--border-subtle)",
+                    "borderRadius": "var(--r-md)",
+                    "background": "var(--surface-card)",
+                    "color": "var(--fg-1)",
+                    "outline": "none",
+                },
+            ),
+            rx.el.button(
+                "Add",
+                on_click=PeopleState.add_alias,
+                class_name="btn btn-ghost",
+                style={"fontSize": "12px", "padding": "5px 12px"},
+            ),
+            style={"display": "flex", "gap": "6px", "marginBottom": "16px"},
+        ),
+    )
+
+
+def add_tm_modal() -> rx.Component:
+    """Phase O.3 — Add Team Member overlay."""
+    return rx.cond(
+        PeopleState.add_tm_open,
+        rx.el.div(
+            # Backdrop
+            rx.el.div(
+                on_click=PeopleState.close_add_tm_modal,
+                style={
+                    "position": "fixed", "inset": "0",
+                    "background": "rgba(0,0,0,0.45)",
+                    "zIndex": "60",
+                },
+            ),
+            # Panel
+            rx.el.div(
+                rx.el.div(
+                    rx.el.h3("Add Team Member",
+                             style={"fontSize": "16px", "fontWeight": "700",
+                                    "color": "var(--fg-1)"}),
+                    rx.el.button(
+                        "✕",
+                        on_click=PeopleState.close_add_tm_modal,
+                        style={"background": "transparent", "border": "none",
+                               "fontSize": "18px", "color": "var(--fg-3)",
+                               "cursor": "pointer"},
+                    ),
+                    style={"display": "flex", "justifyContent": "space-between",
+                           "alignItems": "center", "marginBottom": "14px"},
+                ),
+                # Display name
+                rx.el.label("Display Name", class_name="drawer-section-title"),
+                rx.el.input(
+                    type="text",
+                    placeholder="e.g. Sam, Mike S, JT",
+                    value=PeopleState.new_tm_display_name,
+                    on_change=PeopleState.set_new_tm_display_name,
+                    style={
+                        "width": "100%", "fontSize": "14px",
+                        "padding": "8px 10px", "marginTop": "4px",
+                        "marginBottom": "10px",
+                        "border": "1px solid var(--border-subtle)",
+                        "borderRadius": "var(--r-md)",
+                        "background": "var(--surface-card)",
+                        "color": "var(--fg-1)",
+                        "outline": "none",
+                    },
+                ),
+                # Aliases (comma-separated)
+                rx.el.label("Aliases (comma-separated)", class_name="drawer-section-title"),
+                rx.el.input(
+                    type="text",
+                    placeholder="e.g. samantha, sammy",
+                    value=PeopleState.new_tm_aliases_text,
+                    on_change=PeopleState.set_new_tm_aliases_text,
+                    style={
+                        "width": "100%", "fontSize": "13px",
+                        "padding": "8px 10px", "marginTop": "4px",
+                        "marginBottom": "10px",
+                        "border": "1px solid var(--border-subtle)",
+                        "borderRadius": "var(--r-md)",
+                        "background": "var(--surface-card)",
+                        "color": "var(--fg-1)",
+                        "outline": "none",
+                    },
+                ),
+                # Grave pool
+                rx.el.label("Pool", class_name="drawer-section-title"),
+                rx.el.select(
+                    rx.el.option("Grave",     value="Grave"),
+                    rx.el.option("PM Overlap", value="PM"),
+                    rx.el.option("AM Overlap", value="AM"),
+                    rx.el.option("Other",     value="Other"),
+                    value=PeopleState.new_tm_grave_pool,
+                    on_change=PeopleState.set_new_tm_grave_pool,
+                    style={
+                        "width": "100%", "fontSize": "13px",
+                        "padding": "7px 10px", "marginTop": "4px",
+                        "marginBottom": "12px",
+                        "border": "1px solid var(--border-subtle)",
+                        "borderRadius": "var(--r-md)",
+                        "background": "var(--surface-card)",
+                        "color": "var(--fg-1)",
+                        "outline": "none",
+                    },
+                ),
+                # Error
+                rx.cond(
+                    PeopleState.new_tm_error != "",
+                    rx.el.p(
+                        PeopleState.new_tm_error,
+                        style={"fontSize": "12px", "color": "var(--accent-flag)",
+                               "marginBottom": "10px"},
+                    ),
+                    rx.fragment(),
+                ),
+                # Actions
+                rx.el.div(
+                    rx.el.button(
+                        "Cancel",
+                        on_click=PeopleState.close_add_tm_modal,
+                        class_name="btn btn-ghost",
+                        style={"fontSize": "13px"},
+                    ),
+                    rx.el.button(
+                        rx.cond(PeopleState.new_tm_saving, "Saving…", "Add Team Member"),
+                        on_click=PeopleState.save_new_tm,
+                        disabled=PeopleState.new_tm_saving,
+                        class_name="btn btn-primary",
+                        style={"fontSize": "13px"},
+                    ),
+                    style={"display": "flex", "justifyContent": "flex-end",
+                           "gap": "8px"},
+                ),
+                style={
+                    "position": "fixed",
+                    "top": "50%", "left": "50%",
+                    "transform": "translate(-50%, -50%)",
+                    "width": "min(420px, calc(100vw - 32px))",
+                    "background": "var(--surface-card)",
+                    "border": "1px solid var(--border-subtle)",
+                    "borderRadius": "var(--r-lg)",
+                    "padding": "20px",
+                    "boxShadow": "0 24px 64px rgba(0,0,0,0.32)",
+                    "zIndex": "61",
+                },
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
 def profile_view() -> rx.Component:
     """Read-only profile view."""
     return rx.el.div(
@@ -297,6 +549,8 @@ def profile_view() -> rx.Component:
         rx.el.button("Edit Profile", class_name="btn btn-ghost",
                      on_click=PeopleState.start_edit_profile,
                      style={"fontSize":"12px","padding":"6px 12px","marginBottom":"16px"}),
+        # Phase O.2 — Aliases editor
+        _aliases_section(),
         # Score history
         rx.cond(
             PeopleState.drawer_score_history.length() > 0,
@@ -901,6 +1155,8 @@ def people_page() -> rx.Component:
         rx.el.button("+", class_name="fab", on_click=AppState.open_capture,
                      title="Capture (⌘N)", aria_label="Quick capture"),
         profile_drawer(),
+        # Phase O.3 — Add TM modal
+        add_tm_modal(),
         command_palette(),
         capture_modal(),
         class_name=AppState.app_class_name,

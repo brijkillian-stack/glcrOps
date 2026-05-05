@@ -30,7 +30,9 @@ class PeopleState(AppState):
     # View controls
     view_mode:   str = "grid"    # "grid" | "list"
     sort_by:     str = "score"   # "score" | "name" | "rank"
-    pool_filter: str = "active"  # "all" | "active" | "loa" | "accom" | "trainer"
+    pool_filter: str = "active"  # "all" | "active" | "inactive" | "loa" | "accom" | "trainer"
+    # Phase O — shift filter, separate dimension from pool/status filter.
+    shift_filter: str = "all"    # "all" | "graves" | "swings" | "days"
 
     # ── Drawer shared ─────────────────────────────────────────────────────────
     drawer_open:    bool       = False
@@ -90,6 +92,20 @@ class PeopleState(AppState):
     new_aff_note:      str  = ""
     aff_saving:        bool = False
 
+    # ── Aliases editor (Phase O.2) ────────────────────────────────────────────
+    drawer_aliases:   list[str] = []
+    new_alias_input:  str       = ""
+    aliases_saving:   bool      = False
+    aliases_status:   str       = ""   # "" | "saved" | "error"
+
+    # ── Add TM modal (Phase O.3) ──────────────────────────────────────────────
+    add_tm_open:           bool = False
+    new_tm_display_name:   str  = ""
+    new_tm_aliases_text:   str  = ""   # comma-separated for one-shot input
+    new_tm_grave_pool:     str  = "Grave"
+    new_tm_saving:         bool = False
+    new_tm_error:          str  = ""
+
     # ── Computed vars ─────────────────────────────────────────────────────────
 
     @rx.var
@@ -107,6 +123,8 @@ class PeopleState(AppState):
         # Pool / status filter
         if self.pool_filter == "active":
             rows = [p for p in rows if p.get("active", True)]
+        elif self.pool_filter == "inactive":
+            rows = [p for p in rows if not p.get("active", True)]
         elif self.pool_filter == "loa":
             rows = [p for p in rows if p.get("status") == "loa"]
         elif self.pool_filter == "accom":
@@ -114,6 +132,13 @@ class PeopleState(AppState):
         elif self.pool_filter == "trainer":
             rows = [p for p in rows if p.get("is_trainer")]
         # "all" → no filter
+
+        # Phase O — shift filter (separate dimension)
+        # grave_pool: "Grave" → graves shift, "PM" → swings, "AM" → days
+        _SHIFT_POOL = {"graves": "Grave", "swings": "PM", "days": "AM"}
+        target_pool = _SHIFT_POOL.get(self.shift_filter, "")
+        if target_pool:
+            rows = [p for p in rows if (p.get("grave_pool") or "") == target_pool]
 
         # Sort
         if self.sort_by == "name":
@@ -236,6 +261,10 @@ class PeopleState(AppState):
     def set_pool_filter(self, v: str):
         self.pool_filter = v
 
+    @rx.event
+    def set_shift_filter(self, v: str):
+        self.shift_filter = v
+
     # ── Grid events ───────────────────────────────────────────────────────────
 
     @rx.event
@@ -306,6 +335,11 @@ class PeopleState(AppState):
         self.drawer_accommodations= profile.get("accommodations") or []
         self.drawer_preferences   = profile.get("preferences") or []
         self.drawer_affinities    = profile.get("pair_affinities") or []
+
+        # Phase O.2 — surface aliases for the editor section
+        self.drawer_aliases = list(profile.get("aliases") or [])
+        self.new_alias_input = ""
+        self.aliases_status  = ""
 
         # Build flat eligibility list for rx.foreach
         raw_elig = profile.get("eligibility") or {}
@@ -584,3 +618,105 @@ class PeopleState(AppState):
             self.elig_status = "saved"
         else:
             self.elig_status = "error"
+
+    # =========================================================================
+    # Aliases editor (Phase O.2)
+    # =========================================================================
+
+    @rx.event
+    def set_new_alias_input(self, v: str):
+        self.new_alias_input = v
+
+    @rx.event
+    def add_alias(self):
+        """Add the value in new_alias_input to drawer_aliases (deduped) and save."""
+        candidate = (self.new_alias_input or "").strip().lower()
+        if not candidate:
+            return
+        if candidate in [a.lower() for a in self.drawer_aliases]:
+            self.new_alias_input = ""
+            return
+        self.drawer_aliases = [*self.drawer_aliases, candidate]
+        self.new_alias_input = ""
+        self._persist_aliases()
+
+    @rx.event
+    def remove_alias(self, alias: str):
+        self.drawer_aliases = [a for a in self.drawer_aliases if a != alias]
+        self._persist_aliases()
+
+    def _persist_aliases(self):
+        """Internal — push current aliases list to entities.metadata."""
+        if not self.drawer_tm_id:
+            return
+        from apps.zds.database import update_entity_aliases
+        self.aliases_saving = True
+        ok = update_entity_aliases(self.drawer_tm_id, self.drawer_aliases)
+        self.aliases_saving = False
+        self.aliases_status = "saved" if ok else "error"
+
+    # =========================================================================
+    # Add Team Member modal (Phase O.3)
+    # =========================================================================
+
+    @rx.event
+    def open_add_tm_modal(self):
+        self.add_tm_open = True
+        self.new_tm_display_name = ""
+        self.new_tm_aliases_text = ""
+        self.new_tm_grave_pool = "Grave"
+        self.new_tm_error = ""
+
+    @rx.event
+    def close_add_tm_modal(self):
+        self.add_tm_open = False
+        self.new_tm_error = ""
+
+    @rx.event
+    def set_new_tm_display_name(self, v: str):
+        self.new_tm_display_name = v
+        self.new_tm_error = ""
+
+    @rx.event
+    def set_new_tm_aliases_text(self, v: str):
+        self.new_tm_aliases_text = v
+
+    @rx.event
+    def set_new_tm_grave_pool(self, v: str):
+        self.new_tm_grave_pool = v
+
+    @rx.event
+    async def save_new_tm(self):
+        """Validate + create the TM. Reloads people grid on success."""
+        from apps.zds.database import insert_tm_entity, is_display_name_taken
+        name = (self.new_tm_display_name or "").strip()
+        if not name:
+            self.new_tm_error = "Display name is required."
+            return
+        if is_display_name_taken(name):
+            self.new_tm_error = f"A TM named '{name}' already exists. Choose a different display name."
+            return
+        aliases = [
+            a.strip().lower()
+            for a in (self.new_tm_aliases_text or "").split(",")
+            if a.strip()
+        ]
+        self.new_tm_saving = True
+        self.new_tm_error  = ""
+        yield
+        try:
+            insert_tm_entity(
+                display_name=name,
+                grave_pool=self.new_tm_grave_pool or "Grave",
+                aliases=aliases,
+            )
+            self.new_tm_saving = False
+            self.add_tm_open = False
+            # Refresh the grid
+            self.people = get_people()
+        except ValueError as e:
+            self.new_tm_saving = False
+            self.new_tm_error = str(e)
+        except Exception as e:
+            self.new_tm_saving = False
+            self.new_tm_error = f"Save failed: {e}"

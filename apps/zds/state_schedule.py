@@ -57,6 +57,19 @@ class ScheduleEditorState(rx.State):
     loading: bool = True
     error:   str  = ""
 
+    # ── Unknown-name reconciler (Phase O.4) ──────────────────────────────────
+    # Names from the xlsx that don't resolve to any entity. Each entry has
+    # {first, last, display, shift}. The UI surfaces them as a banner with
+    # "Create new" / "Match to existing" actions per row.
+    unresolved_names: list[dict] = []
+    # Per-row action state — which name is being processed, and (if matching)
+    # which existing entity is selected from the dropdown.
+    reconcile_target_display: str = ""
+    reconcile_match_tm_id:    str = ""
+    reconcile_saving:         bool = False
+    # All TMs available as match targets (display_name + id)
+    reconcile_options: list[dict] = []
+
     # =========================================================================
     # Computed vars
     # =========================================================================
@@ -149,11 +162,32 @@ class ScheduleEditorState(rx.State):
                 if name_lower and cell_date:
                     ov_map[(name_lower, cell_date)] = o.get("override_value", "")
 
-            # 4. Parse grid
-            grid = schedule_parser.parse_week_grid(blob, overrides_by_tm_date=ov_map)
+            # 4. Parse grid — pass entities so the resolver can map xlsx
+            # legal names to entity nicknames via metadata.aliases.
+            grid = schedule_parser.parse_week_grid(
+                blob,
+                overrides_by_tm_date=ov_map,
+                entities=entities,
+            )
             self.dates    = grid.get("dates", [])
             self.weekdays = grid.get("weekdays", [])
             self.rows     = grid.get("rows", [])
+
+            # 5. Phase O.4 — find names in the xlsx that don't resolve to any
+            # entity, so the UI can offer to create-new or match-to-existing.
+            try:
+                self.unresolved_names = schedule_parser.find_unresolved_xlsx_names(
+                    blob, entities
+                )
+            except Exception as exc:
+                print(f"[_load_grid] unresolved scan: {exc}")
+                self.unresolved_names = []
+            # Build the dropdown options list (for "Match to existing")
+            self.reconcile_options = sorted(
+                ({"id": e["id"], "display_name": e.get("display_name", "")}
+                 for e in entities if e.get("display_name")),
+                key=lambda r: r["display_name"].lower(),
+            )
         except Exception as e:
             self.error = f"Couldn't load schedule: {e}"
         finally:
@@ -304,4 +338,85 @@ class ScheduleEditorState(rx.State):
             except Exception:
                 pass
         self.close_cell_popover()
+        self._load_grid()
+
+    # =========================================================================
+    # Phase O.4 — Unknown-name reconciler
+    # =========================================================================
+
+    @rx.event
+    def set_reconcile_target(self, display: str):
+        """User clicked Match on a row — open the dropdown for this row."""
+        self.reconcile_target_display = display or ""
+        self.reconcile_match_tm_id = ""
+
+    @rx.event
+    def set_reconcile_match_tm_id(self, tm_id: str):
+        self.reconcile_match_tm_id = tm_id or ""
+
+    @rx.event
+    def cancel_reconcile(self):
+        self.reconcile_target_display = ""
+        self.reconcile_match_tm_id = ""
+
+    @rx.event
+    def reconcile_create_new(self, display: str, shift: str):
+        """Create a new TM entity using the xlsx-derived display name."""
+        if not display:
+            return
+        self.reconcile_saving = True
+        try:
+            grave_pool = (
+                "Grave" if shift == "graves"
+                else "PM" if shift == "swings"
+                else "AM" if shift == "days"
+                else "Grave"
+            )
+            database.insert_tm_entity(
+                display_name=display.strip(),
+                grave_pool=grave_pool,
+                aliases=[],
+            )
+        except Exception as e:
+            self.error = f"Couldn't create TM: {e}"
+            self.reconcile_saving = False
+            return
+        self.reconcile_saving = False
+        # Reload the grid so the new entity resolves and the unresolved list shrinks
+        self._load_grid()
+
+    @rx.event
+    def reconcile_apply_match(self, first: str):
+        """Add the xlsx first-name as an alias on the chosen entity, then
+        reload so it resolves on the next pass."""
+        if not (first and self.reconcile_match_tm_id):
+            return
+        self.reconcile_saving = True
+        try:
+            # Pull current aliases, append the new one
+            res = (
+                database._client()
+                .table("entities")
+                .select("metadata")
+                .eq("id", self.reconcile_match_tm_id)
+                .single()
+                .execute()
+            )
+            meta = (res.data or {}).get("metadata") or {}
+            aliases = list(meta.get("aliases") or [])
+            new_alias = first.strip().lower()
+            if new_alias and new_alias not in aliases:
+                aliases.append(new_alias)
+            ok = database.update_entity_aliases(self.reconcile_match_tm_id, aliases)
+            if not ok:
+                self.error = "Couldn't update aliases."
+                self.reconcile_saving = False
+                return
+        except Exception as e:
+            self.error = f"Match failed: {e}"
+            self.reconcile_saving = False
+            return
+        self.reconcile_saving = False
+        self.reconcile_target_display = ""
+        self.reconcile_match_tm_id = ""
         self._load_grid()

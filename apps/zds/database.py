@@ -364,6 +364,98 @@ def remove_call_off(tm_id: str, night_date: str) -> bool:
         return False
 
 
+# ── ENTITY MANAGEMENT (Phase O) ───────────────────────────────────────────────
+# TM creation, alias editing, and display_name uniqueness checks.
+
+def is_display_name_taken(display_name: str, exclude_id: str = "") -> bool:
+    """True if a TM with this display_name already exists.
+    Pass `exclude_id` when validating during an edit (don't flag the same
+    row as a conflict with itself)."""
+    name = (display_name or "").strip()
+    if not name:
+        return False
+    try:
+        q = (
+            _client()
+            .table("entities")
+            .select("id")
+            .eq("entity_type", "tm")
+            .eq("display_name", name)
+        )
+        if exclude_id:
+            q = q.neq("id", exclude_id)
+        res = q.limit(1).execute()
+        return bool(res.data)
+    except Exception as e:
+        print(f"[is_display_name_taken] {e}")
+        return False
+
+
+def insert_tm_entity(
+    display_name: str,
+    grave_pool: str = "Grave",
+    aliases: Optional[list[str]] = None,
+) -> dict:
+    """Create a new TM entity. Returns the inserted row dict.
+
+    Raises ValueError if display_name is empty or already taken.
+    """
+    name = (display_name or "").strip()
+    if not name:
+        raise ValueError("display_name is required.")
+    if is_display_name_taken(name):
+        raise ValueError(f"A TM named '{name}' already exists.")
+
+    import uuid
+    metadata = {
+        "active":      True,
+        "grave_pool":  grave_pool or "Grave",
+        "display_name": name,
+        "skill_score": 5,
+        "aliases":     [a.strip().lower() for a in (aliases or []) if a.strip()],
+        "eligibility": {},
+    }
+    row = {
+        "id":           f"tm_{uuid.uuid4().hex[:12]}",
+        "name":         name,
+        "display_name": name,
+        "entity_type":  "tm",
+        "status":       "active",
+        "metadata":     metadata,
+    }
+    res = _client().table("entities").insert(row).execute()
+    return (res.data or [row])[0]
+
+
+def update_entity_aliases(entity_id: str, aliases: list[str]) -> bool:
+    """Replace the metadata.aliases array on an entity."""
+    if not entity_id:
+        return False
+    try:
+        # Fetch current metadata so we can preserve other keys
+        res = (
+            _client()
+            .table("entities")
+            .select("metadata")
+            .eq("id", entity_id)
+            .single()
+            .execute()
+        )
+        meta = (res.data or {}).get("metadata") or {}
+        meta["aliases"] = [a.strip().lower() for a in (aliases or []) if a.strip()]
+        (
+            _client()
+            .table("entities")
+            .update({"metadata": meta})
+            .eq("id", entity_id)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[update_entity_aliases] {e}")
+        return False
+
+
 # ── SCHEDULE OVERRIDES (Phase N.3) ────────────────────────────────────────────
 # Cell-level edits on top of an uploaded schedule xlsx. The parser layer
 # applies these on top of the raw xlsx values when building rosters.
@@ -767,11 +859,17 @@ def fetch_overlap_assignments(night_id: str) -> list[dict]:
 # ── TM ROSTER (for picker) ────────────────────────────────────────────────────
 
 def fetch_all_tms() -> list[dict]:
-    """All active TMs with their eligibility maps."""
+    """All active TMs with their eligibility maps.
+
+    Filters to entity_type='tm' so areas and other entity types are excluded.
+    Includes aliases + raw metadata so the schedule parser's alias resolver
+    can find them without re-querying.
+    """
     res = (
         _client()
         .table("entities")
-        .select("id, display_name, metadata")
+        .select("id, display_name, metadata, status")
+        .eq("entity_type", "tm")
         .eq("status", "active")
         .order("display_name")
         .execute()
@@ -790,6 +888,11 @@ def fetch_all_tms() -> list[dict]:
             "grave_pool":   meta.get("grave_pool", "") or "",
             "eligibility":  meta.get("eligibility", {}),
             "preferences":  meta.get("preferences", []),
+            # Phase O — surface aliases + raw metadata so the schedule parser's
+            # resolver and any alias-aware code can use them.
+            "aliases":      list(meta.get("aliases") or []),
+            "metadata":     meta,
+            "status":       row.get("status", "active"),
             # Annotated by state.open_picker at pick-time; defaults keep TypedDict valid
             "is_assigned":  False,
             "assigned_to":  "",

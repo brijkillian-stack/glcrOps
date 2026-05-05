@@ -206,12 +206,18 @@ def _detect_shift_label(ws) -> str:
     return ""
 
 
-def peek_shift_rosters_for_date(source, target_date: str) -> dict:
+def peek_shift_rosters_for_date(
+    source,
+    target_date: str,
+    entities: Optional[list[dict]] = None,
+) -> dict:
     """Return per-shift roster status for a single date.
 
     Args:
         source:      Path to a local xlsx file or raw bytes.
         target_date: ISO date string ("2026-05-04") to look up.
+        entities:    Optional entities list — if provided, names get resolved
+                     to entity nicknames via metadata.aliases (Stephen → Steve).
 
     Returns:
         {
@@ -219,8 +225,6 @@ def peek_shift_rosters_for_date(source, target_date: str) -> dict:
           "swings": {...},
           "graves": {...},
         }
-        Names are display-name format ("Brian K" / "Cookie") — caller is
-        responsible for matching to entities if it needs tm_ids.
         Returns empty buckets for shifts whose sheet is missing or unreadable.
     """
     import io
@@ -237,6 +241,7 @@ def peek_shift_rosters_for_date(source, target_date: str) -> dict:
     except Exception:
         return out
 
+    entity_lookup = build_entity_lookup(entities or [])
     target = target_date.strip()
     for sn in wb.sheetnames:
         ws = wb[sn]
@@ -275,9 +280,17 @@ def peek_shift_rosters_for_date(source, target_date: str) -> dict:
                 continue
             first = str(row[2] or "").strip()
             last = str(row[3] or "").strip()
-            if not first or first.lower() in ("first name", "none", ""):
+            if not first or first.lower() in (
+                "first name", "none", "",
+                "day shift", "swing shift", "grave shift",
+            ):
                 continue
-            display = f"{first} {last[0]}".strip() if last else first
+            # Drop "Headcount:" / "Shift" / etc. summary rows
+            if "headcount" in first.lower() or first.lower().endswith(":"):
+                continue
+            resolved = resolve_entity_display_name(first, last, entity_lookup)
+            xlsx_display = f"{first} {last[0]}".strip() if last else first
+            display = resolved or xlsx_display
             cell = row[target_col]
             if cell is None:
                 continue
@@ -301,14 +314,152 @@ def peek_shift_rosters_for_date(source, target_date: str) -> dict:
     return out
 
 
+# ── Name resolver (entity alias matching) ────────────────────────────────────
+# Bridges xlsx legal names ↔ entity nicknames. The xlsx uses full first names
+# (Stephen, Christopher, Samantha, Michael, …); your entities use the nicknames
+# you actually use on shift (Steve, Chris, Sam, Mike S, …). Each entity's
+# `metadata.aliases` list stores additional first-name variants the resolver
+# should treat as the same person.
+#
+# Example metadata.aliases values:
+#   Steve   → ["stephen"]
+#   Chris   → ["christopher"]
+#   Sam     → ["samantha"]
+#   Mike S  → ["michael"]
+#   Cookie  → ["catherine", "cathy"]   (etc.)
+
+
+def build_entity_lookup(entities: list[dict]) -> dict:
+    """Build a name lookup: lowercase-first-name → list of entity dicts.
+
+    Each entity contributes both its display_name's first token AND every
+    alias. Aliases are read from EITHER the top-level `aliases` field
+    (returned by fetch_all_tms post-Phase O) or from `metadata.aliases`
+    (raw entities row), to be tolerant of both shapes.
+    """
+    lookup: dict[str, list[dict]] = {}
+    for e in entities or []:
+        dn = (e.get("display_name") or "").strip()
+        if not dn:
+            continue
+        first_token = dn.split()[0].strip().lower()
+        if first_token:
+            lookup.setdefault(first_token, []).append(e)
+        # Try top-level first (flattened by fetch_all_tms), then metadata.
+        aliases = e.get("aliases")
+        if not aliases:
+            meta = e.get("metadata") or {}
+            aliases = meta.get("aliases") or []
+        for alias in aliases:
+            key = str(alias).strip().lower()
+            if key and e not in lookup.setdefault(key, []):
+                lookup[key].append(e)
+    return lookup
+
+
+def resolve_entity_display_name(
+    first: str,
+    last: str,
+    lookup: dict,
+) -> str:
+    """Map a (first, last) pair from an xlsx row to an entity's display_name.
+
+    Returns "" if no entity matches — caller should fall back to the
+    xlsx-derived display.
+    """
+    if not first:
+        return ""
+    fn = first.strip().lower()
+    candidates = lookup.get(fn, [])
+    if not candidates:
+        return ""
+    if len(candidates) == 1:
+        return candidates[0].get("display_name", "") or ""
+    # Multiple candidates share this first name — disambiguate by last initial.
+    ln_initial = (last or "").strip()[:1].upper()
+    if ln_initial:
+        for e in candidates:
+            dn = (e.get("display_name") or "").strip()
+            parts = dn.split()
+            # Entity display_names are formatted "First" or "First L" — match
+            # on the second token's first letter.
+            if len(parts) > 1 and parts[1][:1].upper() == ln_initial:
+                return dn
+    # Fallback: first match
+    return candidates[0].get("display_name", "") or ""
+
+
 # ── Full week grid extractor (Phase N.2 / N.3) ───────────────────────────────
 # Reads ALL three sheets and returns the full week's roster as a list of
 # rows ready for the editor grid: one entry per (TM, shift) with cells per
 # date. Optional overrides dict applies on top of raw xlsx values.
+# Phase N.2.5 — also accepts entities to resolve xlsx legal names → entity
+# nicknames via metadata.aliases.
+
+def find_unresolved_xlsx_names(
+    source,
+    entities: list[dict],
+) -> list[dict]:
+    """Phase O.4 — return every (first, last, shift) row in the xlsx whose
+    first name + last initial doesn't resolve to any entity.
+
+    Used by the schedule editor to surface "Unknown TMs found" so Brian can
+    create new entities or alias them to existing ones.
+    """
+    import io
+    out: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    try:
+        if hasattr(source, "read"):
+            wb = openpyxl.load_workbook(source, data_only=True, read_only=True)
+        elif isinstance(source, (bytes, bytearray)):
+            wb = openpyxl.load_workbook(io.BytesIO(source), data_only=True, read_only=True)
+        else:
+            wb = openpyxl.load_workbook(str(source), data_only=True, read_only=True)
+    except Exception:
+        return out
+
+    lookup = build_entity_lookup(entities or [])
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        shift = _detect_shift_label(ws)
+        if not shift:
+            continue
+        for row in ws.iter_rows(min_row=8, max_row=ws.max_row, values_only=True):
+            if not row or len(row) < 4:
+                continue
+            first = str(row[2] or "").strip()
+            last = str(row[3] or "").strip()
+            if not first or first.lower() in (
+                "first name", "none", "",
+                "day shift", "swing shift", "grave shift",
+            ):
+                continue
+            # Drop "Headcount:" / "Shift" / etc. summary rows
+            if "headcount" in first.lower() or first.lower().endswith(":"):
+                continue
+            resolved = resolve_entity_display_name(first, last, lookup)
+            if resolved:
+                continue
+            xlsx_display = f"{first} {last[0]}".strip() if last else first
+            key = (first.lower(), last.lower(), shift)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "first":   first,
+                "last":    last,
+                "display": xlsx_display,
+                "shift":   shift,
+            })
+    wb.close()
+    return out
+
 
 def parse_week_grid(
     source,
     overrides_by_tm_date: Optional[dict] = None,
+    entities: Optional[list[dict]] = None,
 ) -> dict:
     """Parse a schedule xlsx into a full editor-friendly grid.
 
@@ -351,6 +502,8 @@ def parse_week_grid(
         return out
 
     overrides_by_tm_date = overrides_by_tm_date or {}
+    # Build the alias-aware lookup once; resolves xlsx (first, last) → entity nickname.
+    entity_lookup = build_entity_lookup(entities or [])
 
     # Pull dates from the FIRST sheet that has them — every shift uses the same
     # week so this is consistent.
@@ -420,9 +573,20 @@ def parse_week_grid(
                 continue
             first = str(row[2] or "").strip()
             last = str(row[3] or "").strip()
-            if not first or first.lower() in ("first name", "none", ""):
+            if not first or first.lower() in (
+                "first name", "none", "",
+                "day shift", "swing shift", "grave shift",
+            ):
                 continue
-            display = f"{first} {last[0]}".strip() if last else first
+            # Drop "Headcount:" / "Shift" / etc. summary rows
+            if "headcount" in first.lower() or first.lower().endswith(":"):
+                continue
+            # Resolve to canonical entity nickname when possible (Stephen → Steve,
+            # Christopher → Chris, etc. via metadata.aliases). Falls back to the
+            # xlsx-derived "First L" when no entity match is found.
+            resolved = resolve_entity_display_name(first, last, entity_lookup)
+            xlsx_display = f"{first} {last[0]}".strip() if last else first
+            display = resolved or xlsx_display
 
             cells = []
             ov_key_base = display.strip().lower()
