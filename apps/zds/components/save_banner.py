@@ -64,17 +64,18 @@ def _change_row(entry) -> rx.Component:
             flex="1",
             min_width="0",
         ),
-        # Undo button (or "undone" pill)
+        # Undo / Redo button — Phase K.4: undone entries get a Redo action
         rx.cond(
             entry["undone"],
-            rx.text(
-                "undone",
+            rx.button(
+                rx.icon("redo-2", size=12),
+                "Redo",
                 size="1",
-                color="#9ca3af",
-                font_style="italic",
-                padding="2px 6px",
-                border_radius="4px",
-                background="#f3f4f6",
+                variant="soft",
+                color_scheme="blue",
+                on_click=ZdsState.redo_change(entry["id"]),
+                cursor="pointer",
+                title="Re-apply this change",
             ),
             rx.button(
                 rx.icon("undo-2", size=12),

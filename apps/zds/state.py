@@ -17,8 +17,10 @@ from .database import ENGINE_SLOT_LABEL
 from .styles import BG_ZONE, BG_RR_M, BG_RR_W, BG_AUX
 from .types import (
     EMPTY_NIGHT,
+    EMPTY_ENGINE_RESULT,
     BreakRow,
     ChangeLogEntry,
+    EngineResult,
     Night,
     OverlapRow,
     RRSlot,
@@ -127,6 +129,12 @@ class ZdsState(rx.State):
     # The Schedule tab UI shows names from the parsed xlsx, but the call_offs
     # table is keyed by tm_id, so we need this bridge.
     tm_name_to_id: dict = {}
+
+    # ── Engine result dialog (Phase K.1) ──────────────────────────────────────
+    # Modal that pops up after Run Engine / Set Break Waves with a structured
+    # summary of what changed.
+    engine_result_open: bool = False
+    engine_result: EngineResult = EMPTY_ENGINE_RESULT
 
     # ── TM Picker ─────────────────────────────────────────────────────────────
     show_picker:     bool = False
@@ -734,6 +742,38 @@ class ZdsState(rx.State):
                     tm["schedule_pool"] = "off"
                 tm["is_called_off"] = dn in called_off_set
 
+            # Phase K.2 — batch-fetch recent placements for the eligible TMs.
+            # Strictly before this night's date so we never show tonight's
+            # in-progress placement as "history".
+            current_night_date = ""
+            for n in self.nights:
+                if n["id"] == self.current_night_id:
+                    current_night_date = n.get("night_date", "")
+                    break
+            if current_night_date:
+                tm_ids = [t["id"] for t in tms]
+                try:
+                    history_map = database.fetch_recent_placements_bulk(
+                        tm_ids, before_date=current_night_date, max_per_tm=3,
+                    )
+                except Exception as exc:
+                    print(f"[open_picker] history fetch: {exc}")
+                    history_map = {}
+                for tm in tms:
+                    hist = history_map.get(tm["id"], []) or []
+                    # Pre-render the compact label string the UI will show.
+                    # "Mon Z3 · Sun Z6 · Sat Z9 SR"  (newest first)
+                    if hist:
+                        tm["history_summary"] = " · ".join(
+                            f"{h['weekday']} {h['slot_label']}".strip()
+                            for h in hist
+                        )
+                    else:
+                        tm["history_summary"] = ""
+            else:
+                for tm in tms:
+                    tm["history_summary"] = ""
+
             # Sort: scheduled TMs first (grave → pm_ol → am_ol → off),
             #       already-assigned slots sink to the bottom within each group
             _pool_order = {"grave": 0, "pm_ol": 1, "am_ol": 2, "off": 3}
@@ -791,6 +831,10 @@ class ZdsState(rx.State):
         prev_tm_id: str = "",
         prev_lock: bool = False,
         task_text: str = "",
+        # Phase K.4 — redo + swap-revert payload
+        new_tm_id: str = "",
+        new_lock: bool = False,
+        source_slot_id: str = "",
     ) -> None:
         """Append a ChangeLogEntry, newest-first, capped at 100 entries."""
         entry: ChangeLogEntry = {
@@ -807,6 +851,9 @@ class ZdsState(rx.State):
             "prev_lock": prev_lock,
             "task_text": task_text,
             "undone": False,
+            "new_tm_id": new_tm_id,
+            "new_lock": new_lock,
+            "source_slot_id": source_slot_id,
         }
         self.change_log = [entry] + self.change_log[:99]
 
@@ -830,6 +877,18 @@ class ZdsState(rx.State):
                 prev = entry["prev_tm_id"] or None
                 database.update_zone_assignment(slot_id, prev)
                 self._do_engine_night(self.current_night_id)
+            elif kind == "swap":
+                # Phase K.4 — swap revert: put each TM back where they were.
+                # entry.slot_id      = target slot (where new_tm_id ended up)
+                # entry.source_slot_id = source slot (where prev_tm_id ended up after swap)
+                # entry.prev_tm_id   = TM that was at target before the swap
+                # entry.new_tm_id    = TM that was moved INTO target (came from source)
+                src_slot = entry.get("source_slot_id", "") or ""
+                # Restore: target slot back to prev_tm_id, source slot back to new_tm_id
+                database.update_zone_assignment(slot_id, entry["prev_tm_id"] or None)
+                if src_slot:
+                    database.update_zone_assignment(src_slot, entry["new_tm_id"] or None)
+                self._do_engine_night(self.current_night_id)
             elif kind == "lock_toggle":
                 database.update_slot_lock(slot_id, entry["prev_lock"])
             elif kind == "task_add":
@@ -845,6 +904,57 @@ class ZdsState(rx.State):
             # Mark this entry undone — keep it in the log as an audit trail
             self.change_log = [
                 {**c, "undone": True} if c["id"] == entry_id else c
+                for c in self.change_log
+            ]
+            self._load_night(self.current_night_id)
+        except Exception as e:
+            self.error = str(e)
+
+    def redo_change(self, entry_id: str):
+        """Phase K.4 — Re-apply an undone mutation.
+
+        Symmetric to revert_change. Walks the same kind switch but with the
+        forward payload (new_tm_id / new_lock) instead of the prev payload.
+        """
+        entry: Optional[ChangeLogEntry] = None
+        for c in self.change_log:
+            if c["id"] == entry_id:
+                entry = c
+                break
+        if entry is None or not entry["undone"]:
+            return
+        try:
+            kind = entry["kind"]
+            slot_id = entry["slot_id"]
+            if kind == "assign":
+                database.update_zone_assignment(slot_id, entry["new_tm_id"] or None)
+                self._do_engine_night(self.current_night_id)
+            elif kind == "clear":
+                # A clear's "redo" is to clear again — write None.
+                database.update_zone_assignment(slot_id, None)
+                self._do_engine_night(self.current_night_id)
+            elif kind == "swap":
+                src_slot = entry.get("source_slot_id", "") or ""
+                # Re-apply: target slot gets new_tm_id, source gets prev_tm_id
+                database.update_zone_assignment(slot_id, entry["new_tm_id"] or None)
+                if src_slot:
+                    database.update_zone_assignment(src_slot, entry["prev_tm_id"] or None)
+                self._do_engine_night(self.current_night_id)
+            elif kind == "lock_toggle":
+                database.update_slot_lock(slot_id, entry["new_lock"])
+            elif kind == "task_add":
+                tasks = self._get_slot_tasks(slot_id)
+                if entry["task_text"] not in tasks:
+                    tasks.append(entry["task_text"])
+                database.update_slot_tasks(slot_id, tasks)
+            elif kind == "task_remove":
+                tasks = [t for t in self._get_slot_tasks(slot_id) if t != entry["task_text"]]
+                database.update_slot_tasks(slot_id, tasks)
+            else:
+                return
+            # Mark not-undone again
+            self.change_log = [
+                {**c, "undone": False} if c["id"] == entry_id else c
                 for c in self.change_log
             ]
             self._load_night(self.current_night_id)
@@ -898,6 +1008,7 @@ class ZdsState(rx.State):
                 icon="user-plus",
                 accent="#1d4ed8",
                 prev_tm_id=prev_tm_id,
+                new_tm_id=tm_id,
             )
         except Exception as e:
             self.error = str(e)
@@ -986,6 +1097,8 @@ class ZdsState(rx.State):
                 icon="arrow-left-right",
                 accent="#7c3aed",   # violet — distinguishes swap from assign/clear
                 prev_tm_id=target_prev_tm_id,
+                new_tm_id=target_tm_id,
+                source_slot_id=source_slot_id,
             )
         except Exception as e:
             self.error = f"Swap failed: {e}"
@@ -1102,6 +1215,7 @@ class ZdsState(rx.State):
                 icon="lock" if new_state else "lock_open",
                 accent="#a16207" if new_state else "#6b7280",
                 prev_lock=current,
+                new_lock=new_state,
             )
         except Exception as e:
             self.error = str(e)
@@ -1335,7 +1449,7 @@ class ZdsState(rx.State):
     # Zone Deployment Engine — auto-fill zone/RR/aux assignments from schedule
     # =========================================================================
 
-    def _do_zone_engine(self, target_night_id: str | None = None) -> str:
+    def _do_zone_engine(self, target_night_id: str | None = None) -> dict:
         """
         Run the full GLCR fill_engine for the current week and sync results to
         Supabase zone_assignments.
@@ -1344,7 +1458,18 @@ class ZdsState(rx.State):
         night's unlocked slots are updated (the full week still runs for correct
         cross-day rotation).
 
-        Returns a human-readable status message.
+        Returns a structured result dict (Phase K.1):
+            {
+              "success":      bool,
+              "scope":        "night" | "week",
+              "updated":      int,        # slots written
+              "locked_skipped": int,      # slots preserved due to lock
+              "unresolved_cleared": int,  # slots the engine couldn't fill that we cleared
+              "unresolved":   list[dict], # full engine.unresolved list
+              "week_ending":  str,
+              "error":        str | "",
+              "message":      str,        # human-readable one-liner
+            }
         """
         from .engine_bridge import run_fill_engine
         from . import database
@@ -1357,8 +1482,16 @@ class ZdsState(rx.State):
         else:
             result = run_fill_engine()
 
+        scope = "night" if target_night_id else "week"
+
         if result.get("error"):
-            return f"Engine error: {result['error']}"
+            return {
+                "success": False, "scope": scope,
+                "updated": 0, "locked_skipped": 0, "unresolved_cleared": 0,
+                "unresolved": [], "week_ending": result.get("week_ending", ""),
+                "error":  f"Engine error: {result['error']}",
+                "message": f"Engine error: {result['error']}",
+            }
 
         # Sync placements to Supabase
         summary = database.sync_engine_to_week(
@@ -1368,25 +1501,40 @@ class ZdsState(rx.State):
         )
 
         if summary.get("error"):
-            return f"Sync error: {summary['error']}"
+            return {
+                "success": False, "scope": scope,
+                "updated": 0, "locked_skipped": 0, "unresolved_cleared": 0,
+                "unresolved": [], "week_ending": result.get("week_ending", ""),
+                "error":  f"Sync error: {summary['error']}",
+                "message": f"Sync error: {summary['error']}",
+            }
 
-        scope = "night" if target_night_id else "week"
         updated   = summary.get("updated", 0)
         locked    = summary.get("skipped_locked", 0)
         cleared   = summary.get("unresolved_cleared", 0)
-        unresolved_total = len(result.get("unresolved", []))
+        unresolved = result.get("unresolved", []) or []
 
-        msg = (
-            f"Deployment engine ran ({scope}): "
-            f"{updated} slot(s) filled"
-        )
+        # Compose human-readable summary
+        bits = [f"{updated} slot(s) filled"]
         if cleared:
-            msg += f", {cleared} cleared (engine couldn't fill)"
+            bits.append(f"{cleared} cleared (no eligible TM)")
         if locked:
-            msg += f", {locked} locked slot(s) preserved"
-        if unresolved_total:
-            msg += f". Engine unresolved: {unresolved_total}"
-        return msg
+            bits.append(f"{locked} locked preserved")
+        if unresolved:
+            bits.append(f"{len(unresolved)} unresolved")
+        msg = f"Deployment engine ran ({scope}): " + ", ".join(bits) + "."
+
+        return {
+            "success":            True,
+            "scope":              scope,
+            "updated":            updated,
+            "locked_skipped":     locked,
+            "unresolved_cleared": cleared,
+            "unresolved":         unresolved,
+            "week_ending":        result.get("week_ending", ""),
+            "error":              "",
+            "message":            msg,
+        }
 
     def run_zone_engine_current_night(self):
         """
@@ -1398,13 +1546,11 @@ class ZdsState(rx.State):
         self.loading = True
         self.error = ""
         try:
-            msg = self._do_zone_engine(target_night_id=self.current_night_id)
+            result = self._do_zone_engine(target_night_id=self.current_night_id)
             # Re-run break wave engine to keep break sheet in sync
             self._do_engine_night(self.current_night_id)
             self._load_night(self.current_night_id)
-            # Surface any error messages; otherwise clear error
-            if msg.startswith("Engine error") or msg.startswith("Sync error"):
-                self.error = msg
+            self._open_engine_result(result)
         except Exception as e:
             self.error = str(e)
         finally:
@@ -1419,11 +1565,10 @@ class ZdsState(rx.State):
         self.loading = True
         self.error = ""
         try:
-            msg = self._do_zone_engine(target_night_id=night_id)
+            result = self._do_zone_engine(target_night_id=night_id)
             # Re-run break wave engine for this night too
             self._do_engine_night(night_id)
-            if msg.startswith("Engine error") or msg.startswith("Sync error"):
-                self.error = msg
+            self._open_engine_result(result)
         except Exception as e:
             self.error = str(e)
         finally:
@@ -1439,15 +1584,170 @@ class ZdsState(rx.State):
         self.loading = True
         self.error = ""
         try:
-            msg = self._do_zone_engine(target_night_id=None)
+            result = self._do_zone_engine(target_night_id=None)
             # Re-run break wave engine for all nights
             for night in self.nights:
                 self._do_engine_night(night["id"])
             if self.current_night_id:
                 self._load_night(self.current_night_id)
-            if msg.startswith("Engine error") or msg.startswith("Sync error"):
-                self.error = msg
+            self._open_engine_result(result)
         except Exception as e:
             self.error = str(e)
         finally:
             self.loading = False
+
+    # ── Bulk operations on the current night (Phase K.3) ──────────────────────
+
+    def bulk_clear_unlocked(self):
+        """Clear every UNLOCKED filled slot on the current night.
+        Locked slots are preserved.
+        """
+        if not self.current_night_id:
+            return
+        cleared_count = 0
+        try:
+            for s in self.zone_slots + self.aux_slots:
+                if s.get("is_filled") and not s.get("is_locked"):
+                    database.update_zone_assignment(s["id"], None)
+                    cleared_count += 1
+            for rr in self.rr_slots:
+                if rr.get("mens_is_filled") and not rr.get("mens_is_locked"):
+                    database.update_zone_assignment(rr["mens_slot_id"], None)
+                    cleared_count += 1
+                if rr.get("womens_is_filled") and not rr.get("womens_is_locked"):
+                    database.update_zone_assignment(rr["womens_slot_id"], None)
+                    cleared_count += 1
+            self._do_engine_night(self.current_night_id)
+            self._load_night(self.current_night_id)
+            if cleared_count:
+                self._log_change(
+                    kind="bulk_clear",
+                    slot_id="",
+                    target_label="all unlocked",
+                    detail=f"Cleared {cleared_count} unlocked slot(s)",
+                    icon="brush-cleaning",
+                    accent="#9ca3af",
+                )
+        except Exception as e:
+            self.error = str(e)
+
+    def bulk_lock_filled(self):
+        """Lock every filled slot on the current night.
+        Useful once you're happy with a night and want to freeze it before
+        iterating on others."""
+        if not self.current_night_id:
+            return
+        locked_count = 0
+        try:
+            for s in self.zone_slots + self.aux_slots:
+                if s.get("is_filled") and not s.get("is_locked"):
+                    database.update_slot_lock(s["id"], True)
+                    locked_count += 1
+            for rr in self.rr_slots:
+                if rr.get("mens_is_filled") and not rr.get("mens_is_locked"):
+                    database.update_slot_lock(rr["mens_slot_id"], True)
+                    locked_count += 1
+                if rr.get("womens_is_filled") and not rr.get("womens_is_locked"):
+                    database.update_slot_lock(rr["womens_slot_id"], True)
+                    locked_count += 1
+            self._load_night(self.current_night_id)
+            if locked_count:
+                self._log_change(
+                    kind="bulk_lock",
+                    slot_id="",
+                    target_label="all filled",
+                    detail=f"Locked {locked_count} filled slot(s)",
+                    icon="lock",
+                    accent="#a16207",
+                )
+        except Exception as e:
+            self.error = str(e)
+
+    def bulk_copy_from_previous_night(self):
+        """Copy filled placements from the previous night in this week into
+        the corresponding unlocked slots on the current night.
+
+        Locks on the target slots are preserved (won't overwrite). Walks by
+        slot_key + rr_side so the mapping is unambiguous.
+        """
+        if not self.current_night_id or not self.current_week_id:
+            return
+        # Find current night's day_num and the previous night
+        current_day_num = 0
+        for n in self.nights:
+            if n["id"] == self.current_night_id:
+                current_day_num = int(n.get("day_num", 0) or 0)
+                break
+        if current_day_num <= 1:
+            self.error = "No previous night in this week to copy from."
+            return
+        prev_night_id = ""
+        for n in self.nights:
+            if int(n.get("day_num", 0) or 0) == current_day_num - 1:
+                prev_night_id = n["id"]
+                break
+        if not prev_night_id:
+            self.error = "Previous night not found in this week."
+            return
+
+        try:
+            prev_slots = database.fetch_zone_assignments(prev_night_id)
+            # Index prev by (slot_key, rr_side)
+            prev_by_key: dict[tuple, str] = {}
+            for s in prev_slots:
+                if s.get("tm_id"):
+                    key = (s["slot_key"], s.get("rr_side") or "")
+                    prev_by_key[key] = s["tm_id"]
+
+            copied = 0
+            # Walk current zone + aux slots
+            for s in self.zone_slots + self.aux_slots:
+                if s.get("is_locked"):
+                    continue
+                key = (s["slot_key"], s.get("rr_side") or "")
+                src_tm = prev_by_key.get(key)
+                if src_tm:
+                    database.update_zone_assignment(s["id"], src_tm)
+                    copied += 1
+            # Walk current RR slots (per side)
+            for rr in self.rr_slots:
+                if not rr.get("mens_is_locked") and rr.get("mens_slot_id"):
+                    src_tm = prev_by_key.get((rr["slot_key"], "mens"))
+                    if src_tm:
+                        database.update_zone_assignment(rr["mens_slot_id"], src_tm)
+                        copied += 1
+                if not rr.get("womens_is_locked") and rr.get("womens_slot_id"):
+                    src_tm = prev_by_key.get((rr["slot_key"], "womens"))
+                    if src_tm:
+                        database.update_zone_assignment(rr["womens_slot_id"], src_tm)
+                        copied += 1
+
+            self._do_engine_night(self.current_night_id)
+            self._load_night(self.current_night_id)
+            self._log_change(
+                kind="bulk_copy",
+                slot_id="",
+                target_label="from previous night",
+                detail=f"Copied {copied} placement(s) from previous night",
+                icon="copy",
+                accent="#0ea5e9",
+            )
+        except Exception as e:
+            self.error = str(e)
+
+    # ── Engine result dialog (Phase K.1) ──────────────────────────────────────
+
+    def _open_engine_result(self, result: dict):
+        """Surface the structured engine result in a modal (and as self.error
+        if it was a failure)."""
+        self.engine_result = result or {}
+        self.engine_result_open = True
+        if not result.get("success"):
+            self.error = result.get("error", "") or result.get("message", "")
+
+    def close_engine_result(self):
+        self.engine_result_open = False
+
+    def set_engine_result_open(self, open_: bool):
+        """Two-way bind for rx.dialog's on_open_change."""
+        self.engine_result_open = bool(open_)

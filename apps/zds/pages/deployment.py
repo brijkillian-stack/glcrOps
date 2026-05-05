@@ -6,6 +6,7 @@ Shows the 5×2 zones grid, 5-card RR row, aux strip, and a flip-side break sheet
 import reflex as rx
 from ..state import ZdsState
 from ..components import zone_card, rr_card, aux_card, tm_picker_drawer, night_tab_bar, save_banner
+from ..components.engine_result_dialog import engine_result_dialog
 
 
 # ── Section header ────────────────────────────────────────────────────────────
@@ -429,6 +430,45 @@ def deployment() -> rx.Component:
                 on_click=ZdsState.open_print_current_night,
                 cursor="pointer",
             ),
+            # Bulk operations menu — Phase K.3
+            rx.menu.root(
+                rx.menu.trigger(
+                    rx.button(
+                        rx.icon("ellipsis-vertical", size=14),
+                        "Bulk",
+                        variant="outline",
+                        size="2",
+                        cursor="pointer",
+                    ),
+                ),
+                rx.menu.content(
+                    rx.menu.item(
+                        rx.hstack(
+                            rx.icon("brush-cleaning", size=13, color="#9ca3af"),
+                            rx.text("Clear all unlocked"),
+                            gap="8px", align="center",
+                        ),
+                        on_click=ZdsState.bulk_clear_unlocked,
+                    ),
+                    rx.menu.item(
+                        rx.hstack(
+                            rx.icon("lock", size=13, color="#a16207"),
+                            rx.text("Lock all filled"),
+                            gap="8px", align="center",
+                        ),
+                        on_click=ZdsState.bulk_lock_filled,
+                    ),
+                    rx.menu.separator(),
+                    rx.menu.item(
+                        rx.hstack(
+                            rx.icon("copy", size=13, color="#0ea5e9"),
+                            rx.text("Copy from previous night"),
+                            gap="8px", align="center",
+                        ),
+                        on_click=ZdsState.bulk_copy_from_previous_night,
+                    ),
+                ),
+            ),
             # Run Deployment Engine — auto-fill unlocked zone/RR/aux slots from schedule
             rx.button(
                 rx.icon("cpu", size=14),
@@ -550,6 +590,9 @@ def deployment() -> rx.Component:
 
         # Audit banner — sticky bottom-right, hidden until first change
         save_banner(),
+
+        # Engine result dialog — Phase K.1, pops up after Run Engine
+        engine_result_dialog(),
 
         background="#f9fafb",
         min_height="100vh",

@@ -51,20 +51,39 @@ from glcr_engine.config import (
     ZONE_ADJACENCY as _ZONE_ADJACENCY_SHARED,
 )
 
+# 5/5/26: DB helpers — replace Rules/*.json + Eligibility Roster.xlsx reads.
+# shared/ lives at repo root (4 parents above this file).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from shared.db import (
+    get_engine_roster_from_db,
+    get_engine_profiles_from_db,
+    get_slot_difficulty as _get_slot_difficulty_db,
+    get_slot_load_scores as _get_slot_load_scores_db,
+    get_scorecard_config as _get_scorecard_config_db,
+    get_overlap_tasks_for_engine,
+    get_training_schedule_from_db,
+    create_new_tm_stub_in_db,
+)
+
 # BASE = the GLCR working directory. Resolved from this script's location so
 # the engine runs unchanged in any cowork session. (The script lives at
 # GLCR/fill_engine.py; everything else — Rules/, Templates/, Outputs/,
 # Inputs/ — is a sibling.)
 BASE            = Path(__file__).resolve().parent
-ROSTER_PATH     = BASE / "Rules" / "Eligibility Roster.xlsx"
+# Templates + Archive stay file-based (output artifacts, not rule data).
 TEMPLATE_PATH   = BASE / "Templates" / "Zone Deployment Master Template.xlsx"
 ARCHIVE_PATH    = BASE / "Archive" / "Grave Placement Archive.xlsx"
-PROFILES_PATH   = BASE / "Rules" / "TM Profiles.json"
-DIFFICULTY_PATH = BASE / "Rules" / "Slot Difficulty.json"
-TRAINING_CONFIG_PATH = BASE / "Rules" / "Training Config.json"
-OVERLAP_TASKS_PATH   = BASE / "Rules" / "Overlap Tasks.json"
-SLOT_LOAD_PATH       = BASE / "Rules" / "Slot Load Scores.json"
-SCORECARD_WEIGHTS_PATH = BASE / "Rules" / "Scorecard Weights.json"
+# Rules/*.json paths kept for reference but are no longer read by the engine.
+# Data now lives in Supabase. Files will be removed after the next verified run.
+ROSTER_PATH          = BASE / "Rules" / "Eligibility Roster.xlsx"   # obsolete
+PROFILES_PATH        = BASE / "Rules" / "TM Profiles.json"          # obsolete
+DIFFICULTY_PATH      = BASE / "Rules" / "Slot Difficulty.json"      # obsolete
+TRAINING_CONFIG_PATH = BASE / "Rules" / "Training Config.json"      # obsolete
+OVERLAP_TASKS_PATH   = BASE / "Rules" / "Overlap Tasks.json"        # obsolete
+SLOT_LOAD_PATH       = BASE / "Rules" / "Slot Load Scores.json"     # obsolete
+SCORECARD_WEIGHTS_PATH = BASE / "Rules" / "Scorecard Weights.json"  # obsolete
 
 # ── AUTO-DETECT SCHEDULE FILE ─────────────────────────────────────────
 # Default: most recently modified .xlsx in Weekly Schedules.
@@ -145,14 +164,12 @@ STAFFING_GOAL = {
 
 }
 
-# ── TRAINING SCHEDULE (from config file) ─────────────────────────────
-# Edit Rules/Training Config.json through conversation — never edit this file.
+# ── TRAINING SCHEDULE (from Supabase public.training_schedule) ───────
+# Edit via the webapp or through conversation — never edit this file.
 TRAINING_SCHEDULE = {}
-if TRAINING_CONFIG_PATH.exists():
-    with open(TRAINING_CONFIG_PATH) as _tf:
-        _tc = json.load(_tf)
-    TRAINING_SCHEDULE = _tc.get("schedule", {})
-    print(f"  Training config: {len(TRAINING_SCHEDULE)} scheduled day(s) loaded")
+_tc = get_training_schedule_from_db()
+TRAINING_SCHEDULE = _tc.get("schedule", {})
+print(f"  Training config: {len(TRAINING_SCHEDULE)} scheduled day(s) loaded (DB)")
 
 
 # Zone adjacency — sourced from glcr_engine/config.py (5/3/26 consolidation).
@@ -234,49 +251,19 @@ print(f"Run: {RUN_TS[:19]}")
 print("=" * 62)
 
 # ── 1. ROSTER ────────────────────────────────────────────────────────
-print("\n[1/7] Loading Eligibility Roster...")
-rwb = openpyxl.load_workbook(ROSTER_PATH, data_only=True)
-rws = rwb.active
-hdr = list(rws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
-col_idx = {str(v).strip(): i for i, v in enumerate(hdr) if v}
-ZONE_ELIG_COLS = {k: v for k, v in col_idx.items()
-                  if k not in ("Employee Name","Display Name","Active",
-                               "Grave Pool","Primary Section","Tie Break Rank","Notes","")}
-roster = {}
-fn_lookup = {}
-for row in rws.iter_rows(min_row=3, values_only=True):
-    if not row or not row[0]: continue
-    emp = str(row[0]).strip()
-    if not emp: continue
-    # 5/2/26: respect Active=N to exclude TMs from the grave deployment pool.
-    # Used when a TM transfers off grave (e.g., Liz → Utility Porter team).
-    active_val = str(row[2]).strip().upper() if row[2] is not None else "Y"
-    if active_val == "N": continue
-    disp = str(row[1]).strip() if row[1] else emp.split()[0]
-    pool = str(row[3]).strip() if row[3] else "Grave"
-    try:   rank = int(float(str(row[5]))) if row[5] is not None else 999
-    except: rank = 999
-    elig_map = {}
-    for zone, ci in ZONE_ELIG_COLS.items():
-        v = row[ci] if ci < len(row) else None
-        elig_map[zone] = str(v).strip().upper() == "Y" if v else False
-    key = emp.lower()
-    roster[key] = {"emp_name":emp,"display_name":disp,"pool":pool,"rank":rank,"eligibility":elig_map}
-    fn_lookup.setdefault(key.split()[0], []).append(key)
-
+# 5/5/26: reads from Supabase public.tm_profiles + public.tm_eligibility.
+print("\n[1/7] Loading Eligibility Roster (DB)...")
+roster, fn_lookup = get_engine_roster_from_db()
 print(f"  {len(roster)} TMs loaded")
 
-# ── TRAINEE_DISPLAY: dynamic from TM Profiles (score ≤ 3 = in training) ─
-# Falls back to hardcoded set if profiles not loaded yet.
-_profile_trainees = set()
-if PROFILES_PATH.exists():
-    try:
-        with open(PROFILES_PATH) as _pf:
-            _pd_tmp = json.load(_pf)
-        for _dn, _p in _pd_tmp.get("profiles", {}).items():
-            if _p.get("skill_score", 5) <= 3:
-                _profile_trainees.add(_dn)
-    except: pass
+# ── TRAINEE_DISPLAY + profiles_data from Supabase (5/5/26) ──────────
+# Load profiles once; reused by 1b, 1c, 1d, and drift-check below.
+print("  Loading TM profiles from Supabase...")
+profiles_data = get_engine_profiles_from_db()
+_profile_trainees = {
+    dn for dn, p in profiles_data.get("profiles", {}).items()
+    if isinstance(p, dict) and p.get("skill_score", 5) <= 3
+}
 TRAINEE_DISPLAY = _profile_trainees if _profile_trainees else {"Seth", "Trenidee"}
 
 def match(first, last):
@@ -325,20 +312,19 @@ SLOT_AVOID_BY_TM = {}
 SWEEPER_SLOTS    = {"Zone7", "Zone8"}
 NO_SWEEPER_SLOTS = SWEEPER_SLOTS | {"MRR1", "WRR1"}
 
-if PROFILES_PATH.exists():
-    with open(PROFILES_PATH) as f:
-        profiles_data = json.load(f)
-    for dn, p in profiles_data.get("profiles", {}).items():
-        tm_skill[dn] = p.get("skill_score", 5)
-        pref = p.get("slot_preference")
-        if pref == "restroom":
-            RESTROOM_PREFERRED.add(dn)
-            AVOID_PHYSICAL.add(dn)
-        elif pref == "no_sweeper":
-            NO_SWEEPER.add(dn)
-            SLOT_AVOID_BY_TM.setdefault(dn, set()).update(NO_SWEEPER_SLOTS)
-        elif pref == "sweeper_capable":
-            SWEEPER_CAPABLE.add(dn)
+# profiles_data already loaded above (see TRAINEE_DISPLAY block).
+for dn, p in profiles_data.get("profiles", {}).items():
+    if not isinstance(p, dict): continue
+    tm_skill[dn] = p.get("skill_score", 5)
+    pref = p.get("slot_preference")
+    if pref == "restroom":
+        RESTROOM_PREFERRED.add(dn)
+        AVOID_PHYSICAL.add(dn)
+    elif pref == "no_sweeper":
+        NO_SWEEPER.add(dn)
+        SLOT_AVOID_BY_TM.setdefault(dn, set()).update(NO_SWEEPER_SLOTS)
+    elif pref == "sweeper_capable":
+        SWEEPER_CAPABLE.add(dn)
 
 # ── 1c. PREFERENCES + PAIR AFFINITIES + ACCOMMODATIONS (5/2/26) ──────
 # Per-TM preference, pair_affinity, and accommodation arrays from TM Profiles.
@@ -349,29 +335,27 @@ if PROFILES_PATH.exists():
 TM_PREFERENCES     = {}   # {dn: [{stance, strength, target, ...}, ...]}
 TM_PAIR_AFFINITIES = {}   # {dn: [{with, stance, strength, ...}, ...]}
 TM_ACCOMMODATIONS  = {}   # {dn: [{type, severity, target, note, status, ...}, ...]}
-if PROFILES_PATH.exists():
-    for dn, p in profiles_data.get("profiles", {}).items():
-        if not isinstance(p, dict): continue
-        prefs = p.get("preferences") or []
-        if prefs: TM_PREFERENCES[dn] = prefs
-        pairs = p.get("pair_affinities") or []
-        if pairs: TM_PAIR_AFFINITIES[dn] = pairs
-        accs = p.get("accommodations") or []
-        if accs: TM_ACCOMMODATIONS[dn] = accs
+# profiles_data already loaded above (see TRAINEE_DISPLAY block).
+for dn, p in profiles_data.get("profiles", {}).items():
+    if not isinstance(p, dict): continue
+    prefs = p.get("preferences") or []
+    if prefs: TM_PREFERENCES[dn] = prefs
+    pairs = p.get("pair_affinities") or []
+    if pairs: TM_PAIR_AFFINITIES[dn] = pairs
+    accs = p.get("accommodations") or []
+    if accs: TM_ACCOMMODATIONS[dn] = accs
 
 # ── 1d. SLOT LOAD SCORES + SCORECARD WEIGHTS ─────────────────────────
 SLOT_LOADS = {}
 SWEEPER_TAG_BONUS = 2
 TRAINING_ROLE_BONUS = {"trainer": 1, "trainee": 1}
-if SLOT_LOAD_PATH.exists():
-    try:
-        with open(SLOT_LOAD_PATH) as f:
-            sl_cfg = json.load(f)
-        SLOT_LOADS = sl_cfg.get("loads", {}) or {}
-        SWEEPER_TAG_BONUS = sl_cfg.get("sweeper_tag_bonus", 2)
-        TRAINING_ROLE_BONUS = sl_cfg.get("training_role_bonus", TRAINING_ROLE_BONUS)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"  [warn] Slot Load Scores.json unreadable ({e}) — fatigue index disabled")
+try:
+    sl_cfg = _get_slot_load_scores_db()
+    SLOT_LOADS = sl_cfg.get("loads", {}) or {}
+    SWEEPER_TAG_BONUS = sl_cfg.get("sweeper_tag_bonus", 2)
+    TRAINING_ROLE_BONUS = sl_cfg.get("training_role_bonus", TRAINING_ROLE_BONUS)
+except Exception as _e:
+    print(f"  [warn] Slot load scores unavailable ({_e}) — fatigue index disabled")
 
 SCORECARD_WEIGHTS = {
     "skill_match": 1.0, "preference_fit": 1.5, "pair_affinity": 1.0,
@@ -379,14 +363,12 @@ SCORECARD_WEIGHTS = {
     "fatigue_index": 0.8, "soft_prefer_set": 0.6,
 }
 FATIGUE_WINDOW_DAYS = 7
-if SCORECARD_WEIGHTS_PATH.exists():
-    try:
-        with open(SCORECARD_WEIGHTS_PATH) as f:
-            sw_cfg = json.load(f)
-        SCORECARD_WEIGHTS.update(sw_cfg.get("weights", {}) or {})
-        FATIGUE_WINDOW_DAYS = sw_cfg.get("fatigue_index_window_days", 7)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"  [warn] Scorecard Weights.json unreadable ({e}) — using defaults")
+try:
+    sw_cfg = _get_scorecard_config_db()
+    SCORECARD_WEIGHTS.update(sw_cfg.get("weights", {}) or {})
+    FATIGUE_WINDOW_DAYS = sw_cfg.get("fatigue_index_window_days", 7)
+except Exception as _e:
+    print(f"  [warn] Scorecard config unavailable ({_e}) — using defaults")
 
 # Derive gender from roster (Womens-* eligibility = female). Used to track who
 # can do the sweeper TASK (a separate concern from placement). Per Brian
@@ -413,10 +395,9 @@ print(f"  Female TMs in roster: {len(FEMALE_TMS)} (Z7/Z8 placement OK; sweeper T
 # the two TM sources before it bites (separated TMs left in profiles, profile
 # entries with no matching roster row, etc.).
 _active_roster_dn = {info["display_name"] for info in roster.values()}
-_profile_dn = set()
-if PROFILES_PATH.exists():
-    _profile_dn = {dn for dn, p in profiles_data.get("profiles", {}).items()
-                   if isinstance(p, dict)}
+# profiles_data loaded from DB above — no file-existence guard needed.
+_profile_dn = {dn for dn, p in profiles_data.get("profiles", {}).items()
+               if isinstance(p, dict)}
 _roster_only = _active_roster_dn - _profile_dn
 _profile_only_active = {dn for dn in (_profile_dn - _active_roster_dn)
                         if not (isinstance(profiles_data.get("profiles", {}).get(dn), dict)
@@ -436,24 +417,20 @@ if _roster_only or _profile_only_active:
     print(f"  ⚠ Profile drift detected: {len(_roster_only)} roster-only, "
           f"{len(_profile_only_active)} profile-only. See audit warnings.")
 
-if DIFFICULTY_PATH.exists():
-    with open(DIFFICULTY_PATH) as f:
-        diff_data = json.load(f)
-    for slot, d in diff_data.get("slots", {}).items():
-        slot_difficulty[slot] = d.get("difficulty", 5)
+_diff_cfg = _get_slot_difficulty_db()
+for slot, d in _diff_cfg.get("slots", {}).items():
+    slot_difficulty[slot] = d.get("difficulty", 5)
 
 # Overlap task assignments — slot code → canonical task string.
 # Task per slot is stable; people rotate. Used to record the implied task
 # on each overlap placement (audit trail) and shared with the deployment
 # book renderer so both stay in sync.
 overlap_tasks = {}
-if OVERLAP_TASKS_PATH.exists():
-    with open(OVERLAP_TASKS_PATH) as f:
-        ot_data = json.load(f)
-    for shift_key in ("PM", "AM"):
-        for slot_code, task in (ot_data.get(shift_key) or {}).items():
-            overlap_tasks[slot_code] = task
-    print(f"  Overlap tasks loaded: {len(overlap_tasks)} slot mappings")
+_ot_data = get_overlap_tasks_for_engine()
+for shift_key in ("PM", "AM"):
+    for slot_code, task in (_ot_data.get(shift_key) or {}).items():
+        overlap_tasks[slot_code] = task
+print(f"  Overlap tasks loaded: {len(overlap_tasks)} slot mappings (DB)")
 
 # ── 2. ARCHIVE ───────────────────────────────────────────────────────
 print("[2/7] Loading placement archive (rotation history)...")
@@ -524,31 +501,12 @@ def parse(ws, ptype):
                 # Only flag unrostered TMs from the grave pool sheet.
                 # PM/AM OL workers are swing/day shift with partial overlap
                 # — they don't need roster entries or training configs.
-                if ptype == "grave" and PROFILES_PATH.exists():
+                if ptype == "grave":
                     try:
-                        with open(PROFILES_PATH) as _f:
-                            _pd = json.load(_f)
-                        display_key = first  # first name as key, matches roster convention
-                        if display_key not in _pd.get("profiles", {}):
-                            _pd["profiles"][display_key] = {
-                                "full_name": full_name,
-                                "skill_score": 5,
-                                "score_history": [],
-                                "comments": [{
-                                    "date": str(date.today()),
-                                    "week_ending": WEEK_ENDING,
-                                    "day": None,
-                                    "slot_context": None,
-                                    "category": "Administrative",
-                                    "sentiment": "Flag",
-                                    "note": f"Auto-detected: {full_name} on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
-                                    "linked_recommendation": None
-                                }]
-                            }
-                            _pd["_meta"]["last_updated"] = str(date.today())
-                            with open(PROFILES_PATH, "w") as _f:
-                                json.dump(_pd, _f, indent=2)
-                            print(f"  ★ NEW GRAVE TM detected: {full_name} — added to Profiles")
+                        # 5/5/26: Write stub to Supabase instead of TM Profiles.json
+                        _added = create_new_tm_stub_in_db(full_name, first, WEEK_ENDING)
+                        if _added:
+                            print(f"  ★ NEW GRAVE TM detected: {full_name} — stub added to DB")
                     except Exception as _e:
                         pass
                     audit_items.append({"severity":"error","type":"NEW_TM_NOT_IN_ROSTER",

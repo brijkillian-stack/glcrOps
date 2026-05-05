@@ -154,6 +154,13 @@ class TM(TypedDict):
     assigned_to: str     # label of that slot, e.g. "Zone 3" (empty when not assigned)
     on_schedule: bool    # True if TM is in grave / PM OL / AM OL pool for this night
     schedule_pool: str   # "grave" | "pm_ol" | "am_ol" | "off"
+    # Phase I — swap support
+    assigned_slot_id: str  # zone_assignments.id of the source slot (for Swap action)
+    assigned_locked: bool  # True if the source slot is locked (swap forbidden)
+    # Phase J — call-off awareness
+    is_called_off: bool  # True if TM is in the call_offs table for this night
+    # Phase K.2 — recent placement history badge
+    history_summary: str   # pre-rendered "Mon Z3 · Sun Z6 · Sat Z9 SR" string
 
 
 class ChangeLogEntry(TypedDict):
@@ -172,11 +179,15 @@ class ChangeLogEntry(TypedDict):
     detail: str           # one-line summary, e.g. "Joy Smith → Zone 9 (was Unfilled)"
     icon: str             # lucide icon name for the row
     accent: str           # hex color tint for the icon
-    # Undo payload — kind-specific; unused fields default to "" / False.
-    prev_tm_id: str       # for assign / clear
-    prev_lock: bool       # for lock_toggle
+    # Undo / redo payload — kind-specific; unused fields default to "" / False.
+    prev_tm_id: str       # for assign / clear / swap (TM that was at slot before)
+    prev_lock: bool       # for lock_toggle (lock state before)
     task_text: str        # for task_add / task_remove
     undone: bool          # marked True after revert (banner can grey it out)
+    # Phase K.4 — redo support
+    new_tm_id: str        # for assign / swap (TM placed at the target slot)
+    new_lock: bool        # for lock_toggle (the new lock state)
+    source_slot_id: str   # for swap (the slot the TM came FROM; primary slot is `slot_id`)
 
 
 # Default `Night` value used when `current_night` can't find a match.
@@ -193,4 +204,39 @@ EMPTY_NIGHT: Night = {
     "breaks_9": 0,
     "breaks_4": 0,
     "day_color": "#6b7280",
+}
+
+
+# Phase K.1 — Engine result modal payload.
+
+class UnresolvedSlot(TypedDict):
+    """One unresolved slot from the engine's audit JSON."""
+    date: str
+    zone_slot: str
+    priority: int
+
+
+class EngineResult(TypedDict):
+    """Structured payload returned by ZdsState._do_zone_engine."""
+    success: bool
+    scope: str                     # "night" | "week"
+    updated: int
+    locked_skipped: int
+    unresolved_cleared: int
+    unresolved: list[UnresolvedSlot]
+    week_ending: str
+    error: str
+    message: str
+
+
+EMPTY_ENGINE_RESULT: EngineResult = {
+    "success": False,
+    "scope": "",
+    "updated": 0,
+    "locked_skipped": 0,
+    "unresolved_cleared": 0,
+    "unresolved": [],
+    "week_ending": "",
+    "error": "",
+    "message": "",
 }

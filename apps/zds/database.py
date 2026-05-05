@@ -364,6 +364,85 @@ def remove_call_off(tm_id: str, night_date: str) -> bool:
         return False
 
 
+# ── TM PLACEMENT HISTORY (Phase K.2) ──────────────────────────────────────────
+
+# Friendly labels for slot_keys — used in the TM picker history badge.
+_SLOT_LABEL_SHORT: dict[str, str] = {
+    "zone_1": "Z1", "zone_2": "Z2", "zone_3": "Z3", "zone_4": "Z4",
+    "zone_5": "Z5", "zone_6": "Z6", "zone_7": "Z7", "zone_8": "Z8",
+    "zone_9": "Z9", "zone_10": "Z10",
+    "rr_1_2": "RR1+2", "rr_6": "RR6", "rr_7": "RR7", "rr_8": "RR8", "rr_10": "RR10",
+    "z9_sr": "Z9 SR", "admin": "Adm",
+    "trash_1": "Trash 1", "trash_2": "Trash 2",
+    "support_1": "Supp 1", "support_2": "Supp 2", "support_3": "Supp 3",
+}
+
+
+def _short_slot_label(slot_key: str, rr_side: Optional[str]) -> str:
+    """Compact label for picker history. RR slots get an M/W suffix."""
+    base = _SLOT_LABEL_SHORT.get(slot_key, slot_key)
+    if rr_side == "mens":
+        return f"{base} M"
+    if rr_side == "womens":
+        return f"{base} W"
+    return base
+
+
+def fetch_recent_placements_bulk(
+    tm_ids: list[str],
+    before_date: str,
+    max_per_tm: int = 3,
+) -> dict[str, list[dict]]:
+    """Return recent zone placements for multiple TMs in one query.
+
+    Args:
+        tm_ids:      List of entity IDs to look up.
+        before_date: ISO date string — only nights strictly before this date
+                     are considered (so you don't see tonight's placement).
+        max_per_tm:  Cap per TM (default 3).
+
+    Returns:
+        {tm_id: [{date, slot_label, weekday}, ...newest first], ...}
+    """
+    if not tm_ids:
+        return {}
+    # Single query: join zone_assignments with nights for night_date
+    res = (
+        _client()
+        .table("zone_assignments")
+        .select("tm_id, slot_key, rr_side, nights(night_date, day_name)")
+        .in_("tm_id", tm_ids)
+        .lt("nights.night_date", before_date)
+        .not_.is_("tm_id", "null")
+        .execute()
+    )
+    rows = res.data or []
+    # Drop rows where the joined night was filtered out (lt date constraint
+    # against an inner table can return rows with nights=None depending on
+    # the join — defensive filter).
+    rows = [r for r in rows if r.get("nights") and r["nights"].get("night_date")]
+
+    # Sort newest first per tm_id
+    rows.sort(key=lambda r: r["nights"]["night_date"], reverse=True)
+
+    grouped: dict[str, list[dict]] = {tid: [] for tid in tm_ids}
+    for r in rows:
+        tid = r["tm_id"]
+        if tid not in grouped:
+            grouped[tid] = []
+        if len(grouped[tid]) >= max_per_tm:
+            continue
+        n = r["nights"] or {}
+        # Three-letter weekday for compact display
+        weekday = (n.get("day_name") or "")[:3]
+        grouped[tid].append({
+            "date":       n["night_date"],
+            "weekday":    weekday,
+            "slot_label": _short_slot_label(r["slot_key"], r.get("rr_side")),
+        })
+    return grouped
+
+
 # ── ZONE ASSIGNMENTS ──────────────────────────────────────────────────────────
 
 def fetch_zone_assignments(night_id: str) -> list[dict]:

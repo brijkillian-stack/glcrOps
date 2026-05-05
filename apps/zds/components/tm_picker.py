@@ -95,6 +95,20 @@ def _tm_row(tm: dict) -> rx.Component:
                 align="center", gap="6px", flex_wrap="wrap",
             ),
             rx.text(tm["grave_pool"], size="1", color="#6b7280"),
+            # Phase K.2 — recent placement history (last 3 nights)
+            rx.cond(
+                tm["history_summary"] != "",
+                rx.hstack(
+                    rx.icon("history", size=10, color="#9ca3af"),
+                    rx.text(
+                        tm["history_summary"],
+                        size="1", color="#9ca3af",
+                        font_variant_numeric="tabular-nums",
+                    ),
+                    gap="3px", align="center",
+                ),
+                rx.fragment(),
+            ),
             align="start", gap="0", flex="1",
         ),
         rx.spacer(),

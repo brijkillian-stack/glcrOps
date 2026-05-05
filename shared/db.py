@@ -1738,6 +1738,431 @@ def list_areas_with_counts() -> list[dict]:
         return []
 
 
+# ── Engine Data (ZDS fill engine) ────────────────────────────────────────────
+#
+# These helpers replace the Rules/*.json + Eligibility Roster.xlsx file reads
+# that fill_engine.py previously did at startup. They return data shaped to
+# exactly match what the old file reads produced so call-site changes in
+# fill_engine.py are minimal.
+#
+# Slot-id vocabulary: the DB stores eligibility by engine slot codes (Zone1,
+# MRR1, MP1, PMOL1…). fill_engine.py looks up eligibility by "roster column
+# name" (Zone 1, Mens 1 + 2, MP 1, PM OL…). The mapping below bridges them.
+
+_SLOT_ID_TO_ELIG_COL: dict[str, str] = {
+    "Zone1":   "Zone 1",    "Zone2":  "Zone 2",   "Zone3":  "Zone 3",
+    "Zone4":   "Zone 4",    "Zone5":  "Zone 5",   "Zone6":  "Zone 6",
+    "Zone7":   "Zone 7",    "Zone8":  "Zone 8",   "Zone9":  "Zone 9",
+    "Zone10":  "Zone 10",   "Zone9SR":"Zone 9 SR",
+    "MRR1":    "Mens 1 + 2","MRR6":  "Mens 6",   "MRR7":   "Mens 7",
+    "MRR8":    "Mens 8",    "MRR10": "Mens 10",
+    "WRR1":    "Womens 1 + 2","WRR6":"Womens 6", "WRR7":   "Womens 7",
+    "WRR8":    "Womens 8",  "WRR10": "Womens 10",
+    "Trash1":  "Trash 1",   "Trash2":"Trash 2",
+    "Admin":   "Admin",
+    "MP1":     "MP 1",      "MP2":   "MP 2",
+}
+# PMOL/AMOL each have per-slot rows; the engine checks eligibility via the
+# single "PM OL" / "AM OL" column names. Collapse: if ANY PMOL slot = eligible
+# then "PM OL" = True (and same for AMOL).
+_PMOL_SLOTS: frozenset = frozenset({"PMOL1","PMOL2","PMOL3","PMOL4","PMOL5","PMOL6"})
+_AMOL_SLOTS: frozenset = frozenset({"AMOL1","AMOL2","AMOL3","AMOL4","AMOL5","AMOL6"})
+
+
+def get_engine_roster_from_db() -> "tuple[dict, dict]":
+    """
+    Replace the openpyxl Eligibility Roster.xlsx read in fill_engine.py.
+
+    Returns (roster, fn_lookup):
+      roster:    {employee_name.lower(): {emp_name, display_name, pool, rank, eligibility}}
+                 eligibility keys are roster column names ("Zone 1", "Mens 1 + 2", etc.)
+      fn_lookup: {first_name.lower(): [roster_key, ...]}
+    """
+    try:
+        sb = get_client()
+        profiles_res = sb.table("tm_profiles").select(
+            "tm_id, employee_name, display_name, active, grave_pool, tie_break_rank"
+        ).eq("active", True).execute()
+        profiles = profiles_res.data or []
+        tm_ids = [p["tm_id"] for p in profiles]
+
+        # Fetch eligibility for all active TMs in one query
+        elig_res = (
+            sb.table("tm_eligibility")
+            .select("tm_id, slot_id, eligible")
+            .in_("tm_id", tm_ids)
+            .execute()
+        )
+
+        # Pivot eligibility into {tm_id: {elig_col_name: bool}}
+        elig_by_tm: dict[str, dict] = {p["tm_id"]: {} for p in profiles}
+        for row in (elig_res.data or []):
+            tid = row["tm_id"]
+            sid = row["slot_id"]
+            val = bool(row["eligible"])
+            if tid not in elig_by_tm:
+                continue
+            if sid in _PMOL_SLOTS:
+                # Any PMOL eligible → TM is PM OL eligible
+                if val:
+                    elig_by_tm[tid]["PM OL"] = True
+            elif sid in _AMOL_SLOTS:
+                if val:
+                    elig_by_tm[tid]["AM OL"] = True
+            elif sid in _SLOT_ID_TO_ELIG_COL:
+                elig_by_tm[tid][_SLOT_ID_TO_ELIG_COL[sid]] = val
+
+        # Default ALL expected eligibility columns to False for any TM missing rows.
+        # Some TMs may have sparse rows in tm_eligibility (new TMs, partial ingests).
+        # The engine's elig() always returns False for missing keys anyway, but
+        # explicit False is better than a silent miss for drift detection.
+        _ALL_ELIG_COLS = (
+            set(_SLOT_ID_TO_ELIG_COL.values())   # 26 slot columns
+            | {"PM OL", "AM OL"}                  # overlap columns
+        )
+        for tid_map in elig_by_tm.values():
+            for col in _ALL_ELIG_COLS:
+                tid_map.setdefault(col, False)
+
+        roster: dict = {}
+        fn_lookup: dict = {}
+        for p in profiles:
+            emp  = (p.get("employee_name") or "").strip()
+            disp = (p.get("display_name") or (emp.split()[0] if emp else "")).strip()
+            pool = (p.get("grave_pool") or "Grave").strip()
+            try:
+                rank = int(p.get("tie_break_rank") or 999)
+            except (TypeError, ValueError):
+                rank = 999
+            key = emp.lower()
+            roster[key] = {
+                "emp_name":    emp,
+                "display_name": disp,
+                "pool":        pool,
+                "rank":        rank,
+                "eligibility": elig_by_tm.get(p["tm_id"], {}),
+            }
+            fn_key = key.split()[0] if key else ""
+            if fn_key:
+                fn_lookup.setdefault(fn_key, []).append(key)
+
+        return roster, fn_lookup
+    except Exception:
+        print(f"[db] get_engine_roster_from_db error:\n{traceback.format_exc()}")
+        return {}, {}
+
+
+def get_engine_profiles_from_db() -> dict:
+    """
+    Replace TM Profiles.json read(s) in fill_engine.py.
+
+    Returns a dict shaped like the JSON file:
+      {"profiles": {display_name: {skill_score, slot_preference, status,
+                                   preferences, accommodations, pair_affinities}},
+       "_meta": {...}}
+
+    Fetches ALL TMs (not filtered by active) so the profile-drift check
+    can detect separated/transferred TMs that still appear on the roster.
+    """
+    try:
+        sb = get_client()
+        profiles_res = sb.table("tm_profiles").select(
+            "tm_id, display_name, skill_score, slot_preference, status"
+        ).execute()
+        profiles = profiles_res.data or []
+
+        # Fetch detail tables in parallel (supabase-py is synchronous, so sequentially)
+        prefs_res = sb.table("tm_preferences").select(
+            "tm_id, stance, strength, target, note, added_date"
+        ).execute()
+        accs_res = sb.table("tm_accommodations").select(
+            "tm_id, type, severity, target, note, added_date, status"
+        ).execute()
+        pairs_res = sb.table("tm_pair_affinities").select(
+            "tm_id, with_tm_id, with_label, stance, strength, note, added_date"
+        ).execute()
+
+        # Index by tm_id
+        prefs_by_tm: dict = {}
+        for r in (prefs_res.data or []):
+            prefs_by_tm.setdefault(r["tm_id"], []).append({
+                "stance":      r.get("stance"),
+                "strength":    r.get("strength"),
+                "target":      r.get("target"),
+                "note":        r.get("note"),
+                "added_date":  str(r.get("added_date", "") or ""),
+            })
+
+        accs_by_tm: dict = {}
+        for r in (accs_res.data or []):
+            accs_by_tm.setdefault(r["tm_id"], []).append({
+                "type":        r.get("type"),
+                "severity":    r.get("severity"),
+                "target":      r.get("target"),
+                "note":        r.get("note"),
+                "added_date":  str(r.get("added_date", "") or ""),
+                "status":      r.get("status", "active"),
+            })
+
+        pairs_by_tm: dict = {}
+        for r in (pairs_res.data or []):
+            # "with" key matches the TM Profiles JSON structure the engine reads
+            pairs_by_tm.setdefault(r["tm_id"], []).append({
+                "with":       r.get("with_label") or r.get("with_tm_id") or "",
+                "with_tm_id": r.get("with_tm_id"),
+                "stance":     r.get("stance"),
+                "strength":   r.get("strength"),
+                "note":       r.get("note"),
+                "added_date": str(r.get("added_date", "") or ""),
+            })
+
+        result_profiles: dict = {}
+        for p in profiles:
+            dn = (p.get("display_name") or "").strip()
+            if not dn:
+                continue
+            tid = p["tm_id"]
+            result_profiles[dn] = {
+                "skill_score":     float(p.get("skill_score") or 5),
+                "slot_preference": p.get("slot_preference"),
+                "status":          p.get("status") or "active",
+                "preferences":     prefs_by_tm.get(tid, []),
+                "accommodations":  accs_by_tm.get(tid, []),
+                "pair_affinities": pairs_by_tm.get(tid, []),
+                # score_history / comments not needed by the engine
+            }
+
+        return {
+            "profiles": result_profiles,
+            "_meta": {"source": "supabase", "last_updated": date.today().isoformat()},
+        }
+    except Exception:
+        print(f"[db] get_engine_profiles_from_db error:\n{traceback.format_exc()}")
+        return {"profiles": {}, "_meta": {}}
+
+
+def get_slot_difficulty() -> dict:
+    """
+    Replace Slot Difficulty.json read in fill_engine.py.
+    Returns {"slots": {slot_id: {"difficulty": int, "notes": str}}}
+    slot_id keys are engine codes (Zone1, MRR1, Admin, …).
+    """
+    try:
+        res = (
+            get_client()
+            .table("slot_difficulty")
+            .select("slot_id, difficulty, notes")
+            .execute()
+        )
+        slots = {
+            r["slot_id"]: {"difficulty": int(r["difficulty"]), "notes": r.get("notes") or ""}
+            for r in (res.data or [])
+        }
+        return {"slots": slots}
+    except Exception:
+        print(f"[db] get_slot_difficulty error:\n{traceback.format_exc()}")
+        return {"slots": {}}
+
+
+def get_slot_load_scores() -> dict:
+    """
+    Replace Slot Load Scores.json read in fill_engine.py.
+    Returns {"loads": {slot_id: int}, "sweeper_tag_bonus": int, "training_role_bonus": dict}
+    """
+    try:
+        sb = get_client()
+        loads_res = sb.table("slot_load_scores").select("slot_id, load").execute()
+        config_res = (
+            sb.table("slot_load_config")
+            .select("sweeper_tag_bonus, training_role_bonus")
+            .limit(1)
+            .execute()
+        )
+        loads = {r["slot_id"]: int(r["load"]) for r in (loads_res.data or [])}
+        cfg = (config_res.data or [{}])[0]
+        return {
+            "loads": loads,
+            "sweeper_tag_bonus":   int(cfg.get("sweeper_tag_bonus") or 2),
+            "training_role_bonus": cfg.get("training_role_bonus") or {"trainer": 1, "trainee": 1},
+        }
+    except Exception:
+        print(f"[db] get_slot_load_scores error:\n{traceback.format_exc()}")
+        return {"loads": {}, "sweeper_tag_bonus": 2, "training_role_bonus": {"trainer": 1, "trainee": 1}}
+
+
+def get_scorecard_config() -> dict:
+    """
+    Replace Scorecard Weights.json read in fill_engine.py.
+    Returns {"weights": {...}, "fatigue_index_window_days": int}
+    """
+    try:
+        res = (
+            get_client()
+            .table("scorecard_config")
+            .select("weights, fatigue_index_window_days")
+            .eq("id", 1)
+            .limit(1)
+            .execute()
+        )
+        cfg = (res.data or [{}])[0]
+        return {
+            "weights":                  cfg.get("weights") or {},
+            "fatigue_index_window_days": int(cfg.get("fatigue_index_window_days") or 7),
+        }
+    except Exception:
+        print(f"[db] get_scorecard_config error:\n{traceback.format_exc()}")
+        return {"weights": {}, "fatigue_index_window_days": 7}
+
+
+def get_overlap_tasks_for_engine(target_date: "date | None" = None) -> dict:
+    """
+    Replace Overlap Tasks.json read in fill_engine.py.
+    Returns {"PM": {slot_id: task_str}, "AM": {slot_id: task_str}}
+    Merges canonical tasks with per-date overrides (overrides win on same slot).
+    target_date: if provided, applies overlap_task_overrides for that date.
+    """
+    try:
+        sb = get_client()
+        canon_res = sb.table("overlap_tasks").select("period, slot_id, task").execute()
+        result: dict = {"PM": {}, "AM": {}}
+        for r in (canon_res.data or []):
+            p = r.get("period")
+            if p in result:
+                result[p][r["slot_id"]] = r["task"]
+
+        if target_date is not None:
+            date_str = target_date.isoformat() if hasattr(target_date, "isoformat") else str(target_date)
+            ov_res = (
+                sb.table("overlap_task_overrides")
+                .select("period, slot_id, task")
+                .eq("override_date", date_str)
+                .execute()
+            )
+            for r in (ov_res.data or []):
+                p = r.get("period")
+                if p in result:
+                    result[p][r["slot_id"]] = r["task"]
+
+        return result
+    except Exception:
+        print(f"[db] get_overlap_tasks_for_engine error:\n{traceback.format_exc()}")
+        return {"PM": {}, "AM": {}}
+
+
+def get_training_schedule_from_db() -> dict:
+    """
+    Replace Training Config.json read in fill_engine.py.
+    Returns {"schedule": {date_iso: {"trainee": display_name, "trainer": display_name, "day": int}}}
+    Only returns rows with status in (scheduled, active) or null status.
+    """
+    try:
+        sb = get_client()
+        sched_res = (
+            sb.table("training_schedule")
+            .select("training_date, trainee_id, trainer_id, day_number, status")
+            .execute()
+        )
+        rows = sched_res.data or []
+        # Filter: include only scheduled/active/null-status entries
+        rows = [r for r in rows
+                if not r.get("status") or r["status"] in ("scheduled", "active")]
+
+        if not rows:
+            return {"schedule": {}}
+
+        # Look up display names
+        all_tm_ids = list({tid for r in rows for tid in [r.get("trainee_id"), r.get("trainer_id")] if tid})
+        dn_res = (
+            sb.table("tm_profiles")
+            .select("tm_id, display_name")
+            .in_("tm_id", all_tm_ids)
+            .execute()
+        )
+        dn_map = {r["tm_id"]: r["display_name"] for r in (dn_res.data or [])}
+
+        schedule: dict = {}
+        for r in rows:
+            d = r.get("training_date")
+            if not d or not r.get("trainee_id") or not r.get("trainer_id"):
+                continue
+            schedule[str(d)] = {
+                "trainee": dn_map.get(r["trainee_id"], r["trainee_id"]),
+                "trainer": dn_map.get(r["trainer_id"], r["trainer_id"]),
+                "day":     int(r.get("day_number") or 1),
+            }
+
+        return {"schedule": schedule}
+    except Exception:
+        print(f"[db] get_training_schedule_from_db error:\n{traceback.format_exc()}")
+        return {"schedule": {}}
+
+
+def create_new_tm_stub_in_db(full_name: str, display_name: str, week_ending: str) -> bool:
+    """
+    DB replacement for the new-TM auto-detection file write in fill_engine.py.
+
+    Creates minimal entity + tm_profiles rows for an unrecognised grave-pool TM
+    found on the schedule. Returns True if inserted, False if TM already exists
+    (no-op) or on error.
+    """
+    import uuid as _uuid
+    try:
+        sb = get_client()
+        # Idempotency check: bail if display_name already in tm_profiles
+        existing = (
+            sb.table("tm_profiles")
+            .select("tm_id")
+            .eq("display_name", display_name)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return False
+
+        tm_id = f"tm_{display_name.lower().replace(' ', '_')}_{_uuid.uuid4().hex[:4]}"
+
+        # Insert entity row
+        sb.table("entities").insert({
+            "id":           tm_id,
+            "name":         full_name,
+            "display_name": display_name,
+            "entity_type":  "tm",
+            "status":       "active",
+            "metadata": {
+                "display_name": display_name,
+                "skill_score":  5,
+                "status":       "active",
+                "comments": [{
+                    "date":       str(date.today()),
+                    "week_ending": week_ending,
+                    "category":   "Administrative",
+                    "sentiment":  "Flag",
+                    "note":       (
+                        f"Auto-detected: {full_name} on grave schedule "
+                        f"but not in Eligibility Roster. Needs roster entry."
+                    ),
+                }],
+            },
+        }).execute()
+
+        # Insert tm_profiles stub
+        sb.table("tm_profiles").insert({
+            "tm_id":         tm_id,
+            "full_name":     full_name,
+            "employee_name": full_name,
+            "display_name":  display_name,
+            "active":        True,
+            "grave_pool":    "Grave",
+            "skill_score":   5,
+            "status":        "active",
+        }).execute()
+
+        return True
+    except Exception:
+        print(f"[db] create_new_tm_stub_in_db error:\n{traceback.format_exc()}")
+        return False
+
+
 def save_area_note(area_id: str, content: str, sentiment: str = "neutral") -> bool:
     """
     Save a quick area note; auto-link to the area entity via note_entities.

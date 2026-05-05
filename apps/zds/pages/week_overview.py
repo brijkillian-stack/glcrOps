@@ -211,7 +211,15 @@ def week_overview() -> rx.Component:
             rx.fragment(),
         ),
 
+        # Engine result dialog — Phase K.1
+        _engine_dialog(),
+
         background="#f9fafb",
         min_height="100vh",
         on_mount=ZdsState.on_week_overview_load,
     )
+
+
+def _engine_dialog():
+    from ..components.engine_result_dialog import engine_result_dialog
+    return engine_result_dialog()
