@@ -240,3 +240,24 @@ EMPTY_ENGINE_RESULT: EngineResult = {
     "error": "",
     "message": "",
 }
+
+
+# Phase N.2 — Week Schedule editor grid shapes.
+
+class ScheduleCell(TypedDict):
+    """One cell in the editor grid (TM × date)."""
+    raw: str           # original xlsx cell value
+    value: str         # effective value (override or raw)
+    category: str      # "working" | "scheduled_off" | "pto" | "mdl"
+                       # | "called_off" | "other" | "blank"
+    overridden: bool
+
+
+class ScheduleRow(TypedDict):
+    """One row in the editor grid — a TM on a specific shift, with their
+    seven cells (one per date in the week)."""
+    name: str
+    first: str
+    last: str
+    shift: str         # "days" | "swings" | "graves"
+    cells: list[ScheduleCell]

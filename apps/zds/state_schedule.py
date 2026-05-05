@@ -16,6 +16,7 @@ import reflex as rx
 from . import database
 from . import schedule_parser
 from .state import ZdsState
+from .types import ScheduleCell, ScheduleRow
 
 
 # Override values written to the schedule_overrides table. Match the
@@ -30,15 +31,15 @@ class ScheduleEditorState(rx.State):
     """State for the dedicated Week Schedule editor."""
 
     # ── Context ────────────────────────────────────────────────────────────
-    week_id:       str = ""
+    current_week_id: str = ""
     schedule_path: str = ""
 
     # ── Grid data ───────────────────────────────────────────────────────────
     # dates / weekdays are 7-element parallel arrays (Fri..Thu of the week).
     dates:        list[str] = []
     weekdays:     list[str] = []
-    # rows: list of {name, first, last, shift, cells:[7]} as built by parse_week_grid.
-    rows: list[dict] = []
+    # rows: one entry per (TM, shift), with 7 cells each, built by parse_week_grid.
+    rows: list[ScheduleRow] = []
 
     # ── Filters ─────────────────────────────────────────────────────────────
     shift_filter: str = "all"     # "all" | "days" | "swings" | "graves"
@@ -69,10 +70,10 @@ class ScheduleEditorState(rx.State):
     @rx.var
     def back_url(self) -> str:
         """Where the back arrow navigates — week overview for this week."""
-        return f"/zds/week/{self.week_id}" if self.week_id else "/zds/"
+        return f"/zds/week/{self.current_week_id}" if self.current_week_id else "/zds/"
 
     @rx.var
-    def filtered_rows(self) -> list[dict]:
+    def filtered_rows(self) -> list[ScheduleRow]:
         """Rows after applying shift_filter + search_query."""
         out = self.rows
         if self.shift_filter and self.shift_filter != "all":
@@ -96,10 +97,17 @@ class ScheduleEditorState(rx.State):
 
     @rx.event
     def on_load(self):
-        """Page on_mount handler — read week_id from URL params, then load."""
-        wid = self.router.page.params.get("week_id", "") if hasattr(self, "router") else ""
-        if wid:
-            self.week_id = wid
+        """Page on_mount handler.
+
+        Reflex auto-binds the [week_id] URL segment to self.current_week_id (since
+        the field matches the dynamic route param name). We just read it.
+        """
+        try:
+            wid = self.router.page.params.get("week_id", "")
+            if wid:
+                self.current_week_id = wid
+        except Exception:
+            pass
         self._load_grid()
 
     @rx.event
@@ -116,7 +124,7 @@ class ScheduleEditorState(rx.State):
         self.rows = []
         try:
             # 1. Resolve which xlsx is linked to this week
-            week = database.fetch_week(self.week_id) if self.week_id else {}
+            week = database.fetch_week(self.current_week_id) if self.current_week_id else {}
             self.schedule_path = (week or {}).get("schedule_path") or ""
 
             # 2. Pull xlsx bytes from Storage (or local cache)
