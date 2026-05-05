@@ -289,7 +289,7 @@ class AuthState(rx.State):
         # role=viewer; restore_editor_from_storage upgrades if a refresh
         # token is on file).
         if self.editor_role == ROLE_VIEWER and self.persisted_refresh_token:
-            return self.restore_editor_from_storage
+            return AuthState.restore_editor_from_storage
 
     @rx.event
     def require_editor_any(self):
@@ -306,7 +306,7 @@ class AuthState(rx.State):
             return rx.redirect("/unlock")
         # Try silent editor restore if we have a refresh token
         if self.editor_role == ROLE_VIEWER and self.persisted_refresh_token:
-            return self.restore_editor_from_storage
+            return AuthState.restore_editor_from_storage
         if self.editor_role == ROLE_VIEWER:
             return [
                 rx.toast.error("Editor access required for that page"),
