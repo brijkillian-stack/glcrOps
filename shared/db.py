@@ -635,6 +635,248 @@ def get_shift_timeline(shift_date: str) -> list[dict]:
         return []
 
 
+# ── AREA CHECKS (Phase M) ─────────────────────────────────────────────────────
+# Quick spot-check ratings the supervisor logs while walking the floor.
+# Each row scores an area (zone/RR/aux) 1-10 and links to the TM assigned
+# at check time. Powers the Areas + People history views and feeds Grok.
+
+# Canonical area list — used by the Quick Area Check overlay's picker.
+AREA_CHECK_AREAS: list[dict] = [
+    # Zones
+    {"key": "zone_1",  "label": "Zone 1",  "side": ""},
+    {"key": "zone_2",  "label": "Zone 2",  "side": ""},
+    {"key": "zone_3",  "label": "Zone 3",  "side": ""},
+    {"key": "zone_4",  "label": "Zone 4",  "side": ""},
+    {"key": "zone_5",  "label": "Zone 5",  "side": ""},
+    {"key": "zone_6",  "label": "Zone 6",  "side": ""},
+    {"key": "zone_7",  "label": "Zone 7",  "side": ""},
+    {"key": "zone_8",  "label": "Zone 8",  "side": ""},
+    {"key": "zone_9",  "label": "Zone 9",  "side": ""},
+    {"key": "zone_10", "label": "Zone 10", "side": ""},
+    # Restrooms — separate row per side
+    {"key": "rr_1_2",  "label": "RR 1+2 Mens",   "side": "mens"},
+    {"key": "rr_1_2",  "label": "RR 1+2 Women's","side": "womens"},
+    {"key": "rr_6",    "label": "RR 6 Mens",     "side": "mens"},
+    {"key": "rr_6",    "label": "RR 6 Women's",  "side": "womens"},
+    {"key": "rr_7",    "label": "RR 7 Mens",     "side": "mens"},
+    {"key": "rr_7",    "label": "RR 7 Women's",  "side": "womens"},
+    {"key": "rr_8",    "label": "RR 8 Mens",     "side": "mens"},
+    {"key": "rr_8",    "label": "RR 8 Women's",  "side": "womens"},
+    {"key": "rr_10",   "label": "RR 10 Mens",    "side": "mens"},
+    {"key": "rr_10",   "label": "RR 10 Women's", "side": "womens"},
+    # Auxiliary
+    {"key": "z9_sr",     "label": "Z9 SR",     "side": ""},
+    {"key": "admin",     "label": "Admin",     "side": ""},
+    {"key": "trash_1",   "label": "Trash 1",   "side": ""},
+    {"key": "trash_2",   "label": "Trash 2",   "side": ""},
+    {"key": "support_1", "label": "MP 1",      "side": ""},
+    {"key": "support_2", "label": "MP 2",      "side": ""},
+    {"key": "support_3", "label": "Support 3", "side": ""},
+]
+
+
+def fetch_assigned_tm_for_area(area_key: str, rr_side: str, night_date: str) -> dict:
+    """Look up the TM currently assigned to an area on a given night date.
+
+    Walks: nights(night_date=X) → zone_assignments(area_key, rr_side) → entities.
+    Returns {tm_id, display_name, slot_id} or empty dict if unfilled / no night.
+    """
+    try:
+        sb = get_client()
+        n_res = sb.table("nights").select("id").eq("night_date", night_date).limit(1).execute()
+        nights = n_res.data or []
+        if not nights:
+            return {}
+        night_id = nights[0]["id"]
+
+        # zone_assignments query — filter by slot_key always; rr_side only if provided
+        q = (
+            sb.table("zone_assignments")
+            .select("id, tm_id, entities(display_name)")
+            .eq("night_id", night_id)
+            .eq("slot_key", area_key)
+        )
+        if rr_side:
+            q = q.eq("rr_side", rr_side)
+        else:
+            q = q.is_("rr_side", "null")
+        za_res = q.limit(1).execute()
+        rows = za_res.data or []
+        if not rows:
+            return {}
+        row = rows[0]
+        tm_id = row.get("tm_id") or ""
+        ent = row.get("entities") or {}
+        return {
+            "tm_id":        tm_id,
+            "display_name": ent.get("display_name", "") if tm_id else "",
+            "slot_id":      row.get("id", ""),
+        }
+    except Exception as e:
+        print(f"[fetch_assigned_tm_for_area] {e}")
+        return {}
+
+
+def insert_area_check(
+    area_key: str,
+    rr_side: str,
+    score: int,
+    tm_id: str = "",
+    note: str = "",
+    night_date: str = "",
+) -> bool:
+    """Insert a single area check row. Returns True on success."""
+    if not area_key or not (1 <= int(score) <= 10):
+        return False
+    try:
+        from datetime import date as _date
+        sb = get_client()
+        payload = {
+            "area_key":   area_key,
+            "rr_side":    rr_side or None,
+            "score":      int(score),
+            "tm_id":      tm_id or None,
+            "note":       (note or "").strip() or None,
+            "night_date": night_date or _date.today().isoformat(),
+        }
+        sb.table("area_checks").insert(payload).execute()
+        return True
+    except Exception as e:
+        print(f"[insert_area_check] {e}")
+        return False
+
+
+def fetch_recent_area_checks(limit: int = 20) -> list[dict]:
+    """Return recent area checks across all areas/TMs, newest first.
+    Each row joined with entities for display_name."""
+    try:
+        sb = get_client()
+        res = (
+            sb.table("area_checks")
+            .select("area_key, rr_side, score, night_date, note, created_at, entities(display_name)")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        out = []
+        for r in (res.data or []):
+            ent = r.get("entities") or {}
+            out.append({
+                "area_key":     r.get("area_key", ""),
+                "rr_side":      r.get("rr_side") or "",
+                "score":        int(r.get("score", 0)),
+                "night_date":   r.get("night_date", ""),
+                "note":         r.get("note") or "",
+                "created_at":   r.get("created_at", ""),
+                "tm_name":      ent.get("display_name", ""),
+            })
+        return out
+    except Exception as e:
+        print(f"[fetch_recent_area_checks] {e}")
+        return []
+
+
+def get_recap_auto_populate(shift_date: str) -> dict:
+    """Phase L.2 — Pull all the Supabase-backed data we can use to pre-fill
+    sections of the morning shift recap.
+
+    Returns a dict of section -> pre-formatted multi-line string. Empty
+    strings mean "no data" and the caller should leave the section as-is.
+
+        {
+          "team_graves":     "...",  # call_offs joined to entities
+          "team_beos":       "...",  # captures with content_type 'beo'
+          "overlap_graves":  "...",  # overlap_assignments joined to entities + tasks
+          "floor_walk_notes":"...",  # captures with content_type 'observation'/'floor_walk'
+        }
+    """
+    out = {
+        "team_graves":      "",
+        "team_beos":        "",
+        "overlap_graves":   "",
+        "floor_walk_notes": "",
+    }
+    try:
+        sb = get_client()
+
+        # ── Call-offs for graves on this date ────────────────────────────────
+        co_res = (
+            sb.table("call_offs")
+            .select("reason, entities(display_name)")
+            .eq("night_date", shift_date)
+            .execute()
+        )
+        co_names = []
+        for row in (co_res.data or []):
+            ent = row.get("entities") or {}
+            name = ent.get("display_name", "")
+            reason = (row.get("reason") or "").strip()
+            if name:
+                co_names.append(f"{name} called off." if not reason
+                                else f"{name} called off ({reason}).")
+        if co_names:
+            out["team_graves"] = " ".join(co_names)
+
+        # ── Captures by content_type ─────────────────────────────────────────
+        notes_res = (
+            sb.table("notes")
+            .select("content, content_type")
+            .eq("original_date", shift_date)
+            .eq("archived", False)
+            .order("captured_at", desc=False)
+            .execute()
+        )
+        beo_lines = []
+        narrative_lines = []
+        for n in (notes_res.data or []):
+            ct = (n.get("content_type") or "").lower()
+            text = (n.get("content") or "").strip()
+            if not text:
+                continue
+            if ct == "beo":
+                beo_lines.append(text)
+            elif ct in ("observation", "floor_walk"):
+                narrative_lines.append(text)
+        if beo_lines:
+            out["team_beos"] = ", ".join(beo_lines) + "."
+        if narrative_lines:
+            # Concatenate observations as a starting paragraph; Brian will polish.
+            out["floor_walk_notes"] = "\n\n".join(narrative_lines)
+
+        # ── Overlap assignments for the night with this date ─────────────────
+        # Find the night row(s) for this shift_date, then pull their overlap_assignments.
+        night_res = (
+            sb.table("nights")
+            .select("id")
+            .eq("night_date", shift_date)
+            .execute()
+        )
+        night_ids = [r["id"] for r in (night_res.data or [])]
+        if night_ids:
+            ov_res = (
+                sb.table("overlap_assignments")
+                .select("overlap_window, task, entities(display_name)")
+                .in_("night_id", night_ids)
+                .eq("is_filled", True)
+                .order("position")
+                .execute()
+            )
+            grave_overlap_rows = []
+            for r in (ov_res.data or []):
+                ent = r.get("entities") or {}
+                name = ent.get("display_name", "")
+                task = (r.get("task") or "").strip()
+                if name and task:
+                    grave_overlap_rows.append(f"  • {name} – {task}")
+                elif name:
+                    grave_overlap_rows.append(f"  • {name}")
+            if grave_overlap_rows:
+                out["overlap_graves"] = "\n".join(grave_overlap_rows)
+    except Exception:
+        print(f"[db] get_recap_auto_populate error:\n{traceback.format_exc()}")
+    return out
+
+
 def generate_shift_recap(shift_date: str) -> str:
     """
     Build a plain-text morning recap draft suitable for pasting into

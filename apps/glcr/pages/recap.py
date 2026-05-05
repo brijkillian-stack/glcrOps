@@ -149,13 +149,20 @@ def timeline_column() -> rx.Component:
 def draft_toolbar() -> rx.Component:
     return rx.el.div(
         rx.el.button(
-            rx.cond(ShiftRecapState.generating, "Generating…", "⟳  Regenerate"),
-            class_name=rx.cond(
-                ShiftRecapState.generating, "btn btn-ghost", "btn btn-ghost"
-            ),
-            on_click=ShiftRecapState.generate_draft,
-            disabled=ShiftRecapState.generating,
+            rx.cond(ShiftRecapState.refreshing, "Refreshing…", "↻  Refresh from data"),
+            class_name="btn btn-ghost",
+            on_click=ShiftRecapState.refresh_from_data,
+            disabled=ShiftRecapState.refreshing,
             style={"fontSize": "12px"},
+            title="Re-pull call-offs / overlaps / captures from Supabase",
+        ),
+        rx.el.button(
+            rx.cond(ShiftRecapState.compiling, "Compiling…", "⟳  Compile draft"),
+            class_name="btn btn-ghost",
+            on_click=ShiftRecapState.compile_draft,
+            disabled=ShiftRecapState.compiling,
+            style={"fontSize": "12px"},
+            title="Rebuild the email-ready draft from the section fields below",
         ),
         rx.cond(
             ShiftRecapState.draft_ready,
@@ -188,6 +195,149 @@ def draft_toolbar() -> rx.Component:
     )
 
 
+# ── Section editor primitives ────────────────────────────────────────────────
+
+def _section_label(text: str) -> rx.Component:
+    return rx.el.div(
+        text,
+        style={
+            "fontSize": "10.5px", "fontWeight": "700",
+            "letterSpacing": "0.08em", "textTransform": "uppercase",
+            "color": "var(--fg-3)", "marginBottom": "4px",
+        },
+    )
+
+
+def _line_field(label: str, value, on_change_handler) -> rx.Component:
+    """One-line text input — used for short Team Updates fields."""
+    return rx.el.div(
+        _section_label(label),
+        rx.el.input(
+            type="text",
+            value=value,
+            on_change=on_change_handler,
+            placeholder="None",
+            style={
+                "width": "100%", "fontSize": "13px",
+                "padding": "6px 10px",
+                "border": "1px solid var(--border-subtle)",
+                "borderRadius": "var(--r-md)",
+                "background": "var(--surface-card)",
+                "color": "var(--fg-1)",
+                "outline": "none",
+            },
+        ),
+        style={"marginBottom": "10px"},
+    )
+
+
+def _multi_field(label: str, value, on_change_handler,
+                 placeholder: str = "", min_height: str = "70px") -> rx.Component:
+    """Multi-line textarea — used for overlaps + narrative."""
+    return rx.el.div(
+        _section_label(label),
+        rx.el.textarea(
+            value=value,
+            on_change=on_change_handler,
+            placeholder=placeholder,
+            spellcheck=False,
+            style={
+                "width": "100%", "fontSize": "13px",
+                "padding": "8px 10px",
+                "border": "1px solid var(--border-subtle)",
+                "borderRadius": "var(--r-md)",
+                "background": "var(--surface-card)",
+                "color": "var(--fg-1)",
+                "outline": "none",
+                "minHeight": min_height, "resize": "vertical",
+                "fontFamily": "inherit",
+            },
+        ),
+        style={"marginBottom": "10px"},
+    )
+
+
+def _section_group(title: str, *children) -> rx.Component:
+    """Visual grouping for a labeled section of the editor."""
+    return rx.el.div(
+        rx.el.h3(
+            title,
+            style={
+                "fontSize": "13px", "fontWeight": "700",
+                "color": "var(--fg-1)", "marginBottom": "10px",
+                "letterSpacing": "-0.01em",
+            },
+        ),
+        *children,
+        style={
+            "padding": "12px 14px",
+            "background": "var(--surface-canvas)",
+            "border": "1px solid var(--border-subtle)",
+            "borderRadius": "var(--r-md)",
+            "marginBottom": "12px",
+        },
+    )
+
+
+def section_editor() -> rx.Component:
+    """Phase L — structured editor for each section of the recap."""
+    s = ShiftRecapState
+    return rx.el.div(
+        # Team Updates
+        _section_group(
+            "Team Updates",
+            _line_field("Days",      s.team_days,      s.set_team_days),
+            _line_field("Swings",    s.team_swings,    s.set_team_swings),
+            _line_field("Graves",    s.team_graves,    s.set_team_graves),
+            _line_field("Utilities", s.team_utilities, s.set_team_utilities),
+            _line_field("BCOs",      s.team_bcos,      s.set_team_bcos),
+            _line_field("BEOs",      s.team_beos,      s.set_team_beos),
+        ),
+        # Overlaps
+        _section_group(
+            "Overlaps",
+            _multi_field(
+                "Graves", s.overlap_graves, s.set_overlap_graves,
+                placeholder="• Doug – Vacuuming, Bottles, and Glass\n• Gage – Glass, Counters, and Trash",
+                min_height="80px",
+            ),
+            _multi_field(
+                "Swings", s.overlap_swings, s.set_overlap_swings,
+                placeholder="• Darlene did executive offices\n• Jared did zone 10",
+                min_height="70px",
+            ),
+            _multi_field(
+                "Days", s.overlap_days, s.set_overlap_days,
+                placeholder="• Char – CBK and Shkode",
+                min_height="70px",
+            ),
+        ),
+        # Operational systems
+        _section_group(
+            "MPulse, Access Control, and Uniform Updates",
+            _line_field("MPulse",         s.mpulse,         s.set_mpulse),
+            _line_field("Access Control", s.access_control, s.set_access_control),
+            _line_field("Uniforms",       s.uniforms,       s.set_uniforms),
+        ),
+        # Huddle + Narrative
+        _section_group(
+            "Huddle",
+            _multi_field("Attendance", s.huddle, s.set_huddle,
+                         placeholder="Zach, Melissa, Darlene were in huddle today.",
+                         min_height="50px"),
+        ),
+        _section_group(
+            "Shift & Floor Walk Notes",
+            _multi_field(
+                "Narrative", s.floor_walk_notes, s.set_floor_walk_notes,
+                placeholder="How the night went, what came up, what was handled, what's outstanding.",
+                min_height="160px",
+            ),
+        ),
+        style={"marginBottom": "16px"},
+    )
+
+
 def email_subject_row() -> rx.Component:
     return rx.cond(
         ShiftRecapState.draft_ready,
@@ -207,43 +357,35 @@ def email_subject_row() -> rx.Component:
 
 
 def draft_column() -> rx.Component:
+    """Phase L — section editor on top, compiled draft + email actions below."""
     return rx.el.div(
-        rx.el.h2("Draft Recap", class_name="section-title"),
+        rx.el.h2("Recap Sections", class_name="section-title"),
+        section_editor(),
+        # Toolbar + compiled output
+        draft_toolbar(),
+        email_subject_row(),
+        rx.el.h3(
+            "Compiled Draft",
+            style={
+                "fontSize": "11px", "fontWeight": "700",
+                "letterSpacing": "0.08em", "textTransform": "uppercase",
+                "color": "var(--fg-3)", "marginBottom": "6px",
+            },
+        ),
         rx.cond(
             ShiftRecapState.draft_ready,
-            rx.fragment(
-                draft_toolbar(),
-                email_subject_row(),
-                rx.el.textarea(
-                    value=ShiftRecapState.draft,
-                    on_change=ShiftRecapState.set_draft,
-                    class_name="recap-draft-area",
-                    spellcheck=False,
-                ),
+            rx.el.textarea(
+                value=ShiftRecapState.draft,
+                on_change=ShiftRecapState.set_draft,
+                class_name="recap-draft-area",
+                spellcheck=False,
             ),
             rx.el.div(
-                rx.cond(
-                    ShiftRecapState.generating,
-                    rx.el.p(
-                        "Generating recap draft…",
-                        style={"fontSize": "13px", "color": "var(--fg-3)",
-                               "fontStyle": "italic", "textAlign": "center",
-                               "padding": "48px 24px"},
-                    ),
-                    rx.el.div(
-                        rx.el.p(
-                            "Recap will auto-generate when tonight's logs are loaded.",
-                            style={"fontSize": "13px", "color": "var(--fg-3)",
-                                   "fontStyle": "italic", "marginBottom": "16px"},
-                        ),
-                        rx.el.button(
-                            "⟳  Generate Draft",
-                            class_name="btn btn-primary",
-                            on_click=ShiftRecapState.generate_draft,
-                            style={"fontSize": "13px"},
-                        ),
-                        style={"textAlign": "center", "padding": "48px 24px"},
-                    ),
+                rx.el.p(
+                    "Click Compile draft to generate the email-ready text.",
+                    style={"fontSize": "13px", "color": "var(--fg-3)",
+                           "fontStyle": "italic", "textAlign": "center",
+                           "padding": "32px 24px"},
                 ),
                 class_name="recap-draft-empty",
             ),

@@ -34,6 +34,24 @@ class AppState(rx.State):
     capture_saving: bool = False
     capture_saved: bool = False
 
+    # ── Quick Area Check (Phase M) ───────────────────────────────────────────
+    # Floor-walk spot-rating overlay. Brian taps the FAB → picks an area →
+    # the assigned TM is auto-resolved from tonight's deployment → he scores
+    # 1-10 and saves. The row writes to area_checks with both area_key and
+    # tm_id so trends are queryable from either side.
+    area_check_open: bool = False
+    area_check_step: str = "pick"           # "pick" → "rate"
+    area_check_area_key: str = ""
+    area_check_area_side: str = ""
+    area_check_area_label: str = ""
+    area_check_tm_id: str = ""
+    area_check_tm_name: str = ""
+    area_check_score: int = 0
+    area_check_note: str = ""
+    area_check_saving: bool = False
+    area_check_saved: bool = False
+    area_check_error: str = ""
+
     # ── Computed ─────────────────────────────────────────────────────────────
 
     @rx.var
@@ -159,3 +177,86 @@ class AppState(rx.State):
     @rx.event
     def set_capture_date(self, value: str):
         self.capture_date = value
+
+    # =========================================================================
+    # Quick Area Check (Phase M)
+    # =========================================================================
+
+    @rx.event
+    def open_area_check(self):
+        """Reset state and open the Quick Area Check overlay on the picker step."""
+        self.area_check_open       = True
+        self.area_check_step       = "pick"
+        self.area_check_area_key   = ""
+        self.area_check_area_side  = ""
+        self.area_check_area_label = ""
+        self.area_check_tm_id      = ""
+        self.area_check_tm_name    = ""
+        self.area_check_score      = 0
+        self.area_check_note       = ""
+        self.area_check_saved      = False
+        self.area_check_error      = ""
+
+    @rx.event
+    def close_area_check(self):
+        self.area_check_open = False
+
+    @rx.event
+    def pick_area_check_area(self, area_key: str, rr_side: str, label: str):
+        """User selected an area in the picker — resolve tonight's assigned TM
+        and advance to the rating step."""
+        from datetime import date as _date
+        from shared.db import fetch_assigned_tm_for_area
+
+        self.area_check_area_key   = area_key
+        self.area_check_area_side  = rr_side or ""
+        self.area_check_area_label = label
+        self.area_check_score      = 0
+        self.area_check_note       = ""
+        self.area_check_error      = ""
+
+        tonight = _date.today().isoformat()
+        info = fetch_assigned_tm_for_area(area_key, rr_side or "", tonight)
+        self.area_check_tm_id   = info.get("tm_id", "") if info else ""
+        self.area_check_tm_name = info.get("display_name", "") if info else ""
+        self.area_check_step    = "rate"
+
+    @rx.event
+    def set_area_check_score(self, score: int):
+        self.area_check_score = int(score)
+
+    @rx.event
+    def set_area_check_note(self, value: str):
+        self.area_check_note = value
+
+    @rx.event
+    def back_to_area_picker(self):
+        """User wants to pick a different area — return to the picker step."""
+        self.area_check_step = "pick"
+
+    @rx.event
+    async def save_area_check(self):
+        """Write the area check to Supabase. Closes the overlay on success."""
+        from datetime import date as _date
+        from shared.db import insert_area_check
+
+        if not self.area_check_area_key or not (1 <= self.area_check_score <= 10):
+            self.area_check_error = "Pick an area and a 1-10 score."
+            return
+        self.area_check_saving = True
+        self.area_check_error  = ""
+        yield
+        ok = insert_area_check(
+            area_key=self.area_check_area_key,
+            rr_side=self.area_check_area_side,
+            score=self.area_check_score,
+            tm_id=self.area_check_tm_id or "",
+            note=self.area_check_note or "",
+            night_date=_date.today().isoformat(),
+        )
+        self.area_check_saving = False
+        if ok:
+            self.area_check_saved = True
+            self.area_check_open  = False
+        else:
+            self.area_check_error = "Failed to save area check. Try again."
