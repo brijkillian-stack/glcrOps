@@ -33,7 +33,7 @@ def unlock_page() -> rx.Component:
                         pattern="[0-9]*",
                         autocomplete="one-time-code",
                         autofocus=True,
-                        max_length="6",
+                        max_length=6,
                         value=AuthState.pin_input,
                         on_change=AuthState.set_pin_input,
                         class_name="unlock-input",

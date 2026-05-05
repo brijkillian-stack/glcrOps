@@ -90,7 +90,7 @@ def sidebar() -> rx.Component:
             # Editor-only Memory routes — hidden from viewers
             rx.cond(
                 AuthState.is_zds_editor,                # any editor role
-                rx.el.fragment(
+                rx.fragment(
                     rx.el.div(class_name="nav-divider"),
                     *[_nav_item(icon, label, route) for icon, label, route in NAV_EDITOR],
                     rx.el.div(class_name="nav-divider"),
@@ -99,6 +99,7 @@ def sidebar() -> rx.Component:
                     rx.el.div(class_name="nav-divider"),
                     _action_item("★", "Area Check", AppState.open_area_check),
                 ),
+                rx.fragment(),
             ),
 
             # ── Path C+ role chrome ────────────────────────────────────────
