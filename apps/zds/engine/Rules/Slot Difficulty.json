@@ -1,0 +1,34 @@
+{
+  "_meta": {
+    "description": "Difficulty rating for each deployable slot. 1-10 scale. Factors: guest interaction, physical demand, area complexity, traffic volume. Updated through conversation only.",
+    "last_updated": "2026-04-22"
+  },
+  "slots": {
+    "Admin":    { "difficulty": 9, "notes": "Supervisory duties, most complex role, high accountability" },
+    "Zone1":    { "difficulty": 7, "notes": "High guest interaction, pit area, covers Zone 1+2 RR on weekdays" },
+    "Zone2":    { "difficulty": 7, "notes": "Pit area, lobby visibility, covers Zone 1+2 RR on weekdays" },
+    "Zone3":    { "difficulty": 5, "notes": "Moderate traffic, annex duties" },
+    "Zone4":    { "difficulty": 5, "notes": "Moderate traffic" },
+    "Zone5":    { "difficulty": 7, "notes": "High Limit table games, elevated guest expectations" },
+    "Zone6":    { "difficulty": 4, "notes": "Lower traffic, often slow on weekdays" },
+    "Zone7":    { "difficulty": 4, "notes": "Lower traffic, often slow on weekdays" },
+    "Zone8":    { "difficulty": 5, "notes": "Pit 3, moderate traffic" },
+    "Zone9":    { "difficulty": 8, "notes": "Smoking room complexity, social bar, high physical demand" },
+    "Zone10":   { "difficulty": 6, "notes": "High Limit slots, outdoor area, pit 4" },
+    "Zone9SR":  { "difficulty": 8, "notes": "Direct smoking room assignment, ventilation, physically demanding" },
+    "MRR1":     { "difficulty": 7, "notes": "Zone 1+2 area, high traffic on weekends" },
+    "WRR1":     { "difficulty": 7, "notes": "Zone 1+2 area, high traffic on weekends" },
+    "MRR6":     { "difficulty": 5, "notes": "Moderate traffic, also covers Zone 6 on weekdays" },
+    "WRR6":     { "difficulty": 5, "notes": "Moderate traffic, also covers Zone 6 on weekdays" },
+    "MRR7":     { "difficulty": 5, "notes": "Smoking room adjacent" },
+    "WRR7":     { "difficulty": 5, "notes": "Smoking room adjacent" },
+    "MRR8":     { "difficulty": 6, "notes": "Multiple locations: Family RR, TDR, TMBR Locker Room" },
+    "WRR8":     { "difficulty": 6, "notes": "Multiple locations: Family RR, TDR, TMBR Locker Room" },
+    "MRR10":    { "difficulty": 5, "notes": "CBK kitchen area" },
+    "WRR10":    { "difficulty": 5, "notes": "CBK kitchen area" },
+    "Trash1":   { "difficulty": 4, "notes": "Lobby area sweep, moderate physical demand" },
+    "Trash2":   { "difficulty": 4, "notes": "Lobby area sweep, moderate physical demand" },
+    "MP1":      { "difficulty": 3, "notes": "Float/multipurpose, lowest pressure slot" },
+    "MP2":      { "difficulty": 3, "notes": "Float/multipurpose, lowest pressure slot" }
+  }
+}

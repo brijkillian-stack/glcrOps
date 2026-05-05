@@ -1,0 +1,8 @@
+{
+  "_meta": {
+    "description": "Active training pairs for GLCR Grave Shift. Updated through conversation — do not edit manually. Keys are ISO date strings (the date the training occurs). Training days 1-6 per GLCR training SOP.",
+    "last_updated": "2026-05-03",
+    "notes": "Brian (5/3/26): Trenidee removed from grave deployment pool (status=separated in TM Profiles, Active=N in Eligibility Roster). Her D5 (was TBD) and any future training days are cancelled. Schedule cleared. | History: 5/1/26: Trenidee did D3 on a prior shift; 5/1 D2 was removed when she called off; 5/2 D4 with Tawnya was the last entry on the books. Seth remains the only active trainee."
+  },
+  "schedule": {}
+}

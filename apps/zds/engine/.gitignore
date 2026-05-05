@@ -1,0 +1,16 @@
+# Runtime-generated files — should not be committed.
+# Inputs/Weekly Schedules/ is populated by uploads (local copy of Storage)
+# Outputs/<week>/ is populated by each fill_engine run
+# Archive/Grave Placement Archive.xlsx is mutated in place by the engine
+#
+# These files exist so the engine can run; they're not source code.
+
+Inputs/Weekly Schedules/*.xlsx
+Inputs/Weekly Schedules/_archive/
+Outputs/*/
+__pycache__/
+*.pyc
+
+# Keep the directory shells (and the active starting Archive xlsx) tracked
+!Inputs/Weekly Schedules/.gitkeep
+!Outputs/.gitkeep

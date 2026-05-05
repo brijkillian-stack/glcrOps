@@ -1,0 +1,1193 @@
+{
+  "_meta": {
+    "description": "GLCR Grave Shift TM competency profiles, skill scores, and comment log.",
+    "skill_scale": "1-10. 1-3 = new/trainee, 4-5 = developing, 6-7 = solid/reliable, 8-9 = strong, 10 = elite. Scores updated through shift debrief conversation only.",
+    "comment_categories": [
+      "Performance",
+      "Attitude",
+      "Physical",
+      "Request",
+      "Feedback",
+      "Administrative"
+    ],
+    "comment_sentiments": [
+      "Positive",
+      "Negative",
+      "Neutral",
+      "Flag"
+    ],
+    "last_updated": "2026-05-03",
+    "schema_version": "2.1",
+    "schema_changes_5_1_26": {
+      "preferences": {
+        "purpose": "Per-TM placement preferences (avoid/prefer specific slots, areas, or categories)",
+        "shape": "List of {stance, strength, target, note?, added_date, last_reviewed?}",
+        "stance_values": [
+          "avoid",
+          "prefer"
+        ],
+        "strength_values": [
+          "soft",
+          "hard"
+        ],
+        "target_forms": [
+          "Specific slot \u2014 e.g., 'Zone 8', 'WRR 7', 'Z9 SR'",
+          "Area \u2014 e.g., 'area:Lobby', 'area:Z9', 'area:C3'",
+          "Category \u2014 e.g., 'category:sweeper', 'category:restroom', 'category:trash'"
+        ],
+        "engine_behavior": {
+          "soft": "Adds a +/- penalty to the scorecard preference_fit component. Yields when no better candidates exist.",
+          "hard": "Filters the candidate pool. If no other eligible candidates remain for a must-fill slot, engine overrides and logs HARD_PREFERENCE_OVERRIDDEN to audit."
+        }
+      },
+      "pair_affinities": {
+        "purpose": "Per-TM pairing preferences with other named TMs. Engine checks adjacent placements (zones, RR mens/womens split, Z9 SR buddy, sweeper co-route).",
+        "shape": "List of {with, stance, strength, note?, added_date}",
+        "engine_behavior": "Soft: scorecard pair_affinity component penalizes/bonuses adjacent placement. Hard: filters out the conflict pair from adjacent placement when alternatives exist."
+      },
+      "legacy_compat": "Existing slot_preference field (e.g. 'restroom', 'no_sweeper', 'sweeper_capable') still honored by engine. Migrate to preferences/pair_affinities format over time when convenient."
+    },
+    "schema_changes_5_3_26": {
+      "accommodations": {
+        "purpose": "Per-TM accommodations \u2014 separate from preferences. These are protected accessibility/medical/physical/sensory needs that the engine MUST respect (filtered out of candidate pool, audit-logged on override).",
+        "shape": "List of {type, severity, target?, note, added_date, status}",
+        "type_values": [
+          "physical",
+          "sensory",
+          "medical",
+          "temporary",
+          "other"
+        ],
+        "severity_values": [
+          "soft",
+          "hard",
+          "absolute"
+        ],
+        "status_values": [
+          "active",
+          "resolved",
+          "review_due"
+        ],
+        "engine_behavior": {
+          "soft": "Same as soft preference \u2014 scorecard penalty only.",
+          "hard": "Filtered from candidate pool. Override audit if must-fill empties.",
+          "absolute": "Filtered with no override possible \u2014 slot stays empty before TM is placed."
+        },
+        "vs_preferences": "Accommodations are PROTECTED. Different lifetime (persistent vs revisable), different audit category (HARD_ACCOMMODATION_OVERRIDDEN vs HARD_PREFERENCE_OVERRIDDEN), different intent (must-respect vs nice-to-respect)."
+      }
+    }
+  },
+  "profiles": {
+    "Abby": {
+      "full_name": "Abagail Slovak Banks",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-23",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Physical",
+          "sentiment": "Flag",
+          "note": "Brian: Abby has minor back pain \u2014 assign to restroom slots whenever possible to reduce physical strain. Avoid Zone9/9SR and Trash.",
+          "linked_recommendation": null
+        }
+      ],
+      "slot_preference": "restroom",
+      "preferences": [
+        {
+          "stance": "prefer",
+          "strength": "soft",
+          "target": "WRR 6",
+          "note": "Migrated from slot_preference: restroom. Preferred RR slot.",
+          "added_date": "2026-05-02",
+          "last_reviewed": "2026-05-02"
+        }
+      ],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Alec": {
+      "full_name": "Alec Weick",
+      "skill_score": 7,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 7,
+          "reason": "Brian: good Admin, general reliability"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian confirmed Alec is good in Admin role",
+          "linked_recommendation": "7"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Amanda": {
+      "full_name": "Amanda Willover",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Drew": {
+      "full_name": "Andrew Meeks",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Carter": {
+      "full_name": "Carter Campbell",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Chris": {
+      "full_name": "Christopher Shepard",
+      "skill_score": 7.5,
+      "status": "LOA",
+      "loa_start": "2026-05-04",
+      "loa_end": null,
+      "loa_note": "Brian 5/3/26: LOA starting Mon 5/4 until further notice.",
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 7.5,
+          "reason": "Brian: Monday 4/27 observation \u2014 solid."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-05-03",
+          "week_ending": "2026-05-07",
+          "day": "Sunday",
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Neutral",
+          "note": "Brian 5/3/26: Chris on LOA starting Mon 5/4 until further notice. Set Active=N in Eligibility Roster. Reverse on return.",
+          "linked_recommendation": null
+        },
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "MRR8",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: solid.",
+          "linked_recommendation": "7.5"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Darlene": {
+      "full_name": "Darlene Sebright",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Monday 4/27 observation \u2014 solid."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "WRR8",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: solid.",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [
+        {
+          "with": "Jessica",
+          "stance": "avoid",
+          "strength": "soft",
+          "note": "butt heads with Jessica (Brian, 5/2/26)",
+          "added_date": "2026-05-02"
+        }
+      ],
+      "accommodations": []
+    },
+    "Daryl": {
+      "full_name": "Daryl Rankens",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "MRR7",
+          "category": "Physical",
+          "sentiment": "Flag",
+          "note": "Brian: good worker, but older \u2014 cannot do sweeper routes (Sweeper 9/10/SR, Sweeper 5/8/HL) or Restroom 1+2. Engine should auto-exclude Zone 8 (Sweeper 9/10/SR), Zone 7 (Sweeper 5/8/HL), MRR 1+2, WRR 1+2 via slot_preference='no_sweeper'.",
+          "linked_recommendation": null
+        }
+      ],
+      "slot_preference": "no_sweeper",
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": [
+        {
+          "type": "physical",
+          "severity": "hard",
+          "target": "category:sweeper",
+          "note": "Physical accommodation \u2014 no sweeper duty. Migrated 5/3/26 from hard preference + legacy slot_preference flag.",
+          "added_date": "2026-05-03",
+          "status": "active"
+        }
+      ]
+    },
+    "Liz": {
+      "full_name": "Elizabeth Pierce",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-05-02",
+          "by": "Brian",
+          "note": "Moved to Utility Porter team effective 5/2/26. Removed from grave roster (Active=N)."
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "status": "transferred_to_utility_porter",
+      "transferred_date": "2026-05-02",
+      "accommodations": []
+    },
+    "Gary": {
+      "full_name": "Gary Zaagman",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jack": {
+      "full_name": "Jack Eldred",
+      "skill_score": 7.5,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 7.5,
+          "reason": "Brian: Monday 4/27 observation \u2014 solid."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "MRR10",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: solid.",
+          "linked_recommendation": "7.5"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jamie": {
+      "full_name": "Jamie Barker",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: top-tier Admin, general rockstar"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: one of the best Admin TMs, named as a general rockstar",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jared": {
+      "full_name": "Jared Naylor",
+      "skill_score": 7,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 7,
+          "reason": "Brian: Monday 4/27 observation \u2014 does solid work."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "Zone4",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: does solid work.",
+          "linked_recommendation": "7"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jason": {
+      "full_name": "Jason Moore",
+      "skill_score": 4,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 4,
+          "reason": "Brian: Monday 4/27 observation \u2014 does his job, no more."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "MRR1",
+          "category": "Performance",
+          "sentiment": "Neutral",
+          "note": "Brian: does his job, no more. Does not perform well when overloaded.",
+          "linked_recommendation": "4"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jeff": {
+      "full_name": "Jeffery Koppers",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "JT": {
+      "full_name": "Jeremy Laker",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Jessica": {
+      "full_name": "Jessica Altman",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Joy": {
+      "full_name": "Joy Desjarden",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Zone 9/9SR specialist, best four for weekend Zone 9"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Zone9",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top Zone 9/9SR TM, priority for Fri/Sat Zone 9 and 9SR",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Kaiden": {
+      "full_name": "Kaiden DeWeerd",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Cookie": {
+      "full_name": "Karen Zuiderveen",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: named general rockstar"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": null,
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian named Cookie as a general rockstar",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Kathy": {
+      "full_name": "Kathy Wright",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Kaylee": {
+      "full_name": "Kaylee Harris",
+      "skill_score": 7,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 7,
+          "reason": "Brian: Monday 4/27 observation \u2014 a go-to TM."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "Zone8",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: a go-to TM.",
+          "linked_recommendation": "7"
+        }
+      ],
+      "slot_preference": null,
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Maria": {
+      "full_name": "Maria Garza",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Monday 4/27 observation \u2014 solid."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "WRR10",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: solid.",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Melissa": {
+      "full_name": "Melissa Heth",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Zone 9/9SR specialist + general rockstar"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Zone9",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top Zone 9/9SR TM, priority for Fri/Sat Zone 9 and 9SR. Also named general rockstar",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [
+        {
+          "with": "Darlene",
+          "stance": "prefer",
+          "strength": "soft",
+          "note": "work great together (Brian, 5/2/26)",
+          "added_date": "2026-05-02"
+        },
+        {
+          "with": "Jessica",
+          "stance": "avoid",
+          "strength": "soft",
+          "note": "butt heads with Jessica (Brian, 5/2/26)",
+          "added_date": "2026-05-02"
+        }
+      ],
+      "accommodations": []
+    },
+    "Mike S": {
+      "full_name": "Michael Storey",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Zone 9/9SR specialist, best four for weekend Zone 9"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Zone9",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top Zone 9/9SR TM, priority for Fri/Sat Zone 9 and 9SR",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Nikki": {
+      "full_name": "Nicole Cederholm",
+      "skill_score": 7,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 7,
+          "reason": "Brian: Monday 4/27 observation \u2014 pretty decent."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "Zone10",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: pretty decent.",
+          "linked_recommendation": "7"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Peter": {
+      "full_name": "Peter Martin",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Robby": {
+      "full_name": "Robby Perry",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "slot_preference": "no_sweeper",
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": [
+        {
+          "type": "physical",
+          "severity": "hard",
+          "target": "category:sweeper",
+          "note": "No sweeper duty \u2014 added 5/1/26. Migrated to accommodation 5/3/26.",
+          "added_date": "2026-05-03",
+          "status": "active"
+        }
+      ]
+    },
+    "Sam": {
+      "full_name": "Samantha Smith",
+      "skill_score": 7,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 7,
+          "reason": "Brian: good in Admin role"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian confirmed Sam is good in Admin role",
+          "linked_recommendation": "7"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Seth": {
+      "full_name": "Seth Valind",
+      "skill_score": 5,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 3,
+          "new": 5,
+          "reason": "Brian: Monday 4/27 observation \u2014 finishing training tomorrow (4/29) and doing pretty good."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "Zone1",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: finishing training tomorrow (4/29) and doing pretty good. Special task tomorrow Tue 4/28 \u2014 assigned to ADP courses (manual placement, not engine-managed).",
+          "linked_recommendation": "5"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Sheri O": {
+      "full_name": "Sheri Oneil",
+      "skill_score": 9,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 9,
+          "reason": "Brian: best of the best Admin, general rockstar"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top-tier Admin, named #1 among best Admin TMs, general rockstar",
+          "linked_recommendation": "9"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Sherry B": {
+      "full_name": "Sherry Brophy",
+      "skill_score": 9,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 9,
+          "reason": "Brian: best of the best Admin, general rockstar"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top-tier Admin, named #1 among best Admin TMs, general rockstar",
+          "linked_recommendation": "9"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Silvia": {
+      "full_name": "Silvia Reyes-Tolentino",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: Zone 9/9SR specialist, best four for weekend Zone 9"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Zone9",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: top Zone 9/9SR TM, priority for Fri/Sat Zone 9 and 9SR",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Steve": {
+      "full_name": "Stephen Eisele",
+      "skill_score": 6.5,
+      "score_history": [
+        {
+          "date": "2026-04-28",
+          "old": 5,
+          "new": 6.5,
+          "reason": "Brian: Monday 4/27 observation \u2014 pretty solid."
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-28",
+          "week_ending": "2026-04-30",
+          "day": "Monday",
+          "slot_context": "MRR6",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: pretty solid.",
+          "linked_recommendation": "6.5"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Mike W": {
+      "full_name": "Stephen Wilkins",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Tawnya": {
+      "full_name": "Tawnya Elders",
+      "skill_score": 8,
+      "score_history": [
+        {
+          "date": "2026-04-22",
+          "old": 5,
+          "new": 8,
+          "reason": "Brian: top-tier Admin, general rockstar, active trainer"
+        }
+      ],
+      "comments": [
+        {
+          "date": "2026-04-22",
+          "week_ending": "2026-04-30",
+          "day": null,
+          "slot_context": "Admin",
+          "category": "Performance",
+          "sentiment": "Positive",
+          "note": "Brian: one of the best Admin TMs, named as general rockstar. Also active trainer.",
+          "linked_recommendation": "8"
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Trenidee": {
+      "full_name": "Trenidee Hassevoort",
+      "skill_score": 3,
+      "status": "separated",
+      "separated_date": "2026-05-03",
+      "separation_note": "Brian 5/3/26: more than likely not coming back. Set Active=N in Eligibility Roster. Soft separation \u2014 profile retained in case she returns.",
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-05-03",
+          "week_ending": "2026-05-07",
+          "day": "Sunday",
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Brian 5/3/26: removed from grave deployment pool. Separation soft \u2014 profile + score history retained. Trainee MP1/MP2 restriction in skill rules.md should be reduced to Seth-only when convenient.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": [
+        {
+          "type": "medical",
+          "severity": "hard",
+          "target": "Z9 SR",
+          "note": "Seeded example \u2014 confirm with Brian before relying on. Asthma/breathing concern was hypothetical. Migrated to accommodation 5/3/26.",
+          "added_date": "2026-05-03",
+          "status": "review_due"
+        }
+      ]
+    },
+    "Alistair": {
+      "full_name": "Aurora Fox-Stone",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Doug": {
+      "full_name": "Douglas Barnes",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Gage": {
+      "full_name": "Gage Mcnees",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Missy": {
+      "full_name": "Melissa Fox",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Polly": {
+      "full_name": "Polly Chipman",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Becca": {
+      "full_name": "Rebecca Johnston",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Auggie": {
+      "full_name": "Augustine Kiogima",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Char": {
+      "full_name": "Charlene Jones",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Christina": {
+      "full_name": "Christina Neeson",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "ChyAnn": {
+      "full_name": "ChyAnn Knight",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Eric": {
+      "full_name": "Eric Lloyd",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [
+        {
+          "stance": "avoid",
+          "strength": "hard",
+          "target": "category:grave_pool",
+          "note": "Eric is AM-overlap-only \u2014 never place in Support, Zones, RR, or any grave-pool slot",
+          "added_date": "2026-05-03",
+          "last_reviewed": "2026-05-03"
+        }
+      ],
+      "pair_affinities": [],
+      "accommodations": [
+        {
+          "type": "am_overlap_only",
+          "note": "Eric works AM overlap exclusively. Do not pull him into the grave pool or Support slots.",
+          "added_date": "2026-05-03"
+        }
+      ]
+    },
+    "LeeAnn": {
+      "full_name": "Lee Kountz",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Mike": {
+      "full_name": "Michael Stitt",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Tiffany": {
+      "full_name": "Tiffany Wilde-Grile",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Grave Shift": {
+      "full_name": "Grave Shift",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Grave Shift on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Brooke": {
+      "full_name": "Brooke Radwan",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Brooke Radwan on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Nicholas": {
+      "full_name": "Nicholas Bellgraph",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Nicholas Bellgraph on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Ryan": {
+      "full_name": "Ryan Baughman",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Ryan Baughman on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Scott": {
+      "full_name": "Scott Walsh",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Scott Walsh on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Zachery": {
+      "full_name": "Zachery Meacham",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-04-29",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Zachery Meacham on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "preferences": [],
+      "pair_affinities": [],
+      "accommodations": []
+    },
+    "Elizabeth": {
+      "full_name": "Elizabeth Pierce",
+      "skill_score": 5,
+      "score_history": [],
+      "comments": [
+        {
+          "date": "2026-05-02",
+          "week_ending": "2026-05-07",
+          "day": null,
+          "slot_context": null,
+          "category": "Administrative",
+          "sentiment": "Flag",
+          "note": "Auto-detected: Elizabeth Pierce on grave schedule but not in Eligibility Roster. Needs roster entry + training pair config if applicable.",
+          "linked_recommendation": null
+        }
+      ],
+      "accommodations": []
+    }
+  }
+}

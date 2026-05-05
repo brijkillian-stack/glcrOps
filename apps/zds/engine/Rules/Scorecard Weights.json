@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "purpose": "Tunable weights for the multi-objective placement scorecard. Each placement decision sums these components into a total score; lower total = higher priority.",
+    "convention": "All weights are POSITIVE. They scale a per-component PENALTY (low = good fit). The engine sorts ascending — the candidate with the lowest summed penalty wins. Increase a weight to make that component matter more.",
+    "tuning_examples": {
+      "skill_match": "Increase if you want the strongest TM in tough zones more aggressively.",
+      "preference_fit": "Increase if you want the engine to honor preferences more strictly (less likely to override).",
+      "pair_affinity": "Increase if pair conflicts are causing real productivity issues.",
+      "fatigue_index": "Increase if rockstars are getting burned out.",
+      "within_repeat": "Increase to push harder against same-slot repeats this week.",
+      "cross_week_rotation": "Increase to push harder for week-over-week variety."
+    },
+    "transparency": "Every placement decision logs its component breakdown to the audit. Open the JSON audit to see why each TM was chosen (or not).",
+    "last_updated": "2026-05-01"
+  },
+  "weights": {
+    "skill_match":          1.0,
+    "preference_fit":       1.5,
+    "pair_affinity":        1.0,
+    "within_repeat":        1.0,
+    "cross_week_rotation":  0.5,
+    "area_diversity":       0.7,
+    "fatigue_index":        0.8,
+    "soft_prefer_set":      0.6
+  },
+  "hard_preference_override_severity": "warning",
+  "fatigue_index_window_days": 7,
+  "fatigue_threshold": {
+    "fresh":      8,
+    "moderate":   16,
+    "stretched":  22,
+    "burned":     28
+  },
+  "pair_affinity_check_scope": [
+    "adjacent_zones",
+    "rr_pair_split",
+    "z9_sr_buddy",
+    "sweeper_co_route"
+  ]
+}

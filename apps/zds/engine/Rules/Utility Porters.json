@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-day Utility Porter assignments for the Zone Deployment Book. Up to 8 entries per date (anything beyond is ignored). Each entry is {role, name}. role is typically AM or PM (which shift portion the porter covers); leave empty if unknown. Brian's intent (4/29/26): future weekly schedules will include Utility Porter rows; until then this file is populated manually (or left empty for all-Unfilled cards).",
+  "_schema": {
+    "ISO_DATE_YYYY_MM_DD": [
+      {"role": "PM", "name": "Display Name"},
+      {"role": "AM", "name": "Display Name"}
+    ]
+  },
+  "_version": 1,
+  "_updated": "2026-04-29"
+}

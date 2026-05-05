@@ -20,10 +20,7 @@ from typing import Optional
 
 import openpyxl
 
-GLCR_BASE = Path(
-    "/Users/briankillian/Library/CloudStorage/"
-    "OneDrive-gunlakecasino.com/GLCR"
-)
+GLCR_BASE = Path(__file__).resolve().parent / "engine"
 SCHEDULE_DIR = GLCR_BASE / "Inputs" / "Weekly Schedules"
 
 _DAY_NAME_ROW = 6
@@ -52,14 +49,35 @@ def _is_1am(v) -> bool:
 # ── Schedule file discovery ───────────────────────────────────────────────────
 
 def get_latest_schedule_path() -> Optional[Path]:
-    """Return the most recently modified .xlsx in Weekly Schedules/."""
-    if not SCHEDULE_DIR.exists():
-        return None
+    """Return the most recently modified .xlsx in Weekly Schedules/.
+
+    On Render the local Inputs/ folder is ephemeral, so if it's empty we
+    sync from Supabase Storage first. This keeps `Schedule loaded` indicator
+    accurate after a container restart.
+    """
+    SCHEDULE_DIR.mkdir(parents=True, exist_ok=True)
+
     candidates = sorted(
         SCHEDULE_DIR.glob("*.xlsx"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
+
+    # Fall back to Storage if the local folder is empty (typical after
+    # a Render redeploy).
+    if not candidates:
+        try:
+            from shared import storage
+            storage.sync_schedules_to(SCHEDULE_DIR)
+            candidates = sorted(
+                SCHEDULE_DIR.glob("*.xlsx"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+        except Exception:
+            # Network hiccup or bucket missing — fall through and return None.
+            pass
+
     return candidates[0] if candidates else None
 
 

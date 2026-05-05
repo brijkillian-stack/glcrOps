@@ -19,8 +19,9 @@ from typing import Optional
 from . import database
 
 # ── Dynamic import of the rendering engine ───────────────────────────────────
-_RDB_PATH = (Path.home() / "Library/CloudStorage"
-             / "OneDrive-gunlakecasino.com/GLCR/render_deployment_book.py")
+# Vendored to apps/zds/engine/render_deployment_book.py during Phase G.1.
+# Same path locally and on Render — no OneDrive dependency.
+_RDB_PATH = Path(__file__).resolve().parent / "engine" / "render_deployment_book.py"
 _spec = importlib.util.spec_from_file_location("_rdb", _RDB_PATH)
 _rdb  = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_rdb)

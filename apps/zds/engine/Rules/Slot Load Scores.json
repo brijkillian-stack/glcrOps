@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "purpose": "Per-slot 'load score' used by the fatigue index. Higher = more demanding shift.",
+    "scale": "1 (light) to 5 (heavy)",
+    "rationale": {
+      "5": "High-stress, high-public-exposure, physically or emotionally demanding.",
+      "4": "Heavy physical or sustained activity.",
+      "3": "Moderate demand or high visibility.",
+      "2": "Standard zone or restroom rotation.",
+      "1": "Light support, flexible, low-stress."
+    },
+    "fatigue_index_calc": "TM's load = sum of slot loads across last 7 working shifts (from archive). Fatigue penalty in scorecard is roughly (fatigue_pts / 8) for high-load slots — soft pressure to rotate stretched TMs into easier work without preventing assignment.",
+    "tuning_note": "Adjust these to match Brian's observation of which slots actually drain TMs. Initial values are a defensible starting point.",
+    "last_updated": "2026-05-01"
+  },
+  "loads": {
+    "Zone1":   3,
+    "Zone2":   3,
+    "Zone3":   2,
+    "Zone4":   2,
+    "Zone5":   2,
+    "Zone6":   2,
+    "Zone7":   3,
+    "Zone8":   3,
+    "Zone9":   4,
+    "Zone10":  2,
+    "Zone9SR": 5,
+    "Z9SRBuddy": 4,
+    "MRR1":    2,
+    "MRR6":    2,
+    "MRR7":    3,
+    "MRR8":    2,
+    "MRR10":   2,
+    "WRR1":    2,
+    "WRR6":    2,
+    "WRR7":    3,
+    "WRR8":    2,
+    "WRR10":   2,
+    "Trash1":  4,
+    "Trash2":  4,
+    "Admin":   3,
+    "MP1":     1,
+    "MP2":     1,
+    "Support1": 1,
+    "Support2": 1,
+    "Support3": 2,
+    "PMOL1":   2, "PMOL2":   2, "PMOL3":   2, "PMOL4":   2, "PMOL5":   2, "PMOL6":   2,
+    "AMOL1":   2, "AMOL2":   2, "AMOL3":   2, "AMOL4":   2, "AMOL5":   2, "AMOL6":   2
+  },
+  "sweeper_tag_bonus": 2,
+  "training_role_bonus": {
+    "trainer": 1,
+    "trainee": 1
+  }
+}

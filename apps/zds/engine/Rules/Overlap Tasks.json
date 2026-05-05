@@ -1,0 +1,33 @@
+{
+  "_comment": "Canonical AM/PM Overlap task assignments by slot position. The TASK is fixed per slot; the PERSON in the slot rotates day-to-day. Updated when supervisor reorganizes overlap responsibilities. Read by both fill_engine.py (for audit records) and render_deployment_book.py (for the printed deployment book).",
+  "_version": 1,
+  "_updated": "2026-04-28",
+
+  "PM": {
+    "PMOL1": "Vacuum, Bottles & Glass",
+    "PMOL2": "Glass & Counters, Trash",
+    "PMOL3": "Tables & Restroom, Bottles & Glass",
+    "PMOL4": "Trash",
+    "PMOL5": "Trash",
+    "PMOL6": "Trash"
+  },
+
+  "AM": {
+    "AMOL1": "CBK / Shkodé",
+    "AMOL2": "CBK / Shkodé Restrooms",
+    "AMOL3": "Hotel Offices",
+    "AMOL4": "Sandhill / Lobby Bar",
+    "AMOL5": "131 / Group Room / CBK Office",
+    "AMOL6": "Trash"
+  },
+
+  "_per_day_overrides": {
+    "_comment": "Optional per-date overrides — keyed by ISO date. When supervisor doubles up a person on combined slots (e.g., 5 names but 6 task slots), encode the doubling here. The renderer applies these on top of the canonical mapping.",
+    "2026-05-01": {
+      "AM": {
+        "AMOL4": "Sandhill / Lobby Bar; 131 / Group Room / CBK Office",
+        "AMOL5": "Trash"
+      }
+    }
+  }
+}

@@ -1,0 +1,652 @@
+{
+  "map_image": "Casino_Map/GLCR_FloorMap_DEC_2025_NoLogos.png",
+  "map_dimensions": {
+    "width": 8938,
+    "height": 6478
+  },
+  "coordinate_space": "png_pixels",
+  "status": "COMPLETE \u2014 12 zones confirmed via iPad tap-placer + 7 restrooms + break groups",
+  "restrooms_confirmed": {
+    "RR1": {
+      "x": 3563,
+      "y": 2721,
+      "label": "WRR1 / MRR1",
+      "notes": "Below Rewards Center"
+    },
+    "RR2": {
+      "x": 2686,
+      "y": 3712,
+      "label": "WRR2 / MRR2",
+      "notes": "West edge near Poker Room"
+    },
+    "RR6": {
+      "x": 4534,
+      "y": 5709,
+      "label": "WRR6 / MRR6",
+      "notes": "South near Outdoor Patio"
+    },
+    "RR7": {
+      "x": 5930,
+      "y": 5551,
+      "label": "WZ7 / MRR7",
+      "notes": "South near Smoking Slots"
+    },
+    "RR8": {
+      "x": 6227,
+      "y": 3312,
+      "label": "WZ8 / MRR8",
+      "notes": "Between Cashier & High Limit Table"
+    },
+    "RR10": {
+      "x": 8326,
+      "y": 4507,
+      "label": "WZ10 / MRR10",
+      "notes": "Far east Smoking Slots"
+    },
+    "Lobby": {
+      "x": 864,
+      "y": 3493,
+      "label": "Lobby Restroom",
+      "notes": "Rotunda / Lobby Bar"
+    }
+  },
+  "zones_confirmed": {
+    "Zone1": {
+      "polygon": [
+        [
+          3046,
+          1715
+        ],
+        [
+          3946,
+          1715
+        ],
+        [
+          3946,
+          1958
+        ],
+        [
+          3655,
+          1976
+        ],
+        [
+          3673,
+          2507
+        ],
+        [
+          3455,
+          2489
+        ],
+        [
+          3455,
+          3211
+        ],
+        [
+          2776,
+          3316
+        ],
+        [
+          2654,
+          3081
+        ],
+        [
+          2689,
+          2959
+        ],
+        [
+          3081,
+          2776
+        ],
+        [
+          3081,
+          2576
+        ],
+        [
+          3029,
+          2576
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z1 \u2014 Parking garage corridor"
+    },
+    "Zone2": {
+      "polygon": [
+        [
+          3446,
+          3220
+        ],
+        [
+          3446,
+          3803
+        ],
+        [
+          3264,
+          4008
+        ],
+        [
+          3194,
+          4008
+        ],
+        [
+          3211,
+          4974
+        ],
+        [
+          3037,
+          4974
+        ],
+        [
+          3011,
+          4787
+        ],
+        [
+          2637,
+          4735
+        ],
+        [
+          2759,
+          4482
+        ],
+        [
+          2907,
+          4439
+        ],
+        [
+          2959,
+          4151
+        ],
+        [
+          2933,
+          3699
+        ],
+        [
+          2776,
+          3333
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z2 \u2014 Rotunda / Lobby corridor"
+    },
+    "Zone3": {
+      "polygon": [
+        [
+          3198,
+          4500
+        ],
+        [
+          4743,
+          4500
+        ],
+        [
+          5117,
+          4030
+        ],
+        [
+          4530,
+          4012
+        ],
+        [
+          4530,
+          3882
+        ],
+        [
+          3612,
+          3882
+        ],
+        [
+          3464,
+          3734
+        ],
+        [
+          3272,
+          4021
+        ],
+        [
+          3198,
+          4003
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z3 \u2014 Oasis perimeter / center floor"
+    },
+    "Zone4": {
+      "polygon": [
+        [
+          3203,
+          4496
+        ],
+        [
+          3220,
+          5044
+        ],
+        [
+          3616,
+          5044
+        ],
+        [
+          3616,
+          5296
+        ],
+        [
+          3716,
+          5296
+        ],
+        [
+          4021,
+          5466
+        ],
+        [
+          4734,
+          4496
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z4 \u2014 Poker Room / south corridor"
+    },
+    "Zone5": {
+      "polygon": [
+        [
+          4804,
+          4412
+        ],
+        [
+          5117,
+          3986
+        ],
+        [
+          5213,
+          3986
+        ],
+        [
+          5239,
+          3812
+        ],
+        [
+          5309,
+          3812
+        ],
+        [
+          5352,
+          3956
+        ],
+        [
+          5605,
+          3956
+        ],
+        [
+          5718,
+          3860
+        ],
+        [
+          5836,
+          3860
+        ],
+        [
+          5836,
+          3768
+        ],
+        [
+          5318,
+          3768
+        ],
+        [
+          5300,
+          3412
+        ],
+        [
+          5735,
+          3386
+        ],
+        [
+          5953,
+          3647
+        ],
+        [
+          6040,
+          3560
+        ],
+        [
+          6066,
+          4421
+        ],
+        [
+          5170,
+          4465
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z5 \u2014 High Limit Table / center"
+    },
+    "Zone6": {
+      "polygon": [
+        [
+          4813,
+          4430
+        ],
+        [
+          4029,
+          5474
+        ],
+        [
+          4421,
+          5692
+        ],
+        [
+          4543,
+          5527
+        ],
+        [
+          5004,
+          5509
+        ],
+        [
+          5187,
+          5553
+        ],
+        [
+          5170,
+          4447
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z6 \u2014 Table Games / south"
+    },
+    "Zone7": {
+      "polygon": [
+        [
+          5178,
+          4447
+        ],
+        [
+          6075,
+          4421
+        ],
+        [
+          6366,
+          4630
+        ],
+        [
+          6366,
+          5322
+        ],
+        [
+          5814,
+          5322
+        ],
+        [
+          5796,
+          5761
+        ],
+        [
+          5666,
+          5779
+        ],
+        [
+          5579,
+          5709
+        ],
+        [
+          5579,
+          5553
+        ],
+        [
+          5204,
+          5535
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z7 \u2014 Table Games / southeast"
+    },
+    "Zone8": {
+      "polygon": [
+        [
+          6040,
+          3446
+        ],
+        [
+          6066,
+          4421
+        ],
+        [
+          6379,
+          4630
+        ],
+        [
+          6836,
+          4630
+        ],
+        [
+          6836,
+          3420
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z8 \u2014 Center-east Table Games"
+    },
+    "Zone9": {
+      "polygon": [
+        [
+          6841,
+          3416
+        ],
+        [
+          7955,
+          3416
+        ],
+        [
+          7972,
+          3612
+        ],
+        [
+          8616,
+          3612
+        ],
+        [
+          8633,
+          3925
+        ],
+        [
+          7894,
+          3943
+        ],
+        [
+          7876,
+          3764
+        ],
+        [
+          7119,
+          3764
+        ],
+        [
+          7119,
+          3934
+        ],
+        [
+          6841,
+          3908
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z9 \u2014 NE row / cashier"
+    },
+    "Zone10": {
+      "polygon": [
+        [
+          6845,
+          3916
+        ],
+        [
+          6845,
+          4626
+        ],
+        [
+          6989,
+          4626
+        ],
+        [
+          6989,
+          4390
+        ],
+        [
+          8629,
+          4390
+        ],
+        [
+          8629,
+          3925
+        ],
+        [
+          7128,
+          3995
+        ],
+        [
+          7128,
+          3943
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z10 \u2014 Smoking Slots + High Limit Slots (inc. Z11 area on grave)"
+    },
+    "Zone11": {
+      "polygon": [
+        [
+          6993,
+          4390
+        ],
+        [
+          7589,
+          4390
+        ],
+        [
+          7589,
+          4617
+        ],
+        [
+          6993,
+          4617
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z11 \u2014 High Limit Slots sub-area (merged into Z10 on grave)"
+    },
+    "Zone12": {
+      "polygon": [
+        [
+          7728,
+          3203
+        ],
+        [
+          7728,
+          3394
+        ],
+        [
+          7963,
+          3412
+        ],
+        [
+          7963,
+          3616
+        ],
+        [
+          8498,
+          3616
+        ],
+        [
+          8498,
+          3120
+        ],
+        [
+          7916,
+          3120
+        ],
+        [
+          7916,
+          3168
+        ]
+      ],
+      "source": "iPad tap-placer 2026-04-24, light cleanup applied",
+      "label_grave": "Z12 \u2014 Z9 Smoking Room (grave shift)"
+    }
+  },
+  "zones_unconfirmed": {},
+  "oasis_oval": {
+    "anchors": [
+      [
+        2079,
+        3592
+      ],
+      [
+        2056,
+        4314
+      ]
+    ],
+    "note": "Oval rotunda \u2014 not a porter zone per Brian"
+  },
+  "break_groups": {
+    "1": {
+      "times": [
+        "12:45a",
+        "2:30a",
+        "4:45a"
+      ],
+      "members": [
+        "Zone1",
+        "Zone4",
+        "Zone7",
+        "Zone10",
+        "WZ6",
+        "WZ10",
+        "MZ8"
+      ]
+    },
+    "2": {
+      "times": [
+        "1:00a",
+        "3:00a",
+        "5:00a"
+      ],
+      "members": [
+        "Zone2",
+        "Zone5",
+        "Zone8",
+        "MZ1",
+        "MZ6",
+        "WZ7",
+        "Trash1"
+      ]
+    },
+    "3": {
+      "times": [
+        "1:15a",
+        "3:30a",
+        "5:15a"
+      ],
+      "members": [
+        "Zone3",
+        "Zone6",
+        "Zone9",
+        "WZ1",
+        "WZ8",
+        "MZ7",
+        "MZ10",
+        "Trash2"
+      ]
+    }
+  },
+  "shift_overrides": {
+    "grave": {
+      "zone9sr_target": "Zone12",
+      "_zone9sr_note": "On grave, the audit code 'Zone9SR' (Z9 Smoking Room) is rendered on the Zone12 polygon \u2014 NE corner smoking slots.",
+      "merged_zones": [
+        {
+          "operational": "Zone10",
+          "includes": [
+            "Zone10",
+            "Zone11"
+          ],
+          "note": "On grave shift Z10 and Z11 are worked as one zone; TM assigned to 'Zone10' in the audit covers both polygon areas."
+        }
+      ]
+    }
+  }
+}

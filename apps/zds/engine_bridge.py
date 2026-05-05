@@ -13,12 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Absolute path to the GLCR working directory (contains fill_engine.py,
-# glcr_engine package, Rules/, Inputs/, Outputs/, etc.)
-GLCR_BASE = Path(
-    "/Users/briankillian/Library/CloudStorage/"
-    "OneDrive-gunlakecasino.com/GLCR"
-)
+# Vendored engine lives alongside this file at apps/zds/engine/.
+# Contains fill_engine.py, glcr_engine package, Rules/, Templates/, Archive/,
+# Inputs/, Outputs/. Path resolves the same locally and on Render.
+GLCR_BASE = Path(__file__).resolve().parent / "engine"
 FILL_ENGINE = GLCR_BASE / "fill_engine.py"
 
 # ── Slot mapping: fill_engine code → (Supabase slot_key, rr_side) ────────────
@@ -84,6 +82,19 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
             "stdout": "", "stderr": "",
             "error": f"fill_engine.py not found at {FILL_ENGINE}",
         }
+
+    # Sync schedules from Supabase Storage into the local Inputs/ folder.
+    # On Render the local folder is wiped on each container restart, so
+    # without this the engine would see an empty Inputs/ even though the
+    # user uploaded a schedule earlier this week.
+    try:
+        from shared import storage
+        inputs_dir = GLCR_BASE / "Inputs" / "Weekly Schedules"
+        storage.sync_schedules_to(inputs_dir)
+    except Exception as exc:
+        # Don't fail the engine run if Storage is briefly unavailable —
+        # the engine will still try the local Inputs/ directory.
+        print(f"[engine_bridge] Storage sync warning: {exc}")
 
     cmd = [sys.executable, str(FILL_ENGINE)]
     if schedule_file:

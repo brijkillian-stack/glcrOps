@@ -27,9 +27,19 @@ from .types import (
     ZoneSlot,
 )
 
-# Vite serves .web/public/ at the root URL.
-# state.py lives at apps/zds/state.py → go up 3 levels to reach the project root.
-_PRINT_CACHE = Path(__file__).parent.parent.parent / ".web" / "public" / "print_cache"
+# Print-cache resolution:
+#   - Dev (`reflex run --env dev`): Vite serves from .web/public/, so we write
+#     there and the URL /print_cache/<file> hits Vite.
+#   - Prod / Render (Caddy + static export): Caddy serves from .web/build/client/,
+#     so we write the print HTML there instead. Same URL path, different dir.
+# state.py lives at apps/zds/state.py → up 3 to reach project root.
+_PROJ_ROOT = Path(__file__).parent.parent.parent
+_PROD_STATIC = _PROJ_ROOT / ".web" / "build" / "client"
+_PRINT_CACHE = (
+    _PROD_STATIC / "print_cache"
+    if _PROD_STATIC.exists()
+    else _PROJ_ROOT / ".web" / "public" / "print_cache"
+)
 
 
 def _enrich_nights(nights: list[dict]) -> list[dict]:
@@ -342,18 +352,28 @@ class ZdsState(rx.State):
 
     async def handle_schedule_upload(self, files: list[rx.UploadFile]):
         """
-        Accept a dropped/selected schedule .xlsx and save it to the
-        Weekly Schedules directory, then reload the pool data.
+        Accept a dropped/selected schedule .xlsx, persist to BOTH the local
+        Inputs/ dir (for immediate parser reload) AND Supabase Storage (so
+        the schedule survives container restarts on Render), then refresh
+        the pool data.
         """
         from . import schedule_parser
+        from shared import storage
         if not files:
             return
         upload_dir = schedule_parser.SCHEDULE_DIR
         upload_dir.mkdir(parents=True, exist_ok=True)
         for file in files:
             upload_data = await file.read()
+            # 1. Local copy — used immediately by the parser below.
             dest = upload_dir / file.filename
             dest.write_bytes(upload_data)
+            # 2. Persist to Supabase Storage — survives container restarts.
+            try:
+                storage.upload_schedule(file.filename, upload_data)
+            except Exception as exc:
+                # Don't fail the UI on Storage error — just log and surface.
+                self.error = f"Saved locally; Storage sync failed: {exc}"
         self._reload_schedule()
 
     def select_night(self, night_id: str):
