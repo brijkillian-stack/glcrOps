@@ -27,8 +27,9 @@ from .types import (
     ZoneSlot,
 )
 
-# Vite serves .web/public/ at the root URL — write generated HTML here
-_PRINT_CACHE = Path(__file__).parent.parent / ".web" / "public" / "print_cache"
+# Vite serves .web/public/ at the root URL.
+# state.py lives at apps/zds/state.py → go up 3 levels to reach the project root.
+_PRINT_CACHE = Path(__file__).parent.parent.parent / ".web" / "public" / "print_cache"
 
 
 def _enrich_nights(nights: list[dict]) -> list[dict]:
@@ -871,8 +872,8 @@ class ZdsState(rx.State):
     def _do_engine_night(self, night_id: str):
         """
         Rebuild break_assignments for one night from current zone placements.
-        Uses BG_* defaults for wave assignment.  Writes rows for ALL slots
-        (filled or empty) so the break sheet always shows the full structure.
+        Uses BG_* defaults for wave assignment.
+        Only filled slots are inserted — break_assignments.tm_id is NOT NULL.
         """
         all_slots = database.fetch_zone_assignments(night_id)
         rows: list[dict] = []
@@ -886,8 +887,8 @@ class ZdsState(rx.State):
         }
         for n in zone_order:
             s = zone_map.get(n)
-            if s is None:
-                continue
+            if s is None or not s.get("tm_id"):
+                continue  # skip unfilled — tm_id NOT NULL
             sort_order += 1
             label = ENGINE_SLOT_LABEL.get(s["slot_key"], s["slot_key"])
             rows.append({
@@ -908,8 +909,8 @@ class ZdsState(rx.State):
                     (s for s in rr_slots
                      if s["slot_key"] == sk and s["rr_side"] == side), None
                 )
-                if slot is None:
-                    continue
+                if slot is None or not slot.get("tm_id"):
+                    continue  # skip unfilled — tm_id NOT NULL
                 num = rr_num[sk]
                 sort_order += 1
                 label = ENGINE_SLOT_LABEL.get(f"{sk}_{side}", f"{sk} {side}")
@@ -930,8 +931,8 @@ class ZdsState(rx.State):
         aux_map = {s["slot_key"]: s for s in all_slots if s["slot_type"] == "aux"}
         for sk in aux_order:
             s = aux_map.get(sk)
-            if s is None:
-                continue
+            if s is None or not s.get("tm_id"):
+                continue  # skip unfilled — tm_id NOT NULL
             sort_order += 1
             label = ENGINE_SLOT_LABEL.get(sk, sk)
             rows.append({
