@@ -14,13 +14,31 @@ from shared.db import get_client
 
 
 class AuthState(rx.State):
-    """Authentication state for magic-link flow."""
+    """Authentication state for magic-link flow.
 
-    # ── User session ──────────────────────────────────────────────────────────
+    Phase: Path A login simplification (2026-05-05)
+    ─────────────────────────────────────────────────
+    Refresh token + email are persisted in browser localStorage so the
+    session survives reloads and PWA cold-starts. On every protected-page
+    mount, ``restore_session_from_storage`` runs first — if there's a
+    persisted refresh token, it gets exchanged for a fresh access token
+    silently (no magic link required).
+
+    Combined with the dashboard-side JWT TTL bump (access 24h, refresh 30d),
+    this means Brian logs in via magic link once per ~30 days per device,
+    not "every few minutes." Activity-driven refresh on window focus keeps
+    long sessions alive.
+    """
+
+    # ── User session (in-memory only — reset on each browser reload) ─────────
     email: str = ""
     is_authenticated: bool = False
     user_id: str = ""  # Brian's UUID from auth.users
     jwt_token: str = ""  # JWT (stored server-side, never sent to browser as cookie)
+
+    # ── Persisted across reloads (localStorage) ──────────────────────────────
+    persisted_refresh_token: str = rx.LocalStorage("")
+    persisted_email: str = rx.LocalStorage("")
 
     # ── UI state ──────────────────────────────────────────────────────────────
     magic_link_sent: bool = False
@@ -94,6 +112,9 @@ class AuthState(rx.State):
                 self.jwt_token = res.session.access_token
                 self.is_authenticated = True
                 self.email = res.user.email or self.email
+                # Persist refresh token + email for cross-reload session restore
+                self.persisted_refresh_token = res.session.refresh_token or ""
+                self.persisted_email = self.email
                 self.error = ""
                 return True
             else:
@@ -141,6 +162,9 @@ class AuthState(rx.State):
                 self.jwt_token = res.session.access_token
                 self.is_authenticated = True
                 self.email = res.user.email or self.email
+                # Persist for cross-reload session restore
+                self.persisted_refresh_token = res.session.refresh_token or refresh_token
+                self.persisted_email = self.email
                 self.error = ""
                 return rx.redirect("/")
             self.error = "Authentication failed: session not returned by Supabase."
@@ -153,20 +177,78 @@ class AuthState(rx.State):
 
     @rx.event
     def sign_out(self):
-        """Clear the session."""
+        """Clear the session and any persisted tokens."""
         self.is_authenticated = False
         self.user_id = ""
         self.jwt_token = ""
         self.email = ""
         self.magic_link_sent = False
         self.error = ""
+        # Clear persisted tokens so the next page load goes to /login
+        self.persisted_refresh_token = ""
+        self.persisted_email = ""
 
     @rx.event
-    def require_auth(self):
+    async def restore_session_from_storage(self):
+        """Restore Supabase session from persisted refresh token (Path A login).
+
+        Called on every protected-page mount before require_auth fires. If we
+        already have an in-memory session, this is a no-op. If we have a
+        persisted refresh token, exchange it for a fresh access token without
+        a magic-link round-trip.
         """
-        Gate event: if not authenticated, redirect to /login.
-        Used as on_load hook on protected pages.
+        if self.is_authenticated:
+            return                                  # session already in memory
+        if not self.persisted_refresh_token:
+            return                                  # nothing to restore from
+        try:
+            sb = get_client()
+            res = sb.auth.refresh_session(self.persisted_refresh_token)
+            if res and res.user and res.session:
+                self.user_id = res.user.id
+                self.jwt_token = res.session.access_token
+                self.email = res.user.email or self.persisted_email
+                self.is_authenticated = True
+                # Refresh tokens rotate — store the new one
+                if res.session.refresh_token:
+                    self.persisted_refresh_token = res.session.refresh_token
+                self.persisted_email = self.email
+                self.error = ""
+        except Exception:
+            # Refresh failed (token revoked, expired, or Supabase auth changed).
+            # Clear persisted state so the next page load goes to /login cleanly.
+            self.persisted_refresh_token = ""
+            self.persisted_email = ""
+            self.is_authenticated = False
+
+    @rx.event
+    async def refresh_session(self):
+        """Activity-driven session refresh.
+
+        Wired to a JS focus listener in brijkillian_stack.py — fires when the
+        user returns to the browser tab/PWA. Silent on failure (the next
+        protected-page navigation will catch and redirect if needed).
         """
+        if not self.is_authenticated or not self.persisted_refresh_token:
+            return
+        try:
+            sb = get_client()
+            res = sb.auth.refresh_session(self.persisted_refresh_token)
+            if res and res.session:
+                self.jwt_token = res.session.access_token
+                if res.session.refresh_token:
+                    self.persisted_refresh_token = res.session.refresh_token
+        except Exception:
+            pass                                    # silent — next nav handles it
+
+    @rx.event
+    async def require_auth(self):
+        """
+        Gate event: try to restore from storage, then redirect to /login if
+        still unauthenticated. Used as on_load hook on protected pages.
+        """
+        if not self.is_authenticated:
+            await self.restore_session_from_storage()
         if not self.is_authenticated:
             return rx.redirect("/login")
 

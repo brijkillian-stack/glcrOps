@@ -1,5 +1,7 @@
 """GLCR Memory route definitions."""
 
+from shared.components.homepage import home_page
+
 from .pages.today import today_page
 from .pages.search import search_page
 from .pages.tasks import tasks_page
@@ -40,7 +42,9 @@ ROUTES = [
     (auth_callback_page, "/auth/callback", "Signing in...", []),
 
     # Protected routes (mapped to /glcr/* prefix for unified app)
-    (today_page, "/", "Today · GLCR Memory", [TodayState.load_today, TodayState.start_live_updates]),
+    # / is now the three-card launchpad; Today moves to /today.
+    (home_page, "/", "Graves Ops", []),
+    (today_page, "/today", "Today · GLCR Memory", [TodayState.load_today, TodayState.start_live_updates]),
     (search_page, "/search", "Search · GLCR Memory", [SearchState.clear_search]),
     (logs_page, "/logs", "Logs · GLCR Memory", [LogsState.load_logs]),
     (people_page, "/people", "People · GLCR Memory", [PeopleState.load_people]),

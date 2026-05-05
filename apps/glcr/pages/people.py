@@ -179,8 +179,13 @@ def tm_card(item: dict) -> rx.Component:
             rx.el.div(
                 rx.el.span(item["score_label"], class_name=score_badge_cls),
                 rx.el.div(
-                    rx.el.p(item["first_name"], class_name="tm-name"),
-                    rx.el.p(item["name"],       class_name="tm-full-name"),
+                    # Phase P — display_name is canonical (big), legal name secondary.
+                    rx.el.p(item["name"], class_name="tm-name"),
+                    rx.cond(
+                        item["full_name"] != item["name"],
+                        rx.el.p(item["full_name"], class_name="tm-full-name"),
+                        rx.fragment(),
+                    ),
                 ),
                 class_name="tm-card-head",
             ),

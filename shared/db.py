@@ -421,7 +421,11 @@ def get_people() -> list[dict]:
         res = (
             get_client()
             .table("entities")
-            .select("id, name, metadata")
+            # Phase P — pull the top-level display_name column as the
+            # canonical name. metadata.display_name is now mirrored to it
+            # on every write, but reading the column avoids JSON parsing
+            # and keeps Reflex var binding tidy.
+            .select("id, name, display_name, metadata")
             .eq("entity_type", "tm")
             .neq("id", "tm_grave_shift")
             .execute()
@@ -442,8 +446,13 @@ def get_people() -> list[dict]:
             if not isinstance(meta, dict):
                 meta = {}
 
-            # display_name is stored in metadata; fall back to first word of full name
-            name = (meta.get("display_name") or full_name.split()[0] if full_name else "").strip()
+            # Phase P — display_name column is canonical. Fall back to
+            # metadata.display_name (legacy) and then first word of full name.
+            name = (
+                (r.get("display_name") or "").strip()
+                or (meta.get("display_name") or "").strip()
+                or (full_name.split()[0] if full_name else "")
+            ).strip()
             if not name:
                 continue
 
@@ -1524,7 +1533,7 @@ def get_tm_full_profile(tm_id: str) -> dict:
         res = (
             get_client()
             .table("entities")
-            .select("id, name, metadata")
+            .select("id, name, display_name, metadata")
             .eq("id", tm_id)
             .single()
             .execute()
@@ -1535,8 +1544,13 @@ def get_tm_full_profile(tm_id: str) -> dict:
             meta = {}
 
         full_name    = entity.get("name", "").strip()
-        # display_name lives in metadata (e.g. "Abby"); fall back to first word of full name
-        display_name = (meta.get("display_name") or full_name.split()[0] if full_name else "").strip()
+        # Phase P — top-level display_name column is canonical. Fallbacks
+        # protect against legacy rows where the column was empty.
+        display_name = (
+            (entity.get("display_name") or "").strip()
+            or (meta.get("display_name") or "").strip()
+            or (full_name.split()[0] if full_name else "")
+        ).strip()
         status       = meta.get("status", "active")
         skill_score  = float(meta.get("skill_score") or 5)
 

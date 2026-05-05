@@ -8,7 +8,8 @@ from shared.components.app_switcher import app_switcher
 from apps.glcr.state.today import TodayState
 
 NAV_ITEMS = [
-    ("⊙", "Today",      "/"),
+    ("◎", "Home",       "/"),
+    ("⊙", "Today",      "/today"),
     ("⌕", "Search",     "/search"),
     ("◉", "Logs",       "/logs"),
     ("◍", "People",     "/people"),

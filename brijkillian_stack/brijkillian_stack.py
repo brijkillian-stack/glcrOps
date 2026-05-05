@@ -43,6 +43,28 @@ document.addEventListener('keydown', function(e) {
 });
 """
 
+# ── Session keep-alive (Path A login) ─────────────────────────────────────────
+# Refresh the Supabase session on window focus and every 15 min of active use.
+# Combined with the long-lived JWT (24h access, 30d refresh) and persisted
+# refresh token in localStorage, Brian only sees the magic-link login once
+# per ~30 days per device.
+
+_AUTH_KEEPALIVE_SCRIPT = """
+(function() {
+  function refresh() {
+    if (window._reflexDispatch) {
+      window._reflexDispatch('auth_state.refresh_session', {});
+    }
+  }
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') refresh();
+  });
+  // Periodic refresh every 15 min while the tab is active
+  setInterval(refresh, 15 * 60 * 1000);
+})();
+"""
+
 # ── Service Worker registration ───────────────────────────────────────────────
 
 _SW_REGISTRATION_SCRIPT = """
@@ -85,6 +107,7 @@ app = rx.App(
     ],
     head_components=[
         rx.el.script(_KBD_SCRIPT),
+        rx.el.script(_AUTH_KEEPALIVE_SCRIPT),
         rx.el.link(rel="manifest", href="/manifest.json"),
         rx.el.meta(name="theme-color", content="#0065BF"),
         rx.el.meta(name="apple-mobile-web-app-capable", content="yes"),
@@ -98,6 +121,8 @@ app = rx.App(
         # via MutationObserver when <script type="application/json" id="pc-config-*">
         # data-islands appear in the DOM (rendered by pencil_canvas() component).
         rx.el.script(src="/pencil_canvas.js"),
+        # ── Homepage three-card launchpad styles ──────────────────────────
+        rx.el.link(rel="stylesheet", href="/homepage.css"),
     ],
 )
 
@@ -114,10 +139,10 @@ for entry in GLCR_ROUTES:
         # Public route — no auth, no Grok
         app.add_page(page_fn, route=route, title=title)
     else:
-        # Protected route — wrap with Grok and auth guard
+        # Protected route — auth check (with restore-from-storage) runs first,
+        # then any page-specific on_load handlers.
         kwargs = {"route": route, "title": title}
-        if on_load:
-            kwargs["on_load"] = on_load
+        kwargs["on_load"] = [AuthState.require_auth] + (on_load or [])
         app.add_page(_with_grok(page_fn), **kwargs)
 
 # Register ZDS routes
