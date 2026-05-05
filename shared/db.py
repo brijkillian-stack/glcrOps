@@ -498,8 +498,10 @@ def get_people() -> list[dict]:
                 for h in history
             )
 
+            # Phase O — also treat 'archived' as not-active so archived TMs
+            # are excluded from default People page views and TM picker.
             status = (meta.get("status") or "active").strip()
-            active = status not in ("separated", "inactive")
+            active = status not in ("separated", "inactive", "archived")
             rank   = int(meta.get("tie_break_rank") or 99)
 
             people.append({

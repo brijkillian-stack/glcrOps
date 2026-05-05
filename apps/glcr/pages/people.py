@@ -281,15 +281,24 @@ def _score_history_row(entry: dict) -> rx.Component:
     )
 
 
-def _status_badge(status: str) -> rx.Component:
-    cls = rx.cond(
-        status == "loa",        "chip chip-flag",
-        rx.cond(status == "separated", "chip chip-flag",
-        rx.cond(status == "active",    "chip chip-positive", "chip")))
-    label = rx.cond(
-        status == "loa",        "LOA",
-        rx.cond(status == "separated", "Separated",
-        rx.cond(status == "active",    "Active", status)))
+def _status_badge(status) -> rx.Component:
+    """Status pill — color + label vary by status. Phase O adds 'archived'."""
+    cls = rx.match(
+        status,
+        ("loa",       "chip chip-flag"),
+        ("separated", "chip chip-flag"),
+        ("archived",  "chip"),
+        ("active",    "chip chip-positive"),
+        "chip",
+    )
+    label = rx.match(
+        status,
+        ("loa",       "LOA"),
+        ("separated", "Separated"),
+        ("archived",  "Archived"),
+        ("active",    "Active"),
+        status,
+    )
     return rx.el.span(label, class_name=cls)
 
 
@@ -545,10 +554,35 @@ def profile_view() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Edit button
-        rx.el.button("Edit Profile", class_name="btn btn-ghost",
-                     on_click=PeopleState.start_edit_profile,
-                     style={"fontSize":"12px","padding":"6px 12px","marginBottom":"16px"}),
+        # Edit + Archive controls
+        rx.el.div(
+            rx.el.button("Edit Profile", class_name="btn btn-ghost",
+                         on_click=PeopleState.start_edit_profile,
+                         style={"fontSize":"12px","padding":"6px 12px"}),
+            # Phase O follow-up — Archive / Restore (visible based on status)
+            rx.cond(
+                PeopleState.drawer_status == "archived",
+                rx.el.button(
+                    "↩ Restore",
+                    class_name="btn btn-ghost",
+                    on_click=PeopleState.unarchive_current_tm,
+                    style={"fontSize":"12px","padding":"6px 12px",
+                           "color":"var(--accent-positive)"},
+                    title="Restore this TM to active",
+                ),
+                rx.el.button(
+                    "🗄 Archive",
+                    class_name="btn btn-ghost",
+                    on_click=PeopleState.archive_current_tm,
+                    style={"fontSize":"12px","padding":"6px 12px",
+                           "color":"var(--fg-3)"},
+                    title="Archive this TM — hides from picker, schedule editor, "
+                          "and active People views. Restorable any time.",
+                ),
+            ),
+            style={"display":"flex","gap":"8px","marginBottom":"16px",
+                   "flexWrap":"wrap"},
+        ),
         # Phase O.2 — Aliases editor
         _aliases_section(),
         # Score history

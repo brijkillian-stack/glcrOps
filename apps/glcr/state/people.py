@@ -720,3 +720,31 @@ class PeopleState(AppState):
         except Exception as e:
             self.new_tm_saving = False
             self.new_tm_error = f"Save failed: {e}"
+
+    # =========================================================================
+    # Archive / restore (Phase O follow-up)
+    # =========================================================================
+
+    @rx.event
+    async def archive_current_tm(self):
+        """Archive the TM whose drawer is currently open."""
+        from apps.zds.database import archive_tm
+        if not self.drawer_tm_id:
+            return
+        ok = archive_tm(self.drawer_tm_id)
+        if ok:
+            # Reflect immediately in the drawer
+            self.drawer_status = "archived"
+            # Refresh grid so the row updates
+            self.people = get_people()
+
+    @rx.event
+    async def unarchive_current_tm(self):
+        """Restore (unarchive) the TM whose drawer is currently open."""
+        from apps.zds.database import unarchive_tm
+        if not self.drawer_tm_id:
+            return
+        ok = unarchive_tm(self.drawer_tm_id)
+        if ok:
+            self.drawer_status = "active"
+            self.people = get_people()

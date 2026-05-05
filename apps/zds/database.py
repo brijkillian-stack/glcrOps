@@ -427,6 +427,60 @@ def insert_tm_entity(
     return (res.data or [row])[0]
 
 
+def set_tm_status(tm_id: str, status: str) -> bool:
+    """Phase O — set a TM's status. Updates BOTH the top-level `status`
+    column (which fetch_all_tms filters on) and metadata.status (which
+    get_people reads), so archived TMs disappear from the picker and
+    schedule resolver in one shot.
+
+    Common values:
+      'active'    — visible everywhere (default)
+      'archived'  — hidden from all active views; still in DB for history
+      'loa'       — leave-of-absence; visible with LOA filter
+      'separated' — left the company
+    """
+    if not (tm_id and status):
+        return False
+    try:
+        # Fetch current metadata, update its status, write back along with column
+        res = (
+            _client()
+            .table("entities")
+            .select("metadata")
+            .eq("id", tm_id)
+            .single()
+            .execute()
+        )
+        meta = (res.data or {}).get("metadata") or {}
+        meta["status"] = status
+        # Postgres `status` column is the source of truth fetch_all_tms filters on.
+        # We treat anything other than 'active' as not active.
+        (
+            _client()
+            .table("entities")
+            .update({
+                "status":   "active" if status == "active" else status,
+                "metadata": meta,
+            })
+            .eq("id", tm_id)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[set_tm_status] {e}")
+        return False
+
+
+def archive_tm(tm_id: str) -> bool:
+    """Convenience — set status='archived'."""
+    return set_tm_status(tm_id, "archived")
+
+
+def unarchive_tm(tm_id: str) -> bool:
+    """Convenience — set status back to 'active'."""
+    return set_tm_status(tm_id, "active")
+
+
 def update_entity_aliases(entity_id: str, aliases: list[str]) -> bool:
     """Replace the metadata.aliases array on an entity."""
     if not entity_id:
