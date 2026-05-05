@@ -1,9 +1,18 @@
 """
-shared/auth.py — Two-tier auth: site PIN + optional magic-link editor elevation.
+shared/auth.py — Site PIN auth.
 
-Path C+: PIN gates entry (anyone with the PIN sees the dashboard, ZDS, all data
-read-only). Magic-link sign-in elevates a known email to ZDS Editor or Editor
-based on env-var allowlists, unlocking write actions.
+DEV MODE (2026-05-05): PIN unlock auto-elevates to full editor.
+The magic-link layer is preserved in code (login page, auth_callback,
+exchange_session_from_url, etc.) but is no longer wired into the on_load
+chain. Anyone with the PIN gets full edit access, simplifying debugging
+of the empty-People-page issue. To restore the three-tier model:
+  1. Revert verify_pin to leave editor_role = ROLE_VIEWER
+  2. Re-enable the magic-link restore in require_unlock / require_editor_any
+  3. Optionally re-show the "Sign in as editor" link in the sidebar
+
+Path C+ history (still in module): PIN gates entry. Magic-link sign-in
+elevates a known email to ZDS Editor or Editor based on env-var
+allowlists, unlocking write actions.
 
 ────────────────────────────────────────────────────────────────────────────
 Roles
@@ -238,6 +247,8 @@ class AuthState(rx.State):
 
         self.persisted_site_token = token
         self.is_authenticated = True
+        # DEV MODE: PIN unlock auto-elevates to full editor.
+        self.editor_role = ROLE_EDITOR
         self.pin_input = ""
         self.failed_attempts = 0
         self.error = ""
@@ -272,46 +283,33 @@ class AuthState(rx.State):
         ok, _ = verify_session_token(self.persisted_site_token)
         if ok:
             self.is_authenticated = True
+            # DEV MODE: anyone with a valid PIN session is treated as editor.
+            self.editor_role = ROLE_EDITOR
         else:
             self.persisted_site_token = ""
             self.is_authenticated = False
 
     @rx.event
     def require_unlock(self):
-        """on_load gate for every protected page. Tries restore-from-storage,
-        then redirects to /unlock if still locked. Also runs editor restore
-        so write actions on the same page have correct role from the jump."""
-        if not self.is_authenticated:
-            self.restore_unlock_from_storage()
-        if not self.is_authenticated:
-            return rx.redirect("/unlock")
-        # Try to silently restore editor identity (PIN unlock alone keeps
-        # role=viewer; restore_editor_from_storage upgrades if a refresh
-        # token is on file).
-        if self.editor_role == ROLE_VIEWER and self.persisted_refresh_token:
-            return AuthState.restore_editor_from_storage
-
-    @rx.event
-    def require_editor_any(self):
-        """Stronger gate: requires PIN AND any editor role (zds_editor or editor).
-
-        Used as on_load on Memory pages (search, logs, people, threads,
-        patterns, writeups, health) and Shift edit pages (tasks, recap,
-        floor, areas, deployment). Viewers (PIN-only) bounce to / with a
-        toast — they should still be able to use the app via Today and ZDS.
+        """on_load gate for every protected page. PIN required; redirects to
+        /unlock if not unlocked. DEV MODE: anyone unlocked is auto-editor,
+        so no magic-link chain call here.
         """
         if not self.is_authenticated:
             self.restore_unlock_from_storage()
         if not self.is_authenticated:
             return rx.redirect("/unlock")
-        # Try silent editor restore if we have a refresh token
-        if self.editor_role == ROLE_VIEWER and self.persisted_refresh_token:
-            return AuthState.restore_editor_from_storage
-        if self.editor_role == ROLE_VIEWER:
-            return [
-                rx.toast.error("Editor access required for that page"),
-                rx.redirect("/"),
-            ]
+
+    @rx.event
+    def require_editor_any(self):
+        """DEV MODE: identical to require_unlock — magic-link role gating is
+        disabled. Any PIN-unlocked user has full edit access. To restore the
+        three-tier model, see the module docstring at the top of this file.
+        """
+        if not self.is_authenticated:
+            self.restore_unlock_from_storage()
+        if not self.is_authenticated:
+            return rx.redirect("/unlock")
 
     # Legacy aliases — kept so existing on_load entries keep working.
     @rx.event
