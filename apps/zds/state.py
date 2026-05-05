@@ -159,6 +159,14 @@ class ZdsState(rx.State):
     # them into a real week + 7 nights.
     unlinked_schedules: list[dict] = []
 
+    # ── Schedule management panel (Phase N.1) ─────────────────────────────────
+    # Full listing of every xlsx in Storage with size + week_ending + linkage.
+    managed_schedules: list[dict] = []
+    # Two-step delete confirmation
+    delete_target_filename: str = ""
+    # Replace upload — targets a specific existing filename
+    replace_target_filename: str = ""
+
     # ── Task inline edit ──────────────────────────────────────────────────────
     task_edit_slot_id: str = ""
     task_edit_text:    str = ""
@@ -256,6 +264,11 @@ class ZdsState(rx.State):
     def week_overview_url(self) -> str:
         return f"/zds/week/{self.current_week_id}"
 
+    @rx.var
+    def current_week_schedule_url(self) -> str:
+        """Phase N.2 — Link to the dedicated Week Schedule editor."""
+        return f"/zds/week/{self.current_week_id}/schedule"
+
     # =========================================================================
     # Week list
     # =========================================================================
@@ -272,6 +285,11 @@ class ZdsState(rx.State):
                 # Storage may be unreachable in local dev — non-fatal
                 print(f"[load_weeks] list_unlinked_schedules: {ex}")
                 self.unlinked_schedules = []
+            # Phase N.1 — managed schedules panel
+            try:
+                self.load_managed_schedules()
+            except Exception as ex:
+                print(f"[load_weeks] load_managed_schedules: {ex}")
         except Exception as e:
             self.error = str(e)
         finally:
@@ -329,6 +347,121 @@ class ZdsState(rx.State):
         except Exception as e:
             self.error = str(e)
             self.loading = False
+
+    # ── Schedule management (Phase N.1) ───────────────────────────────────────
+
+    def load_managed_schedules(self):
+        """Refresh the Manage Schedules panel — pulls Storage list, joins
+        each filename with any week record that links to it, and parses
+        week_ending from the xlsx where possible."""
+        from shared import storage
+        from . import schedule_parser
+        try:
+            files = storage.list_schedules()
+        except Exception as exc:
+            self.error = f"Couldn't list schedules: {exc}"
+            return
+
+        # Index existing weeks by schedule_path so we can show which file
+        # is linked to which week.
+        try:
+            weeks = database.fetch_weeks()
+        except Exception:
+            weeks = []
+        weeks_by_path: dict[str, dict] = {
+            w["schedule_path"]: w for w in weeks if w.get("schedule_path")
+        }
+
+        sb_client = None
+        try:
+            from shared.db import get_client
+            sb_client = get_client()
+        except Exception:
+            pass
+
+        rows = []
+        for f in files:
+            name = f.get("name", "")
+            if not name or name.startswith("."):
+                continue
+            size_bytes = (f.get("metadata") or {}).get("size", 0)
+            updated_at = f.get("updated_at", "") or f.get("created_at", "")
+
+            # Best-effort parse of the week_ending from the xlsx (peek only)
+            week_ending = ""
+            try:
+                if sb_client is not None:
+                    blob: bytes = sb_client.storage.from_("schedules").download(name)
+                    peek = schedule_parser.peek_schedule_dates(blob)
+                    if peek:
+                        week_ending = peek["week_ending"]
+            except Exception:
+                pass
+
+            linked_week = weeks_by_path.get(name)
+            rows.append({
+                "filename":     name,
+                "size_bytes":   int(size_bytes or 0),
+                "updated_at":   updated_at[:10] if updated_at else "",
+                "week_ending":  week_ending,
+                "linked_week_id":    (linked_week or {}).get("id", ""),
+                "linked_week_label": (linked_week or {}).get("label", "") or week_ending,
+            })
+
+        # Sort by week_ending desc, then filename
+        rows.sort(key=lambda r: (r["week_ending"] or "", r["filename"]), reverse=True)
+        self.managed_schedules = rows
+
+    def request_delete_schedule(self, filename: str):
+        """Open the delete confirmation by setting the target filename."""
+        self.delete_target_filename = filename or ""
+
+    def cancel_delete_schedule(self):
+        self.delete_target_filename = ""
+
+    def confirm_delete_schedule(self):
+        """Actually delete: drop from Storage, clear any week.schedule_path
+        pointing at it, wipe schedule_overrides for the file."""
+        filename = self.delete_target_filename
+        if not filename:
+            return
+        from shared import storage
+        try:
+            storage.delete_schedule(filename)
+        except Exception as exc:
+            self.error = f"Storage delete failed: {exc}"
+            self.delete_target_filename = ""
+            return
+
+        # Clear linkages
+        try:
+            for w in database.fetch_weeks():
+                if w.get("schedule_path") == filename:
+                    database.update_week_schedule_path(w["id"], "")
+        except Exception:
+            pass
+        try:
+            database.delete_overrides_for_schedule(filename)
+        except Exception:
+            pass
+
+        self.delete_target_filename = ""
+        # Refresh both lists so the UI reflects reality
+        self.load_managed_schedules()
+        try:
+            self.unlinked_schedules = database.list_unlinked_schedules()
+            self.weeks = database.fetch_weeks()
+        except Exception:
+            pass
+
+    def request_replace_schedule(self, filename: str):
+        """Stage a replace-upload targeting a specific filename. The actual
+        upload widget reads this; if set, the next upload OVERWRITES this
+        filename instead of using the dropped file's own name."""
+        self.replace_target_filename = filename or ""
+
+    def cancel_replace_schedule(self):
+        self.replace_target_filename = ""
 
     def open_new_week_modal(self):
         self.show_new_week = True
@@ -460,14 +593,18 @@ class ZdsState(rx.State):
             return
         upload_dir = schedule_parser.SCHEDULE_DIR
         upload_dir.mkdir(parents=True, exist_ok=True)
+        replace_name = self.replace_target_filename
         for file in files:
             upload_data = await file.read()
+            # If the user clicked Replace on a specific row, use THAT filename
+            # for the upload — overwrites the existing xlsx in Storage.
+            target_name = replace_name if replace_name else file.filename
             # 1. Local copy — used immediately by the parser below.
-            dest = upload_dir / file.filename
+            dest = upload_dir / target_name
             dest.write_bytes(upload_data)
             # 2. Persist to Supabase Storage — survives container restarts.
             try:
-                storage.upload_schedule(file.filename, upload_data)
+                storage.upload_schedule(target_name, upload_data)
             except Exception as exc:
                 # Don't fail the UI on Storage error — just log and surface.
                 self.error = f"Saved locally; Storage sync failed: {exc}"
@@ -479,7 +616,7 @@ class ZdsState(rx.State):
                     we = peek["week_ending"]
                     for w in database.fetch_weeks():
                         if w["week_ending"] == we and not w.get("schedule_path"):
-                            database.update_week_schedule_path(w["id"], file.filename)
+                            database.update_week_schedule_path(w["id"], target_name)
                             break
             except Exception as exc:
                 print(f"[upload] auto-link failed: {exc}")
@@ -489,6 +626,12 @@ class ZdsState(rx.State):
         try:
             self.unlinked_schedules = database.list_unlinked_schedules()
             self.weeks = database.fetch_weeks()
+        except Exception:
+            pass
+        # Phase N.1 — refresh managed schedules + clear any active replace target
+        self.replace_target_filename = ""
+        try:
+            self.load_managed_schedules()
         except Exception:
             pass
 

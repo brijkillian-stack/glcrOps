@@ -364,6 +364,95 @@ def remove_call_off(tm_id: str, night_date: str) -> bool:
         return False
 
 
+# ── SCHEDULE OVERRIDES (Phase N.3) ────────────────────────────────────────────
+# Cell-level edits on top of an uploaded schedule xlsx. The parser layer
+# applies these on top of the raw xlsx values when building rosters.
+
+def fetch_schedule_overrides(schedule_path: str) -> list[dict]:
+    """Every override row attached to a given schedule file."""
+    if not schedule_path:
+        return []
+    res = (
+        _client()
+        .table("schedule_overrides")
+        .select("*")
+        .eq("schedule_path", schedule_path)
+        .execute()
+    )
+    return res.data or []
+
+
+def upsert_schedule_override(
+    schedule_path: str,
+    tm_id: str,
+    shift: str,
+    cell_date: str,
+    override_value: str,
+    note: Optional[str] = None,
+) -> bool:
+    """Set or replace a cell override. Idempotent via UNIQUE constraint."""
+    if not (schedule_path and tm_id and shift and cell_date and override_value):
+        return False
+    try:
+        (
+            _client()
+            .table("schedule_overrides")
+            .upsert(
+                {
+                    "schedule_path":  schedule_path,
+                    "tm_id":          tm_id,
+                    "shift":          shift,
+                    "cell_date":      cell_date,
+                    "override_value": override_value,
+                    "note":           (note or "").strip() or None,
+                },
+                on_conflict="schedule_path,tm_id,cell_date",
+            )
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[upsert_schedule_override] {e}")
+        return False
+
+
+def delete_schedule_override(
+    schedule_path: str, tm_id: str, cell_date: str,
+) -> bool:
+    """Remove a single cell override (Reset to original)."""
+    try:
+        (
+            _client()
+            .table("schedule_overrides")
+            .delete()
+            .eq("schedule_path", schedule_path)
+            .eq("tm_id", tm_id)
+            .eq("cell_date", cell_date)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[delete_schedule_override] {e}")
+        return False
+
+
+def delete_overrides_for_schedule(schedule_path: str) -> bool:
+    """Wipe all overrides for a given schedule (used when the file is deleted
+    from Storage)."""
+    try:
+        (
+            _client()
+            .table("schedule_overrides")
+            .delete()
+            .eq("schedule_path", schedule_path)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        print(f"[delete_overrides_for_schedule] {e}")
+        return False
+
+
 # ── TM PLACEMENT HISTORY (Phase K.2) ──────────────────────────────────────────
 
 # Friendly labels for slot_keys — used in the TM picker history badge.

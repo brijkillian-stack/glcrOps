@@ -57,6 +57,20 @@ def ensure_schedules_bucket() -> None:
         raise
 
 
+def delete_schedule(filename: str) -> bool:
+    """Remove an xlsx from the schedules bucket. Idempotent — silently
+    succeeds if the file is already gone."""
+    if not filename:
+        return False
+    sb = get_client()
+    try:
+        sb.storage.from_(SCHEDULES_BUCKET).remove([filename])
+        return True
+    except Exception as exc:
+        log.exception("Failed to delete schedule %s: %s", filename, exc)
+        return False
+
+
 def upload_schedule(filename: str, data: bytes) -> str:
     """Upload an xlsx into the schedules bucket. Overwrites if the same
     filename is already present (upsert)."""

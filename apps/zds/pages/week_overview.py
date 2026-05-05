@@ -130,6 +130,17 @@ def week_overview() -> rx.Component:
                 gap="0",
             ),
             rx.spacer(),
+            # Phase N.2 — link to the dedicated Week Schedule editor
+            rx.link(
+                rx.button(
+                    rx.icon("calendar-days", size=14),
+                    "View Schedule",
+                    variant="soft",
+                    size="2",
+                    cursor="pointer",
+                ),
+                href=ZdsState.current_week_schedule_url,
+            ),
             # Print Week — generates HTML and opens in new tab
             rx.button(
                 rx.icon("printer", size=14),

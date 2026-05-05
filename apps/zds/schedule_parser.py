@@ -301,6 +301,174 @@ def peek_shift_rosters_for_date(source, target_date: str) -> dict:
     return out
 
 
+# ── Full week grid extractor (Phase N.2 / N.3) ───────────────────────────────
+# Reads ALL three sheets and returns the full week's roster as a list of
+# rows ready for the editor grid: one entry per (TM, shift) with cells per
+# date. Optional overrides dict applies on top of raw xlsx values.
+
+def parse_week_grid(
+    source,
+    overrides_by_tm_date: Optional[dict] = None,
+) -> dict:
+    """Parse a schedule xlsx into a full editor-friendly grid.
+
+    Args:
+        source: Path or bytes to the xlsx.
+        overrides_by_tm_date: Optional {(tm_display_name_lower, date_iso) -> override_value}
+                              dict. If provided, override values replace the
+                              raw xlsx cell value during the read.
+
+    Returns:
+        {
+          "dates": ["2026-05-01", ..., "2026-05-07"],
+          "weekdays": ["Friday", ..., "Thursday"],
+          "rows": [
+            {
+              "name":   "Brian K",
+              "first":  "Brian",
+              "last":   "K",
+              "shift":  "graves",      # "days" | "swings" | "graves"
+              "cells":  [               # one per date, in same order as `dates`
+                {"raw": "11:00P - 7:00A", "value": "11:00P - 7:00A", "category": "working", "overridden": False},
+                {"raw": "OFF",            "value": "PTO",            "category": "pto",     "overridden": True},
+                ...
+              ],
+            },
+            ...
+          ],
+        }
+        category is one of: "working", "scheduled_off", "pto", "mdl",
+                            "called_off", "other", "blank"
+    """
+    import io
+    out = {"dates": [], "weekdays": [], "rows": []}
+    try:
+        if isinstance(source, (bytes, bytearray)):
+            wb = openpyxl.load_workbook(io.BytesIO(source), data_only=True, read_only=True)
+        else:
+            wb = openpyxl.load_workbook(str(source), data_only=True, read_only=True)
+    except Exception:
+        return out
+
+    overrides_by_tm_date = overrides_by_tm_date or {}
+
+    # Pull dates from the FIRST sheet that has them — every shift uses the same
+    # week so this is consistent.
+    dates: list[str] = []
+    weekdays: list[str] = []
+    date_col_per_sheet: dict[str, list[tuple[int, str]]] = {}
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        try:
+            day_row  = list(ws.iter_rows(min_row=6, max_row=6, values_only=True))[0]
+            date_row = list(ws.iter_rows(min_row=7, max_row=7, values_only=True))[0]
+        except Exception:
+            continue
+        cols: list[tuple[int, str]] = []
+        for ci, dval in enumerate(date_row):
+            if dval is None:
+                continue
+            try:
+                if isinstance(dval, (date, datetime)):
+                    d = dval.date() if isinstance(dval, datetime) else dval
+                else:
+                    s = str(dval).strip()
+                    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+                    if not m:
+                        continue
+                    d = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+                d_iso = d.isoformat()
+                cols.append((ci, d_iso))
+            except Exception:
+                continue
+        date_col_per_sheet[sn] = cols
+        if cols and not dates:
+            dates = [iso for _, iso in cols]
+            for ci, iso in cols:
+                wd = ""
+                if ci < len(day_row):
+                    raw = str(day_row[ci] or "").strip()
+                    if raw and raw.lower() not in ("first name", "last name"):
+                        wd = raw
+                if not wd:
+                    try:
+                        from datetime import date as _date
+                        y, m, d = (int(p) for p in iso.split("-"))
+                        wd = _date(y, m, d).strftime("%A")
+                    except Exception:
+                        pass
+                weekdays.append(wd)
+
+    out["dates"] = dates
+    out["weekdays"] = weekdays
+    if not dates:
+        wb.close()
+        return out
+
+    # Walk each sheet's data rows and build editor entries
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        shift = _detect_shift_label(ws)
+        if not shift:
+            continue
+        cols = date_col_per_sheet.get(sn) or []
+        if not cols:
+            continue
+
+        for row in ws.iter_rows(min_row=8, max_row=ws.max_row, values_only=True):
+            if not row or len(row) < 4:
+                continue
+            first = str(row[2] or "").strip()
+            last = str(row[3] or "").strip()
+            if not first or first.lower() in ("first name", "none", ""):
+                continue
+            display = f"{first} {last[0]}".strip() if last else first
+
+            cells = []
+            ov_key_base = display.strip().lower()
+            for ci, iso in cols:
+                raw_cell = row[ci] if ci < len(row) else None
+                raw_str = "" if raw_cell is None else str(raw_cell).strip()
+
+                # Check for override on (display_name, date)
+                override = overrides_by_tm_date.get((ov_key_base, iso))
+                value = override if override else raw_str
+                category = _categorize_cell(value)
+                cells.append({
+                    "raw":         raw_str,
+                    "value":       value,
+                    "category":    category,
+                    "overridden":  bool(override),
+                })
+
+            out["rows"].append({
+                "name":  display,
+                "first": first,
+                "last":  last,
+                "shift": shift,
+                "cells": cells,
+            })
+    wb.close()
+    return out
+
+
+def _categorize_cell(value: str) -> str:
+    """Categorize a cell value (xlsx or override) into a display category."""
+    if value is None:
+        return "blank"
+    s = str(value).strip()
+    if not s:
+        return "blank"
+    upper = s.upper()
+    if upper == "CALLED_OFF" or "CALLED OFF" in upper:
+        return "called_off"
+    # Time range
+    if " - " in s and ":" in s:
+        return "working"
+    cat = _classify_off_value(s)
+    return cat or "blank"
+
+
 # ── Lightweight date extractor ────────────────────────────────────────────────
 # Used by Phase H "create week from schedule" flow on the /zds/ index page.
 # Reads ONLY the Sheet3 header dates — skips pool parsing for speed.

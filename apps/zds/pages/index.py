@@ -176,6 +176,132 @@ def _unlinked_schedules_section() -> rx.Component:
     )
 
 
+def _humanize_size(n: int) -> str:
+    """Reflex-side static helper — only used in component construction so
+    we can pass plain ints to a static formatter (Vars handle the rendering)."""
+    return f"{n:,} B"
+
+
+def _managed_schedule_row(item: dict) -> rx.Component:
+    """One row in the Manage Schedules panel."""
+    is_delete_target = ZdsState.delete_target_filename == item["filename"]
+    is_replace_target = ZdsState.replace_target_filename == item["filename"]
+    return rx.box(
+        rx.hstack(
+            rx.icon("file-spreadsheet", size=16, color="#0065BF"),
+            rx.vstack(
+                rx.hstack(
+                    rx.text(item["filename"], size="2", weight="bold"),
+                    rx.cond(
+                        item["linked_week_id"] != "",
+                        rx.badge("Linked", color_scheme="blue", variant="soft", font_size="9px"),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        is_replace_target,
+                        rx.badge("Replacing — drop file below", color_scheme="amber",
+                                 variant="solid", font_size="9px"),
+                        rx.fragment(),
+                    ),
+                    gap="6px", align="center", flex_wrap="wrap",
+                ),
+                rx.text(
+                    rx.cond(
+                        item["week_ending"] != "",
+                        rx.fragment("Week ending ", item["week_ending"], "  ·  ",
+                                    item["size_bytes"].to_string(), " bytes"),
+                        rx.fragment(item["size_bytes"].to_string(), " bytes"),
+                    ),
+                    size="1", color="#9ca3af",
+                ),
+                gap="0", align="start", flex="1",
+            ),
+            rx.spacer(),
+            # Action buttons OR delete confirmation
+            rx.cond(
+                is_delete_target,
+                rx.hstack(
+                    rx.text("Delete this schedule?", size="1", color="#dc2626"),
+                    rx.button(
+                        "Cancel",
+                        size="1", variant="soft", color_scheme="gray",
+                        on_click=ZdsState.cancel_delete_schedule,
+                    ),
+                    rx.button(
+                        rx.icon("trash-2", size=12), "Delete",
+                        size="1", color_scheme="red",
+                        on_click=ZdsState.confirm_delete_schedule,
+                    ),
+                    gap="6px", align="center",
+                ),
+                rx.hstack(
+                    rx.cond(
+                        is_replace_target,
+                        rx.button(
+                            "Cancel replace",
+                            size="1", variant="soft", color_scheme="gray",
+                            on_click=ZdsState.cancel_replace_schedule,
+                        ),
+                        rx.button(
+                            rx.icon("upload", size=12), "Replace",
+                            size="1", variant="soft", color_scheme="amber",
+                            on_click=ZdsState.request_replace_schedule(item["filename"]),
+                        ),
+                    ),
+                    rx.button(
+                        rx.icon("trash-2", size=12),
+                        size="1", variant="ghost", color_scheme="red",
+                        on_click=ZdsState.request_delete_schedule(item["filename"]),
+                        title="Delete this schedule",
+                    ),
+                    gap="4px", align="center",
+                ),
+            ),
+            width="100%", align="center", gap="10px",
+        ),
+        padding="10px 14px",
+        background="white",
+        border=rx.cond(
+            is_delete_target,
+            "1px solid #fecaca",
+            rx.cond(is_replace_target, "1px solid #fbbf24", "1px solid #e5e7eb"),
+        ),
+        border_radius="8px",
+    )
+
+
+def _managed_schedules_section() -> rx.Component:
+    """Phase N.1 — Manage Schedules panel."""
+    return rx.cond(
+        ZdsState.managed_schedules.length() > 0,
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("layers", size=15, color="#6b7280"),
+                    rx.text("Schedules in Storage", size="2", weight="bold"),
+                    rx.spacer(),
+                    rx.badge(
+                        ZdsState.managed_schedules.length(),
+                        color_scheme="gray", variant="soft",
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.vstack(
+                    rx.foreach(ZdsState.managed_schedules, _managed_schedule_row),
+                    gap="6px", width="100%",
+                ),
+                gap="8px", width="100%",
+            ),
+            padding="14px 16px",
+            background="#f9fafb",
+            border="1px solid #e5e7eb",
+            border_radius="10px",
+            width="100%",
+        ),
+        rx.fragment(),
+    )
+
+
 def _schedule_upload_section() -> rx.Component:
     """Card on the index page for uploading / replacing the weekly schedule file."""
     return rx.box(
@@ -268,6 +394,8 @@ def index() -> rx.Component:
                     ),
                     # Schedule upload card
                     _schedule_upload_section(),
+                    # Phase N.1 — full Manage Schedules panel
+                    _managed_schedules_section(),
                     # Phase H — schedules with no Zone Sheet yet (creatable)
                     _unlinked_schedules_section(),
                     rx.cond(
