@@ -1212,11 +1212,16 @@ def fetch_overlap_assignments(night_id: str) -> list[dict]:
 # ── TM ROSTER (for picker) ────────────────────────────────────────────────────
 
 def fetch_all_tms() -> list[dict]:
-    """All active TMs with their eligibility maps.
+    """All active TMs with their eligibility maps, EXCLUDING utility porters.
 
     Filters to entity_type='tm' so areas and other entity types are excluded.
     Includes aliases + raw metadata so the schedule parser's alias resolver
     can find them without re-querying.
+
+    Phase 2026-05-05: TMs whose metadata.roles array contains 'utility_porter'
+    are excluded from this list — they're not part of the regular zone-
+    deployment rotation. The People page (apps/glcr/) still surfaces them;
+    only the ZDS engine-facing roster filters them out.
     """
     res = (
         _client()
@@ -1230,6 +1235,10 @@ def fetch_all_tms() -> list[dict]:
     tms = []
     for row in (res.data or []):
         meta  = row.get("metadata") or {}
+        roles = list(meta.get("roles") or [])
+        # Roles filter — drop utility porters entirely from ZDS roster.
+        if "utility_porter" in roles:
+            continue
         score = meta.get("skill_score", 0) or 0
         tms.append({
             "id":           row["id"],
@@ -1241,6 +1250,7 @@ def fetch_all_tms() -> list[dict]:
             "grave_pool":   meta.get("grave_pool", "") or "",
             "eligibility":  meta.get("eligibility", {}),
             "preferences":  meta.get("preferences", []),
+            "roles":        roles,           # surface roles for downstream callers
             # Phase O — surface aliases + raw metadata so the schedule parser's
             # resolver and any alias-aware code can use them.
             "aliases":      list(meta.get("aliases") or []),

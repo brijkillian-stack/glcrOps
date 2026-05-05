@@ -8,6 +8,11 @@ IMPORTANT: Inside rx.foreach the item is a Reflex Var, NOT a plain Python dict.
 - Always use rx.cond(condition, true_val, false_val).
 - All derived display fields (label, color, display_name, name_color, etc.) are
   pre-computed in database.fetch_zone_assignments() so components just read them.
+
+Phase 2026-05-05 — Right-click / long-press TM names now opens a context
+menu with relevant actions (mark sweeper, view profile, etc.). The trigger
+is the .ctx-menu-trigger class + on_context_menu firing
+ContextMenuState.open_at on the display_name span.
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ import reflex as rx
 
 from ..styles import CARD_BASE, C_ALERT
 from ..state import ZdsState
+from shared.components.context_menu import ContextMenuState
 
 
 # ── Shared sub-components ─────────────────────────────────────────────────────
@@ -270,6 +276,19 @@ def zone_card(slot: dict) -> rx.Component:
                 overflow="hidden",
                 text_overflow="ellipsis",
                 max_width="100%",
+                # Phase 2026-05-05 — right-click / long-press opens the
+                # context menu. The JS in context_menu.js reads these
+                # data-* attributes and dispatches the Reflex event
+                # ContextMenuState.open_at with full coords + context.
+                class_name="ctx-menu-trigger",
+                custom_attrs={
+                    "data-ctx-target-type":  "assignment",
+                    "data-ctx-target-id":    slot["tm_id"],
+                    "data-ctx-target-label": slot["display_name"],
+                    "data-ctx-surface":      "deployment_grid",
+                    "data-ctx-night-id":     ZdsState.current_night_id,
+                    "data-ctx-slot-key":     slot["slot_key"],
+                },
             ),
             rx.cond(
                 slot["is_sweeper"],

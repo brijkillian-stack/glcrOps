@@ -1,0 +1,139 @@
+/* ============================================================================
+   context_menu.css — Global ZDS context menu (right-click + long-press)
+   Mounted via shared/components/context_menu.global_context_menu()
+   ============================================================================ */
+
+/* Suppress iOS Safari's default long-press behavior (magnifier, text select)
+   on elements that should trigger our custom menu. Apply this class to the
+   trigger element AND the menu panel itself. */
+.ctx-menu-trigger {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Root wrapper — renders nothing visible itself, just hosts backdrop + panel */
+.ctx-menu-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;             /* let panel + backdrop opt-in below */
+}
+
+/* Backdrop captures the off-menu click to dismiss; transparent visually */
+.ctx-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Menu panel — position is set inline by component (fixed at click coords) */
+.ctx-menu-panel {
+  position: fixed;
+  z-index: 2;
+  pointer-events: auto;
+  min-width: 220px;
+  max-width: 280px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-modal);
+  padding: 4px;
+  overflow: hidden;
+  -webkit-touch-callout: none;
+  user-select: none;
+  font-family: var(--font-body);
+  /* iOS PWA corners */
+  -webkit-tap-highlight-color: transparent;
+  animation: ctx-menu-fade-in 100ms var(--ease);
+}
+
+@keyframes ctx-menu-fade-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctx-menu-panel { animation: none; }
+}
+
+/* Header — target label at the top of the menu */
+.ctx-menu-header {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+/* Item button */
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;          /* 44px target on iPad — comfortable */
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 80ms var(--ease);
+}
+.ctx-menu-item:hover:not(:disabled) {
+  background: var(--accent-blue-bg);
+}
+.ctx-menu-item:active:not(:disabled) {
+  background: var(--accent-blue-bg);
+  transform: scale(0.99);
+}
+.ctx-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ctx-menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.ctx-menu-item-label {
+  flex: 1;
+}
+
+/* Divider */
+.ctx-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+/* iPad / touch-only refinement: bigger tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .ctx-menu-item {
+    padding: 12px 14px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+  .ctx-menu-panel {
+    min-width: 240px;
+  }
+}
+
+/* Dark-mode parity (uses tokens automatically) */
+@media (prefers-color-scheme: dark) {
+  .ctx-menu-panel {
+    background: var(--surface-raised);
+  }
+}
+.app.dark .ctx-menu-panel { background: var(--surface-raised); }

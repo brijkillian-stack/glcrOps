@@ -107,6 +107,13 @@ class PeopleState(AppState):
     # ── Aliases editor (Phase O.2) ────────────────────────────────────────────
     drawer_aliases:   list[str] = []
     new_alias_input:  str       = ""
+
+    # ── Roles editor (Phase 2026-05-05) ───────────────────────────────────────
+    # Shown as toggle chips in the TM drawer profile tab. 'porter' is always
+    # present; 'utility_porter' excludes from ZDS scheduler; 'trainer' marks
+    # eligible mentors.
+    drawer_roles:    list[str] = []
+    roles_status:    str       = ""   # "" | "saved" | "error"
     aliases_saving:   bool      = False
     aliases_status:   str       = ""   # "" | "saved" | "error"
 
@@ -357,6 +364,14 @@ class PeopleState(AppState):
         self.drawer_aliases = list(profile.get("aliases") or [])
         self.new_alias_input = ""
         self.aliases_status  = ""
+
+        # Phase 2026-05-05 — surface roles for the toggle chips section.
+        # Defaults to ['porter'] for any TM whose metadata predates the
+        # roles backfill.
+        meta = profile.get("metadata") or {}
+        roles_raw = meta.get("roles") if isinstance(meta, dict) else None
+        self.drawer_roles = list(roles_raw) if isinstance(roles_raw, list) else ["porter"]
+        self.roles_status = ""
 
         # Build flat eligibility list for rx.foreach
         raw_elig = profile.get("eligibility") or {}
@@ -700,6 +715,41 @@ class PeopleState(AppState):
         ok = update_entity_aliases(self.drawer_tm_id, self.drawer_aliases)
         self.aliases_saving = False
         self.aliases_status = "saved" if ok else "error"
+
+    # ── Roles toggle (Phase 2026-05-05) ──────────────────────────────────────
+    @rx.event
+    def toggle_role(self, role: str):
+        """Add or remove a role on the currently-open drawer TM.
+
+        'porter' is the baseline and always preserved. 'utility_porter'
+        toggles ZDS-scheduler exclusion. 'trainer' marks training capability.
+
+        Updates entities.metadata.roles AND mirrors the change into the
+        in-memory people list so the badge/filter UI updates immediately
+        without a full reload.
+        """
+        if not self.drawer_tm_id:
+            return
+        from shared.db import toggle_tm_role, VALID_ROLES
+        if role not in VALID_ROLES:
+            return
+        new_roles = toggle_tm_role(self.drawer_tm_id, role)
+        if not new_roles:
+            self.roles_status = "error"
+            return
+        self.drawer_roles = list(new_roles)
+        self.roles_status = "saved"
+        # Mirror the change into the in-memory people list so the
+        # filtered_people computed Var picks it up without a reload.
+        is_utility = "utility_porter" in new_roles
+        is_trainer = "trainer" in new_roles
+        for p in self.people:
+            if p.get("id") == self.drawer_tm_id:
+                p["roles"] = list(new_roles)
+                p["is_utility_porter"] = is_utility
+                # Keep is_trainer aligned (legacy heuristic OR explicit role)
+                p["is_trainer"] = is_trainer or p.get("is_trainer", False)
+                break
 
     # =========================================================================
     # Add Team Member modal (Phase O.3)

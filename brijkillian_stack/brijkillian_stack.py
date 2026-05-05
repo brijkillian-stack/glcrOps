@@ -16,6 +16,7 @@ from shared.auth import AuthState
 from shared.grok_state import GrokState
 from shared.components.grok_panel import grok_panel, grok_fab
 from shared.components.area_check import area_check_modal
+from shared.components.context_menu import global_context_menu
 
 from apps.glcr.routes import (
     ROUTES as GLCR_ROUTES,
@@ -67,10 +68,13 @@ if ('serviceWorker' in navigator) {
 # (for GLCR protected pages; ZDS pages don't need Grok yet)
 
 def _with_grok(page_fn):
-    """Wrap a page component with Grok panel + Grok FAB + Area Check modal.
+    """Wrap a page component with Grok panel + Grok FAB + Area Check modal
+    + global context menu.
 
     The Area Check overlay is mounted globally here so the sidebar's
-    "★ Area Check" action works on any protected GLCR page.
+    "★ Area Check" action works on any protected GLCR page. The context
+    menu is mounted here so it's available on every protected page (ZDS
+    pages have their own wrapping below — the menu is also added there).
     """
     def wrapped() -> rx.Component:
         return rx.fragment(
@@ -78,8 +82,20 @@ def _with_grok(page_fn):
             grok_fab(),
             grok_panel(),
             area_check_modal(),
+            global_context_menu(),
         )
     wrapped.__name__ = f"{page_fn.__name__}_with_grok"
+    return wrapped
+
+
+def _with_zds_chrome(page_fn):
+    """Wrap a ZDS page with the global context menu only (no Grok yet)."""
+    def wrapped() -> rx.Component:
+        return rx.fragment(
+            page_fn(),
+            global_context_menu(),
+        )
+    wrapped.__name__ = f"{page_fn.__name__}_zds"
     return wrapped
 
 
@@ -114,6 +130,9 @@ app = rx.App(
         rx.el.link(rel="stylesheet", href="/unlock.css"),
         # ── Role chip styles (sidebar viewer/zds_editor/editor indicator) ─
         rx.el.link(rel="stylesheet", href="/role.css"),
+        # ── Context menu (right-click + long-press) ───────────────────────
+        rx.el.link(rel="stylesheet", href="/context_menu.css"),
+        rx.el.script(src="/context_menu.js"),
     ],
 )
 
@@ -147,10 +166,11 @@ for entry in GLCR_ROUTES:
 
 # Register ZDS routes — viewer-OK (PIN is sufficient to view).
 # Per-action write gating happens at the event-handler level — see
-# docs/role_gating_spec.md.
+# docs/role_gating_spec.md. ZDS pages get the global context menu via
+# _with_zds_chrome wrapping.
 for entry in ZDS_ROUTES:
     page_fn, route, title, on_load = entry
 
     kwargs = {"route": route, "title": title}
     kwargs["on_load"] = [AuthState.require_unlock] + (on_load or [])
-    app.add_page(page_fn, **kwargs)
+    app.add_page(_with_zds_chrome(page_fn), **kwargs)

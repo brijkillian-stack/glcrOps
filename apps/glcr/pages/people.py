@@ -334,6 +334,106 @@ def _alias_chip(alias: str) -> rx.Component:
     )
 
 
+def _role_chip(role: str) -> rx.Component:
+    """One toggleable role chip. Active styling reflects whether `role` is
+    in the current TM's drawer_roles. Tap toggles. Porter is shown but
+    visually locked (cannot be removed)."""
+    is_active = PeopleState.drawer_roles.contains(role)
+    is_porter = role == "porter"
+    label_map = {
+        "porter":         "Porter",
+        "utility_porter": "Utility Porter",
+        "trainer":        "Trainer",
+    }
+    return rx.el.button(
+        rx.el.span(
+            rx.cond(is_active, "✓", "+"),
+            style={"marginRight": "4px"},
+        ),
+        rx.el.span(label_map.get(role, role)),
+        on_click=PeopleState.toggle_role(role),
+        disabled=is_porter,
+        title=rx.cond(
+            is_porter,
+            "Porter is the baseline role and can't be removed.",
+            rx.cond(
+                role == "utility_porter",
+                "Utility porters are excluded from the ZDS scheduler.",
+                "Trainer — eligible to mentor trainees.",
+            ),
+        ),
+        style={
+            "padding": "4px 10px",
+            "borderRadius": "999px",
+            "fontSize": "11px",
+            "fontWeight": "600",
+            "letterSpacing": "0.02em",
+            "border": rx.cond(
+                is_active,
+                "1px solid var(--accent-blue)",
+                "1px solid var(--border-subtle)",
+            ),
+            "background": rx.cond(
+                is_active,
+                "var(--accent-blue)",
+                "var(--surface-card)",
+            ),
+            "color": rx.cond(
+                is_active,
+                "white",
+                "var(--fg-2)",
+            ),
+            "cursor": rx.cond(is_porter, "default", "pointer"),
+            "opacity": rx.cond(is_porter & ~is_active, "0.5", "1"),
+            "marginRight": "6px",
+        },
+    )
+
+
+def _roles_section() -> rx.Component:
+    """Phase 2026-05-05 — Roles editor inside the Profile tab.
+
+    Toggle chips for porter / utility_porter / trainer. Porter is always
+    present as the baseline. utility_porter excludes the TM from the ZDS
+    scheduler entirely. trainer marks them eligible to mentor.
+    """
+    return rx.el.div(
+        rx.el.div(
+            rx.el.span("Roles", class_name="drawer-section-title"),
+            rx.cond(
+                PeopleState.roles_status == "saved",
+                rx.el.span("✓ saved",
+                           style={"fontSize": "10px",
+                                  "color": "var(--accent-positive)",
+                                  "marginLeft": "8px"}),
+                rx.fragment(),
+            ),
+            rx.cond(
+                PeopleState.roles_status == "error",
+                rx.el.span("⚠ failed",
+                           style={"fontSize": "10px",
+                                  "color": "var(--accent-flag)",
+                                  "marginLeft": "8px"}),
+                rx.fragment(),
+            ),
+            style={"display": "flex", "alignItems": "center"},
+        ),
+        rx.el.p(
+            "Roles drive scheduler behavior. Utility porters are excluded "
+            "from ZDS; trainers can be paired with trainees.",
+            style={"fontSize": "11px", "color": "var(--fg-mute)",
+                   "marginBottom": "8px"},
+        ),
+        rx.el.div(
+            _role_chip("porter"),
+            _role_chip("utility_porter"),
+            _role_chip("trainer"),
+            style={"display": "flex", "flexWrap": "wrap",
+                   "gap": "4px", "marginBottom": "16px"},
+        ),
+    )
+
+
 def _aliases_section() -> rx.Component:
     """Phase O.2 — Aliases editor inside the Profile tab."""
     return rx.el.div(
@@ -726,6 +826,9 @@ def profile_view() -> rx.Component:
             style={"display":"flex","gap":"8px","marginBottom":"16px",
                    "flexWrap":"wrap"},
         ),
+        # Phase 2026-05-05 — Roles editor (above aliases since roles drive
+        # scheduler behavior and aliases drive name resolution).
+        _roles_section(),
         # Phase O.2 — Aliases editor
         _aliases_section(),
         # Score history

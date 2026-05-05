@@ -517,6 +517,14 @@ def get_people() -> list[dict]:
             active = status not in ("separated", "inactive", "archived")
             rank   = int(meta.get("tie_break_rank") or 99)
 
+            # Phase 2026-05-05 — roles array. Default to ['porter'] for
+            # rows that haven't been backfilled yet.
+            roles_raw = meta.get("roles")
+            roles = list(roles_raw) if isinstance(roles_raw, list) else ["porter"]
+            is_utility_porter = "utility_porter" in roles
+            if "trainer" in roles:
+                is_trainer = True
+
             people.append({
                 "id":             tm_id,
                 "name":           name,        # display name ("Abby")
@@ -536,14 +544,88 @@ def get_people() -> list[dict]:
                 # Phase O — surface shift assignment for the People page filter.
                 # grave_pool is the canonical metadata field — "Grave" / "PM" / "AM" / "Other".
                 "grave_pool":     (meta.get("grave_pool") or "").strip(),
+                # Phase 2026-05-05 — roles array + utility-porter flag.
+                "roles":             roles,
+                "is_utility_porter": is_utility_porter,
             })
 
         people.sort(key=lambda p: (-p["skill_score"], p["name"]))
         print(f"[db] get_people -> returning {len(people)} people (skipped {skipped_count} rows)")
         return people
-
     except Exception:
         print(f"[db] get_people error:\n{traceback.format_exc()}")
+        return []
+
+
+# ── Roles ─────────────────────────────────────────────────────────────────────
+
+VALID_ROLES = ("porter", "utility_porter", "trainer")
+
+
+def set_tm_roles(tm_id: str, roles: list[str]) -> bool:
+    """Replace the roles array on an entity's metadata. Returns success.
+
+    Sanitizes against VALID_ROLES; ensures at least 'porter' is present so
+    every TM has at least one role.
+    """
+    if not tm_id:
+        return False
+    sanitized = [r for r in (roles or []) if r in VALID_ROLES]
+    if "porter" not in sanitized:
+        sanitized.insert(0, "porter")
+    sanitized = list(dict.fromkeys(sanitized))   # de-dupe, preserve order
+    try:
+        sb = get_client()
+        # Read existing metadata, mutate, write back. Two-step because
+        # the supabase-py client doesn't expose a direct jsonb_set.
+        cur = (
+            sb.table("entities").select("metadata").eq("id", tm_id).limit(1).execute().data
+        )
+        if not cur:
+            return False
+        meta = cur[0].get("metadata") or {}
+        meta["roles"] = sanitized
+        sb.table("entities").update({"metadata": meta}).eq("id", tm_id).execute()
+        return True
+    except Exception:
+        print(f"[db] set_tm_roles error:\n{traceback.format_exc()}")
+        return False
+
+
+def toggle_tm_role(tm_id: str, role: str) -> list[str]:
+    """Add or remove a role from a TM. Returns the new roles list.
+
+    'porter' is always preserved as the baseline role. Toggling 'porter'
+    off is rejected silently (the role list cannot be empty).
+    """
+    if role not in VALID_ROLES:
+        return []
+    try:
+        sb = get_client()
+        cur = (
+            sb.table("entities").select("metadata").eq("id", tm_id).limit(1).execute().data
+        )
+        if not cur:
+            return []
+        meta = cur[0].get("metadata") or {}
+        roles = list(meta.get("roles") or ["porter"])
+        if role == "porter":
+            # Don't allow removing the baseline porter role.
+            if "porter" not in roles:
+                roles.insert(0, "porter")
+        elif role in roles:
+            roles.remove(role)
+        else:
+            roles.append(role)
+        # Always keep 'porter' present
+        if "porter" not in roles:
+            roles.insert(0, "porter")
+        roles = list(dict.fromkeys(roles))
+        meta["roles"] = roles
+        sb.table("entities").update({"metadata": meta}).eq("id", tm_id).execute()
+        return roles
+    except Exception:
+        print(f"[db] toggle_tm_role error:\n{traceback.format_exc()}")
         return []
 
 
