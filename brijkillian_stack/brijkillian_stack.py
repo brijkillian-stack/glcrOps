@@ -17,7 +17,11 @@ from shared.grok_state import GrokState
 from shared.components.grok_panel import grok_panel, grok_fab
 from shared.components.area_check import area_check_modal
 
-from apps.glcr.routes import ROUTES as GLCR_ROUTES, PUBLIC_ROUTES as GLCR_PUBLIC
+from apps.glcr.routes import (
+    ROUTES as GLCR_ROUTES,
+    PUBLIC_ROUTES as GLCR_PUBLIC,
+    VIEWER_OK_ROUTES as GLCR_VIEWER_OK,
+)
 from apps.zds.routes import ROUTES as ZDS_ROUTES, PUBLIC_ROUTES as ZDS_PUBLIC
 
 # ── Keyboard shortcut script ──────────────────────────────────────────────────
@@ -43,27 +47,11 @@ document.addEventListener('keydown', function(e) {
 });
 """
 
-# ── Session keep-alive (Path A login) ─────────────────────────────────────────
-# Refresh the Supabase session on window focus and every 15 min of active use.
-# Combined with the long-lived JWT (24h access, 30d refresh) and persisted
-# refresh token in localStorage, Brian only sees the magic-link login once
-# per ~30 days per device.
-
-_AUTH_KEEPALIVE_SCRIPT = """
-(function() {
-  function refresh() {
-    if (window._reflexDispatch) {
-      window._reflexDispatch('auth_state.refresh_session', {});
-    }
-  }
-  window.addEventListener('focus', refresh);
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') refresh();
-  });
-  // Periodic refresh every 15 min while the tab is active
-  setInterval(refresh, 15 * 60 * 1000);
-})();
-"""
+# ── (removed) Session keep-alive ──────────────────────────────────────────────
+# Path A's Supabase magic-link auth was replaced by Path C's site-PIN gate
+# (2026-05-05). The site-session token is HMAC-signed, lives in localStorage,
+# and is valid for ~1 year. No periodic refresh is needed; verification is a
+# pure HMAC check on every protected-page mount via AuthState.require_unlock.
 
 # ── Service Worker registration ───────────────────────────────────────────────
 
@@ -107,7 +95,6 @@ app = rx.App(
     ],
     head_components=[
         rx.el.script(_KBD_SCRIPT),
-        rx.el.script(_AUTH_KEEPALIVE_SCRIPT),
         rx.el.link(rel="manifest", href="/manifest.json"),
         rx.el.meta(name="theme-color", content="#0065BF"),
         rx.el.meta(name="apple-mobile-web-app-capable", content="yes"),
@@ -123,6 +110,10 @@ app = rx.App(
         rx.el.script(src="/pencil_canvas.js"),
         # ── Homepage three-card launchpad styles ──────────────────────────
         rx.el.link(rel="stylesheet", href="/homepage.css"),
+        # ── Unlock screen styles (site PIN gate, Path C) ──────────────────
+        rx.el.link(rel="stylesheet", href="/unlock.css"),
+        # ── Role chip styles (sidebar viewer/zds_editor/editor indicator) ─
+        rx.el.link(rel="stylesheet", href="/role.css"),
     ],
 )
 
@@ -132,26 +123,34 @@ app = rx.App(
 ALL_PUBLIC_ROUTES = GLCR_PUBLIC + ZDS_PUBLIC
 
 # Register GLCR routes
+# Three guard tiers:
+#   - PUBLIC: no guard at all (unlock, login, auth callback)
+#   - VIEWER_OK: PIN required, role is irrelevant (homepage, /today)
+#   - default: PIN + any editor role required (everything else in Memory)
 for entry in GLCR_ROUTES:
     page_fn, route, title, on_load = entry
 
     if route in GLCR_PUBLIC:
         # Public route — no auth, no Grok
         app.add_page(page_fn, route=route, title=title)
-    else:
-        # Protected route — auth check (with restore-from-storage) runs first,
-        # then any page-specific on_load handlers.
+    elif route in GLCR_VIEWER_OK:
+        # Viewer-OK protected route — PIN required, role doesn't matter
         kwargs = {"route": route, "title": title}
-        kwargs["on_load"] = [AuthState.require_auth] + (on_load or [])
+        kwargs["on_load"] = [AuthState.require_unlock] + (on_load or [])
+        app.add_page(_with_grok(page_fn), **kwargs)
+    else:
+        # Editor-required route — PIN + zds_editor or editor role.
+        # Viewers redirected to / with a toast.
+        kwargs = {"route": route, "title": title}
+        kwargs["on_load"] = [AuthState.require_editor_any] + (on_load or [])
         app.add_page(_with_grok(page_fn), **kwargs)
 
-# Register ZDS routes
+# Register ZDS routes — viewer-OK (PIN is sufficient to view).
+# Per-action write gating happens at the event-handler level — see
+# docs/role_gating_spec.md.
 for entry in ZDS_ROUTES:
     page_fn, route, title, on_load = entry
 
     kwargs = {"route": route, "title": title}
-    if on_load:
-        kwargs["on_load"] = on_load
-
-    # ZDS routes are currently public; add Grok if you extend them
+    kwargs["on_load"] = [AuthState.require_unlock] + (on_load or [])
     app.add_page(page_fn, **kwargs)

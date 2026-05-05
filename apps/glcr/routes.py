@@ -12,9 +12,13 @@ from .pages.floor import floor_page
 from .pages.areas import areas_page
 from .pages.deployment import deployment_page
 from .pages.patterns import patterns_page
+from .pages.unlock import unlock_page
 from .pages.login import login_page
 from .pages.auth_callback import auth_callback_page
 from .pages.health import health_page
+# Path C+ (2026-05-05): /unlock is the site-PIN gate (anyone). /login and
+# /auth/callback are the magic-link elevation flow that promotes a known
+# email to ZDS Editor or Editor based on EDITOR_EMAILS / ZDS_EDITOR_EMAILS.
 from .pages.threads import threads_page
 from .pages.writeups import writeups_page
 
@@ -33,16 +37,28 @@ from .state.threads import ThreadsState
 from .state.writeups import WriteupsState
 
 # Public routes (no authentication required)
-PUBLIC_ROUTES = ["/login", "/auth/callback"]
+# Path C+: /unlock is the PIN gate (everyone). /login + /auth/callback are
+# the magic-link elevation flow (editor tier). All three are public so a
+# locked user can reach them; the gating happens via on_load handlers.
+PUBLIC_ROUTES = ["/unlock", "/login", "/auth/callback"]
+
+# Viewer-permitted routes (PIN unlock is sufficient; no editor required).
+# Brian's call (2026-05-05): viewers see the homepage launchpad, the Today
+# page, and ZDS (all ZDS routes). Everything else in GLCR Memory requires
+# any editor role. Routes not in this set get the require_editor_any guard.
+VIEWER_OK_ROUTES = {"/", "/today"}
+# Note: ZDS routes are handled separately in brijkillian_stack.py — they're
+# all viewer-OK by virtue of being a different app.
 
 # Route table: (page_fn, route_path, title, on_load_list)
 ROUTES = [
-    # Public routes
-    (login_page, "/login", "Sign in · GLCR Memory", []),
-    (auth_callback_page, "/auth/callback", "Signing in...", []),
+    # Public routes — no PIN required
+    (unlock_page,        "/unlock",        "Unlock · Graves Ops",   []),
+    (login_page,         "/login",         "Sign in as editor",     []),
+    (auth_callback_page, "/auth/callback", "Signing in…",           []),
 
-    # Protected routes (mapped to /glcr/* prefix for unified app)
-    # / is now the three-card launchpad; Today moves to /today.
+    # Protected routes — gated by AuthState.require_unlock (PIN site session)
+    # / is the three-card launchpad; Today moves to /today.
     (home_page, "/", "Graves Ops", []),
     (today_page, "/today", "Today · GLCR Memory", [TodayState.load_today, TodayState.start_live_updates]),
     (search_page, "/search", "Search · GLCR Memory", [SearchState.clear_search]),

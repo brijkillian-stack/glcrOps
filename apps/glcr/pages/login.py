@@ -23,7 +23,7 @@ def login_page() -> rx.Component:
             # ── Logo / header ────────────────────────────────────────────────
             rx.el.div(
                 rx.el.h1(
-                    "GLCR Memory",
+                    "Sign in as editor",
                     style={
                         "fontSize": "28px",
                         "fontWeight": "600",
@@ -33,7 +33,7 @@ def login_page() -> rx.Component:
                     },
                 ),
                 rx.el.p(
-                    "Shift intelligence for Gun Lake Casino",
+                    "Magic-link sign-in promotes you from viewer to editor.",
                     style={
                         "fontSize": "14px",
                         "color": "var(--fg-2)",
@@ -64,8 +64,8 @@ def login_page() -> rx.Component:
                         id="email-input",
                         type_="email",
                         placeholder="brijkillian@icloud.com",
-                        value=AuthState.email,
-                        on_change=AuthState.set_email,
+                        value=AuthState.magic_link_email,
+                        on_change=AuthState.set_magic_link_email,
                         disabled=AuthState.magic_link_sent,
                         style={
                             "width": "100%",
@@ -85,9 +85,9 @@ def login_page() -> rx.Component:
 
                 # Error message
                 rx.cond(
-                    AuthState.error != "",
+                    AuthState.magic_link_error != "",
                     rx.el.div(
-                        AuthState.error,
+                        AuthState.magic_link_error,
                         style={
                             "fontSize": "13px",
                             "color": "var(--accent-flag)",
@@ -112,7 +112,7 @@ def login_page() -> rx.Component:
                         ),
                     ),
                     type_="button",
-                    on_click=AuthState.request_magic_link(AuthState.email),
+                    on_click=AuthState.request_magic_link,
                     disabled=AuthState.is_loading | AuthState.magic_link_sent,
                     style={
                         "width": "100%",
@@ -156,7 +156,7 @@ def login_page() -> rx.Component:
                             },
                         ),
                         rx.el.p(
-                            f"Check your inbox at {AuthState.email}",
+                            f"Check your inbox at {AuthState.magic_link_email}",
                             style={
                                 "fontSize": "13px",
                                 "color": "var(--fg-2)",

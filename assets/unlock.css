@@ -1,0 +1,154 @@
+/* ============================================================================
+   unlock.css — Site PIN unlock screen
+   Mobile-first, large touch targets, brand-aligned.
+   ============================================================================ */
+
+.unlock-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: var(--surface-canvas);
+}
+
+.unlock-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  padding: 40px 32px;
+  box-shadow: var(--shadow-rest);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ── Brand ───────────────────────────────────────────────────────────────── */
+.unlock-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.unlock-brand-mark {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  background: var(--accent-blue);
+}
+.unlock-title {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+  margin: 0;
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+.unlock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.unlock-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.unlock-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.unlock-input {
+  width: 100%;
+  padding: 18px 20px;
+  font-family: var(--font-body);
+  font-size: 32px;            /* large for thumb-typing on iPhone */
+  font-weight: 600;
+  letter-spacing: 0.4em;       /* visual rhythm for digits */
+  text-align: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-canvas);
+  color: var(--fg-1);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+  min-height: 64px;
+  outline: 0;
+  -webkit-appearance: none;
+}
+.unlock-input::placeholder {
+  color: var(--fg-mute);
+  letter-spacing: 0.5em;
+}
+.unlock-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(0, 101, 191, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .unlock-input { transition: none; }
+}
+
+/* ── Remember toggle ─────────────────────────────────────────────────────── */
+.unlock-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--fg-2);
+  cursor: pointer;
+  user-select: none;
+}
+.unlock-checkbox {
+  width: 20px; height: 20px;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+
+/* ── Error ───────────────────────────────────────────────────────────────── */
+.unlock-error {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--accent-flag-bg);
+  color: var(--accent-flag);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--accent-flag);
+}
+
+/* ── Submit ──────────────────────────────────────────────────────────────── */
+.unlock-submit {
+  width: 100%;
+  padding: 16px 20px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  background: var(--accent-blue);
+  border: 0;
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  min-height: 52px;
+  transition: background 160ms var(--ease), transform 80ms var(--ease);
+}
+@media (hover: hover) {
+  .unlock-submit:hover:not(:disabled) {
+    background: var(--accent-blue-light);
+  }
+}
+.unlock-submit:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.unlock-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) {
+  .unlock-submit { transition: none; }
+  .unlock-submit:active { transform: none; }
+}

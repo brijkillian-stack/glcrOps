@@ -1,35 +1,32 @@
 """
-shared/components/homepage.py — Phase: better homepage (2026-05-05)
+shared/components/homepage.py — Three-card launchpad at /.
 
-Three-card launchpad rendered at /. Memory / Shift / ZDS, each tappable into
-its own app surface. Static labels for v1; live data hookups (recent captures
-feed, open-task counts, current week status) come in a follow-up.
-
-Routes after the homepage lands:
-    /               this homepage
-    /today          GLCR Today (was /)
-    /search, /people, /logs, /tasks, ...   GLCR Memory pages (unchanged)
-    /zds/...        ZDS unchanged
-
-After the Memory + Shift split (separate spec), the card targets evolve:
-    Memory  → /memory or /search
-    Shift   → /shift or /today
-    ZDS     → /zds/
-For now Memory and Shift point at their representative landing routes.
+Cards are role-aware. Memory card is editor-only — viewers see it dimmed
+with an "Editor only" tagline; clicking it routes to /login instead of
+/search. Today and ZDS are accessible to viewers and editors alike.
 """
 
 import reflex as rx
 
+from shared.auth import AuthState
+
 
 def _app_card(
     *,
-    href: str,
+    href,
     name: str,
-    tagline: str,
+    tagline,
     glyph: str,
     accent_class: str,
+    locked=False,
 ) -> rx.Component:
-    """One launchpad card. Anchor-styled link so iPad/Pencil tap is native."""
+    """One launchpad card. `href`, `tagline`, and `locked` may be Vars.
+
+    When `locked` is truthy, the card renders dimmed; pass an elevation
+    href (e.g. /login) so a click on a locked card prompts editor sign-in.
+    """
+    base_class   = f"home-card {accent_class}"
+    locked_class = f"home-card {accent_class} home-card-locked"
     return rx.link(
         rx.el.div(
             rx.el.div(glyph, class_name="home-card-glyph"),
@@ -38,7 +35,7 @@ def _app_card(
                 rx.el.div(tagline, class_name="home-card-tagline"),
                 class_name="home-card-text",
             ),
-            class_name=f"home-card {accent_class}",
+            class_name=rx.cond(locked, locked_class, base_class),
         ),
         href=href,
         class_name="home-card-link",
@@ -46,6 +43,18 @@ def _app_card(
 
 
 def home_page() -> rx.Component:
+    # Memory card — editor only. Viewers see it dimmed; click goes to /login.
+    memory_href = rx.cond(
+        AuthState.is_zds_editor,
+        "/search",
+        "/login",
+    )
+    memory_tagline = rx.cond(
+        AuthState.is_zds_editor,
+        "The brain — search, people, threads, write-ups, patterns.",
+        "Editor only — sign in to access the memory corpus.",
+    )
+
     return rx.el.main(
         rx.el.div(
             # Header
@@ -61,16 +70,17 @@ def home_page() -> rx.Component:
             # Three-card grid
             rx.el.div(
                 _app_card(
-                    href="/search",
+                    href=memory_href,
                     name="Memory",
-                    tagline="The brain — search, people, threads, write-ups, patterns.",
+                    tagline=memory_tagline,
                     glyph="◎",
                     accent_class="home-card-memory",
+                    locked=~AuthState.is_zds_editor,
                 ),
                 _app_card(
                     href="/today",
                     name="Shift",
-                    tagline="Tonight — today, tasks, recap, floor walk, areas, deployment.",
+                    tagline="Tonight — today's deployment, current tasks, what's open.",
                     glyph="⊙",
                     accent_class="home-card-shift",
                 ),

@@ -1,0 +1,59 @@
+/* ============================================================================
+   role.css — Role chip for sidebar (viewer / zds_editor / editor).
+   ============================================================================ */
+
+.role-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  margin: 4px 0 2px;
+  font-family: var(--font-body);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
+.role-chip-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.role-chip-email {
+  font-size: 11px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Viewer (PIN-only): muted neutral */
+.role-chip-viewer {
+  border-color: var(--border-subtle);
+  background: var(--surface-canvas);
+}
+.role-chip-viewer .role-chip-label { color: var(--fg-3); }
+
+/* ZDS Editor: gold accent */
+.role-chip-zds {
+  border-color: var(--accent-gold);
+  background: var(--accent-gold-bg);
+}
+.role-chip-zds .role-chip-label { color: var(--accent-gold); }
+
+/* Editor: blue accent */
+.role-chip-editor {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+}
+.role-chip-editor .role-chip-label { color: var(--accent-blue); }
+
+/* Mobile bottom-nav: hide chip + email (saves space) */
+@media (max-width: 768px) {
+  .role-chip {
+    display: none;
+  }
+}

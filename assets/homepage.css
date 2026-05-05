@@ -162,3 +162,22 @@
   .home-card { background: var(--surface-raised); }
 }
 .app.dark .home-card { background: var(--surface-raised); }
+
+/* ── Locked card (viewer trying to access an editor surface) ──────────────── */
+.home-card-locked {
+  opacity: 0.55;
+  position: relative;
+}
+.home-card-locked::after {
+  content: "🔒";
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+.home-card-locked:hover {
+  /* Don't lift on hover when locked — visual cue that it's not the same */
+  transform: none !important;
+  box-shadow: var(--shadow-rest) !important;
+}

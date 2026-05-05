@@ -3,13 +3,19 @@ components/sidebar.py — Shared sidebar navigation
 """
 
 import reflex as rx
+from shared.auth import AuthState
 from shared.base import AppState
 from shared.components.app_switcher import app_switcher
 from apps.glcr.state.today import TodayState
 
-NAV_ITEMS = [
+# Nav items split by role tier (Path C+ 2026-05-05).
+# Viewers (PIN only) see only NAV_VIEWER. Editors see everything.
+NAV_VIEWER = [
     ("◎", "Home",       "/"),
     ("⊙", "Today",      "/today"),
+]
+
+NAV_EDITOR = [
     ("⌕", "Search",     "/search"),
     ("◉", "Logs",       "/logs"),
     ("◍", "People",     "/people"),
@@ -26,6 +32,9 @@ NAV_EXTRA = [
     ("⊟", "Write-Ups",    "/writeups"),
     ("▦", "Deployment",   "/deployment"),
 ]
+
+# Aggregate kept for back-compat with any caller that imports NAV_ITEMS.
+NAV_ITEMS = NAV_VIEWER + NAV_EDITOR
 
 
 def _nav_item(icon: str, label: str, route: str) -> rx.Component:
@@ -74,15 +83,61 @@ def sidebar() -> rx.Component:
             rx.el.span("Graves Ops"),
             class_name="sidebar-brand",
         ),
-        # Nav
+        # Nav — three sections, two of them gated by editor role
         rx.el.nav(
-            *[_nav_item(icon, label, route) for icon, label, route in NAV_ITEMS],
+            # Always visible (viewer + editor)
+            *[_nav_item(icon, label, route) for icon, label, route in NAV_VIEWER],
+            # Editor-only Memory routes — hidden from viewers
+            rx.cond(
+                AuthState.is_zds_editor,                # any editor role
+                rx.el.fragment(
+                    rx.el.div(class_name="nav-divider"),
+                    *[_nav_item(icon, label, route) for icon, label, route in NAV_EDITOR],
+                    rx.el.div(class_name="nav-divider"),
+                    *[_nav_item(icon, label, route) for icon, label, route in NAV_EXTRA],
+                    # Phase M — Area Check (write surface; editor-only)
+                    rx.el.div(class_name="nav-divider"),
+                    _action_item("★", "Area Check", AppState.open_area_check),
+                ),
+            ),
+
+            # ── Path C+ role chrome ────────────────────────────────────────
             rx.el.div(class_name="nav-divider"),
-            *[_nav_item(icon, label, route) for icon, label, route in NAV_EXTRA],
-            # Phase M — Area Check action lives in the nav for visibility
-            # on every page. It fires an overlay rather than navigating.
-            rx.el.div(class_name="nav-divider"),
-            _action_item("★", "Area Check", AppState.open_area_check),
+
+            # Role chip — shows current role (Viewer / ZDS Editor / Editor)
+            rx.el.div(
+                rx.el.span(AuthState.role_label, class_name="role-chip-label"),
+                rx.cond(
+                    AuthState.editor_email != "",
+                    rx.el.span(AuthState.editor_email, class_name="role-chip-email"),
+                ),
+                class_name=rx.cond(
+                    AuthState.is_editor,
+                    "role-chip role-chip-editor",
+                    rx.cond(
+                        AuthState.is_zds_editor,
+                        "role-chip role-chip-zds",
+                        "role-chip role-chip-viewer",
+                    ),
+                ),
+            ),
+
+            # Editor sign-in / sign-out
+            rx.cond(
+                AuthState.editor_role == "viewer",
+                # Viewer mode: show "Sign in as editor" link
+                rx.link(
+                    rx.el.span("✎", class_name="nav-icon"),
+                    rx.el.span("Sign in as editor", class_name="nav-label"),
+                    href="/login",
+                    class_name="nav-item",
+                ),
+                # Editor (any tier): show "Sign out (viewer)" action
+                _action_item("⇲", "Sign out (viewer)", AuthState.sign_out_editor),
+            ),
+
+            # Lock device — always available
+            _action_item("⌶", "Lock device", AuthState.lock_device),
             class_name="sidebar-nav",
         ),
         # Footer

@@ -11,18 +11,23 @@
 :{$PORT} {
     log
 
-    # ─── Basic auth gate ────────────────────────────────────────────────────
-    # Username + bcrypt hash come from Render env vars BASIC_AUTH_USER /
-    # BASIC_AUTH_HASH (set them in the Render dashboard). The /health path
-    # is excluded so Render's port-scanner can keep checking us.
-    @needs_auth not path /health
-    basic_auth @needs_auth {
-        {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
-    }
+    # ─── Auth ───────────────────────────────────────────────────────────────
+    # Caddy basic-auth was removed 2026-05-05 (Path A). The Supabase
+    # magic-link layer (shared/auth.py + persisted refresh tokens via
+    # rx.LocalStorage) is now the only auth gate. Magic-link login holds
+    # for ~30 days per device with auto-refresh on activity.
+    #
+    # If team-password access is needed later, add an in-app /site-password
+    # route (Path C from the auth-paths discussion) — DO NOT reintroduce
+    # browser-popup basic_auth here; iOS Safari PWA mode does not persist
+    # those credentials reliably.
+    #
+    # The Render env vars BASIC_AUTH_USER and BASIC_AUTH_HASH are now
+    # unused. Safe to delete from the Render dashboard.
 
     # ─── Routes ─────────────────────────────────────────────────────────────
 
-    # Health endpoint for Render's port scan (no auth, no proxy).
+    # Health endpoint for Render's port scan.
     handle /health {
         respond "ok" 200
     }
