@@ -30,8 +30,15 @@ def _week_card(week: dict) -> rx.Component:
                     gap="6px", align="center",
                 ),
                 rx.hstack(
-                    rx.text("Week ending ", week["week_ending"],
-                            size="1", color="#9ca3af"),
+                    rx.text(
+                        rx.cond(
+                            week["date_range"] != "",
+                            week["date_range"],
+                            week["week_ending"],
+                        ),
+                        size="1", color="#9ca3af",
+                        font_variant_numeric="tabular-nums",
+                    ),
                     rx.cond(
                         has_schedule,
                         rx.hstack(

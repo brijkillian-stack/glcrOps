@@ -742,7 +742,11 @@ def parse_daily_pools(
     if not path or not path.exists():
         return {}
 
-    lookup = _build_name_lookup(entities)
+    # Phase Q.5 — switched from the legacy first-name-only `_build_name_lookup`
+    # to the alias-aware `build_entity_lookup` + `resolve_entity_display_name`.
+    # Otherwise xlsx names like "Stephen Edmunds" don't reach Steve via the
+    # 'stephen' alias, and Steve disappears from the schedule pools.
+    entity_lookup = build_entity_lookup(entities)
 
     try:
         wb = openpyxl.load_workbook(str(path), data_only=True, read_only=True)
@@ -801,7 +805,8 @@ def parse_daily_pools(
                 continue
             if "headcount" in first.lower():
                 continue
-            dn = _match_name(first, last, lookup)
+            # Phase Q.5 — alias-aware resolver (Stephen → Steve via 'stephen' alias)
+            dn = resolve_entity_display_name(first, last, entity_lookup)
             if not dn:
                 continue
             for ds, ci in date_cols.items():

@@ -418,6 +418,7 @@ def get_people() -> list[dict]:
     from entity metadata for display on the People page.
     """
     try:
+        print("[db] get_people -> query start")
         res = (
             get_client()
             .table("entities")
@@ -431,13 +432,16 @@ def get_people() -> list[dict]:
             .execute()
         )
         rows = res.data or []
+        print(f"[db] get_people -> got {len(rows)} rows from query")
 
         seen_ids: set = set()
         people = []
+        skipped_count = 0
 
         for r in rows:
             tm_id = r.get("id", "")
             if not tm_id or tm_id in seen_ids:
+                skipped_count += 1
                 continue
             seen_ids.add(tm_id)
 
@@ -535,6 +539,7 @@ def get_people() -> list[dict]:
             })
 
         people.sort(key=lambda p: (-p["skill_score"], p["name"]))
+        print(f"[db] get_people -> returning {len(people)} people (skipped {skipped_count} rows)")
         return people
 
     except Exception:

@@ -241,6 +241,111 @@ class ZdsState(rx.State):
         """True when schedule pool data has been parsed."""
         return bool(self.schedule_pools)
 
+    # ── Phase R — at-a-glance summary stats for the open night ───────────────
+
+    @rx.var
+    def night_filled_count(self) -> int:
+        n = 0
+        for s in self.zone_slots + self.aux_slots:
+            if s.get("is_filled"):
+                n += 1
+        for rr in self.rr_slots:
+            if rr.get("mens_is_filled"):
+                n += 1
+            if rr.get("womens_is_filled"):
+                n += 1
+        return n
+
+    @rx.var
+    def night_total_count(self) -> int:
+        # Each RR slot contributes 2 (mens + womens)
+        return len(self.zone_slots) + len(self.aux_slots) + (len(self.rr_slots) * 2)
+
+    @rx.var
+    def night_locked_count(self) -> int:
+        n = 0
+        for s in self.zone_slots + self.aux_slots:
+            if s.get("is_locked"):
+                n += 1
+        for rr in self.rr_slots:
+            if rr.get("mens_is_locked"):
+                n += 1
+            if rr.get("womens_is_locked"):
+                n += 1
+        return n
+
+    @rx.var
+    def night_warning_count(self) -> int:
+        """Slots with called-off, not-scheduled, or duplicate flags."""
+        n = 0
+        for s in self.zone_slots + self.aux_slots:
+            ws = s.get("warning_status") or ""
+            if ws in ("called_off", "not_scheduled"):
+                n += 1
+            if s.get("has_duplicate"):
+                n += 1
+        for rr in self.rr_slots:
+            for side in ("mens", "womens"):
+                ws = rr.get(f"{side}_warning_status") or ""
+                if ws in ("called_off", "not_scheduled"):
+                    n += 1
+                if rr.get(f"{side}_has_duplicate"):
+                    n += 1
+        return n
+
+    @rx.var
+    def night_fill_pct(self) -> int:
+        """Filled percentage 0-100 for the progress bar."""
+        total = self.night_total_count
+        if total <= 0:
+            return 0
+        return int((self.night_filled_count * 100) / total)
+
+    @rx.var
+    def unplaced_scheduled_tms(self) -> list[str]:
+        """Phase Q.5 — TMs scheduled tonight (any pool) who aren't yet assigned
+        to any zone/RR/aux slot. Surfaces as a banner above the deployment grid
+        so Brian can see who still needs a spot.
+
+        Excludes TMs marked called-off for this night.
+        """
+        scheduled: set[str] = set()
+        for name in self.night_grave_pool:
+            if name:
+                scheduled.add(name)
+        for name in self.night_pm_ol_pool:
+            if name:
+                scheduled.add(name)
+        for name in self.night_am_ol_pool:
+            if name:
+                scheduled.add(name)
+        # Drop call-offs — they're not expected to be placed
+        called_off = set(self.night_called_off)
+        scheduled -= called_off
+
+        # Subtract anyone already deployed
+        deployed: set[str] = set()
+        for s in self.zone_slots + self.aux_slots:
+            n = (s.get("display_name") or s.get("tm_name") or "").strip()
+            if n and n != "Unfilled":
+                deployed.add(n)
+        for rr in self.rr_slots:
+            for side in ("mens", "womens"):
+                n = (rr.get(f"{side}_name") or "").strip()
+                if n and n != "Unfilled":
+                    deployed.add(n)
+        # Also exclude PM/AM overlap TMs if they're placed in overlap_assignments
+        for ol in self.overlap_rows:
+            n = (ol.get("tm_name") or "").strip()
+            if n:
+                deployed.add(n)
+
+        return sorted(scheduled - deployed, key=lambda s: s.lower())
+
+    @rx.var
+    def unplaced_scheduled_count(self) -> int:
+        return len(self.unplaced_scheduled_tms)
+
     @rx.var
     def schedule_file_label(self) -> str:
         """Filename for display, or a fallback prompt."""
@@ -615,6 +720,19 @@ class ZdsState(rx.State):
             self.current_week_id = week_id
         self.week_info = database.fetch_week(week_id)
         self.nights = _enrich_nights(database.fetch_nights(week_id))
+        # Phase R — stamp at-a-glance stats on each night so the overview
+        # cards can render fill / locked / warnings without separate fetches.
+        try:
+            stats_by_id = database.fetch_week_night_stats(week_id)
+            for n in self.nights:
+                s = stats_by_id.get(n["id"], {})
+                n["stat_filled"]     = int(s.get("filled", 0))
+                n["stat_total"]      = int(s.get("total", 0))
+                n["stat_unfilled"]   = int(s.get("unfilled", 0))
+                n["stat_locked"]     = int(s.get("locked", 0))
+                n["stat_called_off"] = int(s.get("called_off", 0))
+        except Exception as exc:
+            print(f"[on_week_overview_load] stats: {exc}")
         self._reload_schedule()
 
     def on_day_load(self):

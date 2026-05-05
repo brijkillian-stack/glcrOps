@@ -48,6 +48,82 @@ def _night_card(night: dict) -> rx.Component:
                 align="center", gap="8px",
             ),
 
+            # Phase R — at-a-glance fill bar + status pills
+            rx.cond(
+                night["stat_total"] > 0,
+                rx.vstack(
+                    # Progress bar
+                    rx.box(
+                        rx.box(
+                            background=night["day_color"],
+                            height="100%",
+                            border_radius="999px",
+                            width=(
+                                (night["stat_filled"] * 100 / night["stat_total"]).to_string()
+                                + "%"
+                            ),
+                            transition="width 0.3s ease",
+                        ),
+                        background="#f3f4f6",
+                        height="6px",
+                        border_radius="999px",
+                        width="100%",
+                    ),
+                    # Pills row: filled / unfilled / locked / called-off
+                    rx.hstack(
+                        rx.text(
+                            night["stat_filled"].to_string(), " / ",
+                            night["stat_total"].to_string(), " filled",
+                            size="1", color="#374151", weight="medium",
+                            font_variant_numeric="tabular-nums",
+                        ),
+                        rx.cond(
+                            night["stat_unfilled"] > 0,
+                            rx.hstack(
+                                rx.box(
+                                    background="#9ca3af",
+                                    width="6px", height="6px",
+                                    border_radius="999px",
+                                ),
+                                rx.text(
+                                    night["stat_unfilled"].to_string(), " open",
+                                    size="1", color="#6b7280",
+                                ),
+                                gap="3px", align="center",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            night["stat_locked"] > 0,
+                            rx.hstack(
+                                rx.icon("lock", size=10, color="#b45309"),
+                                rx.text(
+                                    night["stat_locked"].to_string(),
+                                    size="1", color="#92400e", weight="medium",
+                                ),
+                                gap="2px", align="center",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            night["stat_called_off"] > 0,
+                            rx.hstack(
+                                rx.icon("octagon-x", size=10, color="#dc2626"),
+                                rx.text(
+                                    night["stat_called_off"].to_string(), " call-off",
+                                    size="1", color="#991b1b", weight="medium",
+                                ),
+                                gap="2px", align="center",
+                            ),
+                            rx.fragment(),
+                        ),
+                        gap="10px", align="center", flex_wrap="wrap",
+                    ),
+                    width="100%", gap="6px",
+                ),
+                rx.fragment(),
+            ),
+
             # Action buttons
             rx.hstack(
                 rx.button(

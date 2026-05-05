@@ -25,6 +25,8 @@ class Week(TypedDict):
     # Phase H — file in the schedules bucket this week is built from. Empty
     # string when not linked yet. Used by the index page card + ZDS engine.
     schedule_path: str
+    # Phase R — pre-formatted "Fri May 1 – Thu May 7" range stamped by fetch_weeks
+    date_range: str
 
 
 class Night(TypedDict):
@@ -40,6 +42,12 @@ class Night(TypedDict):
     breaks_9: int
     breaks_4: int
     day_color: str  # hex; injected in on_week_overview_load / on_day_load
+    # Phase R — at-a-glance stats stamped by on_week_overview_load
+    stat_filled: int
+    stat_total: int
+    stat_unfilled: int
+    stat_locked: int
+    stat_called_off: int
 
 
 class ZoneSlot(TypedDict):
@@ -207,6 +215,11 @@ EMPTY_NIGHT: Night = {
     "breaks_9": 0,
     "breaks_4": 0,
     "day_color": "#6b7280",
+    "stat_filled": 0,
+    "stat_total": 0,
+    "stat_unfilled": 0,
+    "stat_locked": 0,
+    "stat_called_off": 0,
 }
 
 

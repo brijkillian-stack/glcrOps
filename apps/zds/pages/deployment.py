@@ -9,6 +9,120 @@ from ..components import zone_card, rr_card, aux_card, tm_picker_drawer, night_t
 from ..components.engine_result_dialog import engine_result_dialog
 
 
+# ── Phase R — Skeleton scaffold ───────────────────────────────────────────────
+# Pulse-animated placeholder cards that mimic the real grid layout so the page
+# doesn't jump when data arrives. Used while ZdsState.loading is True.
+
+def _skel_block(*, width="100%", height="14px", radius="6px",
+                opacity=1.0) -> rx.Component:
+    return rx.box(
+        background="#e5e7eb",
+        height=height,
+        border_radius=radius,
+        width=width,
+        opacity=str(opacity),
+    )
+
+
+def _skel_zone_card() -> rx.Component:
+    return rx.box(
+        _skel_block(width="40%", height="10px"),
+        rx.box(height="6px"),
+        _skel_block(width="70%", height="22px"),
+        rx.box(height="14px"),
+        _skel_block(width="55%", height="10px", opacity=0.7),
+        background="white",
+        border="1px solid #e5e7eb",
+        border_radius="8px",
+        padding="14px",
+        display="flex",
+        flex_direction="column",
+        height="120px",
+    )
+
+
+def _skel_rr_card() -> rx.Component:
+    return rx.box(
+        _skel_block(width="35%", height="10px"),
+        rx.box(height="6px"),
+        rx.hstack(
+            rx.vstack(
+                _skel_block(width="40%", height="9px"),
+                _skel_block(width="80%", height="18px"),
+                gap="4px", align="start", flex="1",
+            ),
+            rx.divider(orientation="vertical"),
+            rx.vstack(
+                _skel_block(width="50%", height="9px"),
+                _skel_block(width="80%", height="18px"),
+                gap="4px", align="start", flex="1",
+            ),
+            gap="8px", width="100%",
+        ),
+        background="white",
+        border="1px solid #e5e7eb",
+        border_radius="8px",
+        padding="14px",
+        height="92px",
+    )
+
+
+def _skel_aux_card() -> rx.Component:
+    return rx.box(
+        _skel_block(width="50%", height="9px"),
+        rx.box(height="4px"),
+        _skel_block(width="80%", height="14px"),
+        background="white",
+        border="1px solid #e5e7eb",
+        border_radius="6px",
+        padding="10px",
+        height="60px",
+    )
+
+
+def _deployment_skeleton() -> rx.Component:
+    """Skeleton view of the deployment grid — matches real layout
+    (10 zones in 2 rows of 5, 5 RR cards, 7 aux strip)."""
+    return rx.box(
+        # Make the skeleton sit BELOW the sticky top bars (top ~140px)
+        rx.box(height="140px"),
+        rx.vstack(
+            # Section: ZONES (2 rows of 5)
+            _skel_block(width="120px", height="11px", opacity=0.8),
+            rx.grid(
+                *[_skel_zone_card() for _ in range(10)],
+                columns="5", gap="10px", width="100%",
+            ),
+            # Section: RESTROOMS (5)
+            rx.box(height="6px"),
+            _skel_block(width="100px", height="11px", opacity=0.8),
+            rx.grid(
+                *[_skel_rr_card() for _ in range(5)],
+                columns="5", gap="10px", width="100%",
+            ),
+            # Section: AUX (7)
+            rx.box(height="6px"),
+            _skel_block(width="80px", height="11px", opacity=0.8),
+            rx.grid(
+                *[_skel_aux_card() for _ in range(7)],
+                columns="7", gap="8px", width="100%",
+            ),
+            gap="10px",
+            padding="16px 24px 32px",
+            width="100%",
+        ),
+        # Use the existing .skeleton CSS class (defined in styles.css) for
+        # the pulse animation if present. Static otherwise — still a calm
+        # placeholder.
+        class_name="zds-skeleton-overlay",
+        position="absolute",
+        inset="0",
+        z_index="3",
+        background="#f9fafb",
+        overflow="hidden",
+    )
+
+
 # ── Section header ────────────────────────────────────────────────────────────
 
 def _section_header(icon: str, label: str, staffed: str = "") -> rx.Component:
@@ -535,6 +649,146 @@ def deployment() -> rx.Component:
             align="center", padding="16px 24px 0",
         ),
 
+        # Phase R — At-a-glance summary chip (sticky once you scroll past it).
+        # Shows fill percent + counts of warning / locked / open. Live-updates
+        # as you assign / lock / clear slots.
+        rx.box(
+            rx.hstack(
+                # Fill bar
+                rx.vstack(
+                    rx.hstack(
+                        rx.text(
+                            ZdsState.night_filled_count.to_string(), " / ",
+                            ZdsState.night_total_count.to_string(),
+                            " filled",
+                            size="2", weight="bold", color="#111827",
+                            font_variant_numeric="tabular-nums",
+                        ),
+                        rx.text(
+                            "(", ZdsState.night_fill_pct.to_string(), "%)",
+                            size="1", color="#9ca3af",
+                        ),
+                        gap="6px", align="baseline",
+                    ),
+                    rx.box(
+                        rx.box(
+                            background=rx.cond(
+                                ZdsState.night_fill_pct >= 100, "#059669",
+                                rx.cond(ZdsState.night_fill_pct >= 75, "#0065BF",
+                                rx.cond(ZdsState.night_fill_pct >= 50, "#eab308",
+                                        "#dc2626")),
+                            ),
+                            height="100%",
+                            border_radius="999px",
+                            width=ZdsState.night_fill_pct.to_string() + "%",
+                            transition="width 0.4s ease, background 0.2s ease",
+                        ),
+                        background="#f3f4f6",
+                        height="6px",
+                        border_radius="999px",
+                        width="220px",
+                    ),
+                    gap="3px", align="start",
+                ),
+                rx.spacer(),
+                # Pills row
+                rx.hstack(
+                    rx.cond(
+                        ZdsState.night_warning_count > 0,
+                        rx.hstack(
+                            rx.icon("triangle-alert", size=12, color="#dc2626"),
+                            rx.text(
+                                ZdsState.night_warning_count.to_string(),
+                                " warnings",
+                                size="1", color="#991b1b", weight="bold",
+                            ),
+                            gap="3px", align="center",
+                            padding="2px 8px",
+                            background="#fee2e2",
+                            border="1px solid #fca5a5",
+                            border_radius="999px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        ZdsState.night_locked_count > 0,
+                        rx.hstack(
+                            rx.icon("lock", size=12, color="#b45309"),
+                            rx.text(
+                                ZdsState.night_locked_count.to_string(), " locked",
+                                size="1", color="#92400e", weight="bold",
+                            ),
+                            gap="3px", align="center",
+                            padding="2px 8px",
+                            background="#fef3c7",
+                            border="1px solid #fbbf24",
+                            border_radius="999px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        (ZdsState.night_total_count - ZdsState.night_filled_count) > 0,
+                        rx.hstack(
+                            rx.icon("circle-dashed", size=12, color="#6b7280"),
+                            rx.text(
+                                (ZdsState.night_total_count - ZdsState.night_filled_count).to_string(),
+                                " open",
+                                size="1", color="#374151", weight="bold",
+                            ),
+                            gap="3px", align="center",
+                            padding="2px 8px",
+                            background="#f3f4f6",
+                            border="1px solid #d1d5db",
+                            border_radius="999px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    gap="6px", align="center", flex_wrap="wrap",
+                ),
+                width="100%", align="center", gap="14px",
+            ),
+            padding="10px 24px",
+            background="#f9fafb",
+            border_bottom="1px solid #e5e7eb",
+            position="sticky", top="76px", z_index="9",
+        ),
+
+        # Phase Q.5 — Scheduled-but-not-deployed banner
+        # Shows TMs in tonight's schedule pools (any shift) who aren't yet
+        # placed in any zone/RR/aux/overlap slot. Excludes call-offs.
+        rx.cond(
+            ZdsState.unplaced_scheduled_count > 0,
+            rx.box(
+                rx.hstack(
+                    rx.icon("user-round-search", size=14, color="#0369a1"),
+                    rx.text(
+                        ZdsState.unplaced_scheduled_count.to_string(),
+                        " scheduled, not yet placed:",
+                        size="2", weight="bold", color="#0369a1",
+                    ),
+                    rx.foreach(
+                        ZdsState.unplaced_scheduled_tms,
+                        lambda name: rx.box(
+                            rx.text(name, size="1", color="#0369a1",
+                                    weight="medium"),
+                            padding="2px 8px",
+                            background="white",
+                            border="1px solid #7dd3fc",
+                            border_radius="999px",
+                        ),
+                    ),
+                    align="center", gap="6px", flex_wrap="wrap",
+                    width="100%",
+                ),
+                margin="10px 24px",
+                padding="8px 12px",
+                background="#eff6ff",
+                border="1px solid #bfdbfe",
+                border_radius="8px",
+            ),
+            rx.fragment(),
+        ),
+
         # Error banner (print errors, etc.)
         rx.cond(
             ZdsState.error != "",
@@ -572,16 +826,12 @@ def deployment() -> rx.Component:
             padding="16px 24px 32px",
         ),
 
-        # Loading spinner overlay
+        # Phase R — Skeleton loading overlay. Replaces the prior full-screen
+        # spinner; renders a soft pulsing scaffold that matches the deployment
+        # grid shape so the layout doesn't jump when the data arrives.
         rx.cond(
             ZdsState.loading,
-            rx.box(
-                rx.spinner(size="3"),
-                position="fixed", inset="0",
-                display="flex", align_items="center", justify_content="center",
-                background="rgba(255,255,255,0.7)",
-                z_index="20",
-            ),
+            _deployment_skeleton(),
             rx.fragment(),
         ),
 

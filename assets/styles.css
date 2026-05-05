@@ -2034,6 +2034,17 @@ header .app-switcher {
   50%       { opacity: 0.3; }
 }
 
+/* ── Phase R — Deployment grid skeleton overlay ──────────────────────────── */
+/* Slower, calmer pulse than the .skeleton variant — covers a much larger
+   visual area, so the high-contrast 1.0/0.3 oscillation would feel jittery. */
+@keyframes zds-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.zds-skeleton-overlay {
+  animation: zds-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
 /* ── Quick-add bar ───────────────────────────────────────────────────────── */
 .quick-add-bar {
   display: flex;

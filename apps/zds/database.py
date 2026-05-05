@@ -90,7 +90,11 @@ def fetch_weeks() -> list[dict]:
         .order("week_ending", desc=True)
         .execute()
     )
-    return res.data or []
+    rows = res.data or []
+    # Phase R — stamp a human-readable date range on each row for the cards.
+    for r in rows:
+        r["date_range"] = format_week_date_range(r.get("week_ending", ""))
+    return rows
 
 
 def create_week(week_ending: str, label: str, schedule_path: Optional[str] = None) -> dict:
@@ -886,6 +890,94 @@ def fetch_recent_placements_bulk(
 
 
 # ── ZONE ASSIGNMENTS ──────────────────────────────────────────────────────────
+
+def format_week_date_range(week_ending: str) -> str:
+    """Phase R — Given a week_ending ISO date string (e.g. "2026-05-07"),
+    return a human-readable range "Fri May 1 – Thu May 7" covering the
+    7-day grave-shift week (Thursday end, working back to the prior Friday).
+    Falls back to the input string if parsing fails.
+    """
+    try:
+        from datetime import date as _date, timedelta as _td
+        if not week_ending:
+            return ""
+        y, m, d = (int(p) for p in week_ending.split("-"))
+        end = _date(y, m, d)
+        start = end - _td(days=6)
+        # Same month: "Fri May 1 – Thu May 7"
+        # Cross month: "Fri Apr 25 – Thu May 1"
+        if start.month == end.month:
+            return f"{start.strftime('%a %b %-d')} – {end.strftime('%a %b %-d')}"
+        return f"{start.strftime('%a %b %-d')} – {end.strftime('%a %b %-d')}"
+    except Exception:
+        return week_ending or ""
+
+
+def fetch_week_night_stats(week_id: str) -> dict:
+    """Phase R — at-a-glance stats per night for the week overview cards.
+
+    Returns {night_id: {filled, total, locked, called_off}} for every night
+    in the week. One-shot query; cheap.
+    """
+    out: dict = {}
+    if not week_id:
+        return out
+    try:
+        sb = _client()
+        # 1. nights for this week
+        n_res = sb.table("nights").select("id, night_date").eq("week_id", week_id).execute()
+        nights = n_res.data or []
+        if not nights:
+            return out
+        night_ids   = [n["id"] for n in nights]
+        date_by_id  = {n["id"]: n.get("night_date", "") for n in nights}
+
+        # 2. all zone_assignments for those nights
+        za_res = (
+            sb.table("zone_assignments")
+            .select("night_id, tm_id, is_filled, is_locked")
+            .in_("night_id", night_ids)
+            .execute()
+        )
+        rows = za_res.data or []
+
+        # 3. all call_offs for those night_dates (so warning count picks up
+        #    TMs marked off who happen to be assigned to a slot)
+        unique_dates = list({d for d in date_by_id.values() if d})
+        called_off_by_date: dict[str, set] = {}
+        if unique_dates:
+            co_res = (
+                sb.table("call_offs")
+                .select("tm_id, night_date")
+                .in_("night_date", unique_dates)
+                .execute()
+            )
+            for c in (co_res.data or []):
+                called_off_by_date.setdefault(c.get("night_date", ""), set()).add(c.get("tm_id"))
+
+        for nid in night_ids:
+            n_rows = [r for r in rows if r.get("night_id") == nid]
+            filled = sum(1 for r in n_rows if r.get("is_filled"))
+            locked = sum(1 for r in n_rows if r.get("is_locked"))
+            total  = len(n_rows)
+            night_date = date_by_id.get(nid, "")
+            co_set = called_off_by_date.get(night_date, set())
+            warnings = sum(
+                1 for r in n_rows
+                if r.get("tm_id") and r["tm_id"] in co_set
+            )
+            out[nid] = {
+                "filled":     filled,
+                "total":      total,
+                "unfilled":   total - filled,
+                "locked":     locked,
+                "called_off": warnings,
+            }
+        return out
+    except Exception as e:
+        print(f"[fetch_week_night_stats] {e}")
+        return {}
+
 
 def fetch_zone_assignments(night_id: str) -> list[dict]:
     """Returns all slot assignments for a night, joined with TM display name."""
