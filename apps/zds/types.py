@@ -54,6 +54,22 @@ class Night(TypedDict):
     locked_at:  str  # ISO timestamp string; "" when not locked
 
 
+class Notice(TypedDict):
+    """Phase E — per-slot notice surfaced via the NoticeDot affordance.
+
+    Stored in the `notices` table; injected onto each ZoneSlot/RRSlot/AuxSlot
+    by state._load_night. Fields are typed strings so Reflex Vars expose
+    `.upper()`, string concat, etc. inside rx.foreach bodies — without the
+    typed shape, compile fails with UntypedVarError on the second-level
+    iteration inside _notice_dot.
+    """
+    id:         str
+    type:       str   # "alert" | "info" | "training" | "meeting"
+    text:       str
+    created_by: str
+    created_at: str   # ISO timestamp string
+
+
 class ZoneSlot(TypedDict):
     """
     Generic slot row used for both zones and aux strip.
@@ -99,10 +115,11 @@ class ZoneSlot(TypedDict):
     # Empty string for unfilled slots.
     warning_status: str
     # Phase E — notices (injected in state._load_night from the notices table).
-    # Must be `list[dict]` (not bare `list`) so Reflex can statically resolve
-    # subscript access like `notices[0]["type"]` inside rx.foreach. Without
-    # the item type, compile fails with UntypedVarError.
-    notices: list[dict]  # list of {id, type, text, created_by, created_at}
+    # Typed via the Notice TypedDict above so rx.foreach inside _notice_dot
+    # can resolve `n["type"].upper()` and similar string operations. A bare
+    # `list` or even `list[dict]` (Var[Any] item) crashes compile with
+    # UntypedVarError on second-level iteration.
+    notices: list[Notice]
 
 
 class RRSlot(TypedDict):
