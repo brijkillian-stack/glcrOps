@@ -8,6 +8,7 @@ top-nav hstack each ZDS page used to roll inline.
 
 import reflex as rx
 from shared.components.app_switcher import app_switcher
+from apps.zds.state import ZdsState
 
 
 def zds_header(
@@ -33,10 +34,34 @@ def zds_header(
         gap="0",
     )
 
+    # Sun/moon theme toggle: show sun icon in dark mode (click to go light),
+    # moon icon in light mode (click to go dark)
+    theme_toggle = rx.button(
+        rx.cond(
+            ZdsState.theme == "zds-dark",
+            rx.icon("sun", size=16),
+            rx.icon("moon", size=16),
+        ),
+        on_click=ZdsState.toggle_theme,
+        height="40px",
+        padding="8px 12px",
+        border="1px solid #e5e7eb",
+        background="white",
+        color="#374151",
+        border_radius="6px",
+        cursor="pointer",
+        transition="all 0.2s ease",
+        _hover={
+            "border_color": "#d1d5db",
+            "background": "#f9fafb",
+        },
+    )
+
     children = [
         app_switcher(),
         title_block,
         rx.spacer(),
+        theme_toggle,
     ]
     if right is not None:
         children.append(right)

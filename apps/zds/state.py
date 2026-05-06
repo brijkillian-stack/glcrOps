@@ -182,8 +182,8 @@ class ZdsState(rx.State):
     # ── Theme (dark/light toggle) ─────────────────────────────────────────────
     # "zds-dark" → dark mode (default). "light" → light mode.
     # Bound to data_theme on the _with_zds_chrome wrapper.
-    # Session-scoped only — resets on reload.
-    theme: str = "zds-dark"
+    # Persisted via LocalStorage — survives page reload and across devices/sessions.
+    theme: str = rx.LocalStorage("zds-dark")
 
     # ── Audit strip ───────────────────────────────────────────────────────────
     # ISO timestamp of the last successful write this session; drives the

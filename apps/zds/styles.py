@@ -2,28 +2,36 @@
 
 # ── Zone / RR color palette (matches HTML book) ──────────────────────────────
 ZONE_COLORS: dict[str, str] = {
-    "zone_1":    "#b45309",  # c-yellow  (amber-700)
-    "zone_2":    "#6d28d9",  # c-purple
-    "zone_3":    "#c2410c",  # c-orange
-    "zone_4":    "#b91c1c",  # c-red
-    "zone_5":    "#b91c1c",  # c-red
-    "zone_6":    "#be185d",  # c-pink
-    "zone_7":    "#1d4ed8",  # c-blue
-    "zone_8":    "#78350f",  # c-brown
-    "zone_9":    "#c2410c",  # c-orange
-    "zone_10":   "#065f46",  # c-green
-    "rr_1_2":    "#b45309",  # yellow
-    "rr_6":      "#be185d",  # pink
-    "rr_7":      "#1d4ed8",  # blue
-    "rr_8":      "#374151",  # charcoal
-    "rr_10":     "#065f46",  # green
-    "z9_sr":     "#374151",
-    "admin":     "#6d28d9",
-    "trash_1":   "#b45309",
-    "trash_2":   "#c2410c",
-    "support_1": "#0369a1",
-    "support_2": "#0369a1",
-    "support_3": "#0369a1",
+    # Zones 1+2 → amber family (RR 1+2 follows)
+    "zone_1":    "#d97706",
+    "zone_2":    "#d97706",
+    # Zones 3+4+5+9 → red family (Z9 SR follows)
+    "zone_3":    "#dc2626",
+    "zone_4":    "#dc2626",
+    "zone_5":    "#dc2626",
+    "zone_9":    "#dc2626",
+    # Zone 6 → blue (RR 6 follows)
+    "zone_6":    "#2563eb",
+    # Zone 7 → pink (RR 7 follows)
+    "zone_7":    "#ec4899",
+    # Zone 8 → brown (RR 8 follows)
+    "zone_8":    "#92400e",
+    # Zone 10 → green (RR 10 follows)
+    "zone_10":   "#16a34a",
+    # Restrooms mirror their zone family
+    "rr_1_2":    "#d97706",
+    "rr_6":      "#2563eb",
+    "rr_7":      "#ec4899",
+    "rr_8":      "#92400e",
+    "rr_10":     "#16a34a",
+    # Aux slots
+    "z9_sr":     "#dc2626",  # Z9 family
+    "admin":     "#7c3aed",  # purple
+    "trash_1":   "#ea580c",  # orange
+    "trash_2":   "#ea580c",  # orange
+    "support_1": "#64748b",  # slate
+    "support_2": "#64748b",
+    "support_3": "#64748b",
 }
 
 ZONE_LABELS: dict[str, str] = {

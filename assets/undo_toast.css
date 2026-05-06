@@ -13,12 +13,13 @@
 
 .undo-toast-root {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 400;
   pointer-events: none;
   /* max-width so very long labels don't stretch beyond the viewport edge */
-  max-width: min(360px, calc(100vw - 48px));
+  max-width: min(400px, calc(100vw - 48px));
 }
 
 .undo-toast-panel {

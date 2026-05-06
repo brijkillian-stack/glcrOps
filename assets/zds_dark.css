@@ -239,9 +239,9 @@
   -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
 }
 
-/* Lighter on the light-mode surface */
+/* Hidden on light-mode surface — light should feel clean */
 [data-theme="light"] .zds-casino-bg {
-  opacity: 0.06;
+  display: none;
 }
 
 
@@ -561,6 +561,43 @@
 [data-theme="light"] .night-tab-active {
   color: var(--zds-t1) !important;
   background: var(--zds-bg-3) !important;
+}
+
+/* Inner text spans of the night tab — Chakra ghost button injects inline
+   text-color via its color_scheme prop, which beats the .night-tab class
+   color. Target the inner spans directly so the day name + date follow
+   the theme. Brian: "day titles should be white on dark." */
+[data-theme="zds-dark"] .night-tab .night-tab-day,
+[data-theme="zds-dark"] .night-tab-active .night-tab-day {
+  color: var(--zds-t1) !important;
+}
+[data-theme="zds-dark"] .night-tab .night-tab-date,
+[data-theme="zds-dark"] .night-tab-active .night-tab-date {
+  color: var(--zds-t2) !important;
+}
+[data-theme="light"] .night-tab .night-tab-day,
+[data-theme="light"] .night-tab-active .night-tab-day {
+  color: var(--zds-t1) !important;
+}
+[data-theme="light"] .night-tab .night-tab-date,
+[data-theme="light"] .night-tab-active .night-tab-date {
+  color: var(--zds-t3) !important;
+}
+
+/* Big day heading above the deployment grid (rx.heading in
+   deployment.py). Was hardcoded color="#1d4ed8" — replaced with class
+   so the theme controls per-mode. White on dark, ink on light. */
+[data-theme="zds-dark"] .zds-day-heading {
+  color: var(--zds-t1) !important;
+}
+[data-theme="zds-dark"] .zds-day-heading-date {
+  color: var(--zds-t2) !important;
+}
+[data-theme="light"] .zds-day-heading {
+  color: var(--zds-t1) !important;
+}
+[data-theme="light"] .zds-day-heading-date {
+  color: var(--zds-t3) !important;
 }
 
 /* Fill mini-bar track: exactly 28px wide × 3px tall per spec */

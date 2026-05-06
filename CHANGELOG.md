@@ -4,6 +4,17 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-06 — Session zds_phase1b_light_mode (Sonnet)
+
+### Phase 1b — Sun/moon light-mode toggle with LocalStorage persistence
+- **`apps/zds/state.py`** — `theme: str` field changed from session-scoped to `rx.LocalStorage("zds-dark")` for persistence across page reloads and devices.
+- **`apps/zds/components/zds_header.py`** — Theme toggle button added to header with sun/moon icon (lucide-react, 16px), positioned before the optional right-side action. Icon shows "sun" when dark mode active (click to go light), "moon" when light mode active (click to go dark). Button styled to match header chrome with hover effects. On-click handler calls `ZdsState.toggle_theme`.
+- **`assets/zds_dark.css`** — Casino scatter background now `display:none` on light mode (was `opacity:0.06`); light-mode surface kept clean without the dark-mode flourish.
+- **`brijkillian_stack/brijkillian_stack.py`** — No changes; already using `ZdsState.theme` for `data_theme` binding in `_with_zds_chrome`.
+- **Note:** Memory/GLCR pages (`_with_grok`) remain light-mode unconditionally, unaffected by ZDS theme toggle.
+
+---
+
 ## 2026-05-06 — Session zds_handoff_phases_B_thru_F (Sonnet)
 
 ### Phase B — Zone card typography + visual corrections

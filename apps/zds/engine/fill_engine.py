@@ -585,6 +585,16 @@ def parse(ws, ptype):
         last  = str(row[3]).strip() if row[3] else ""
         if not first or first in ("First Name","None"): continue
         if "headcount" in first.lower() or "headcount" in last.lower(): continue
+        # Skip placeholder rows that don't represent real TMs. The schedule
+        # xlsx sometimes has section-header rows like "Grave Shift", "Day
+        # Shift", "PM Shift" that get matched as fake TMs by the auto-stub
+        # logic — and re-created on every run even after manual deletion.
+        # Treat any first/last-name combo that names a shift, group, or
+        # totals row as a non-TM and skip silently.
+        _full = f"{first} {last}".strip().lower()
+        if _full in ("grave shift", "day shift", "pm shift", "swing shift",
+                    "total", "totals", "summary", "subtotal"):
+            continue
         rk = match(first, last)
         if not rk:
             if first not in ("","None"):
@@ -1361,9 +1371,56 @@ for day in DAYS:
     #   All other days: 1st overflow → Support 3
     # Trainees (Seth, Trenidee) and no_sweeper holders are NOT preferred for
     # overflow — they ideally land in canonical slots first.
-    unplaced = [tk for tk in gpool
-                if roster[tk]["display_name"] not in placed
-                and roster[tk]["display_name"] not in TRAINEE_DISPLAY]
+    #
+    # 2026-05-06: Eligibility gate added.  Previously overflow accepted ANY
+    # unplaced grave-pool TM, which let TMs with zero tm_eligibility rows
+    # (auto-stub artifacts, partial imports) flow into Support 3 every
+    # night — Support 3 was filling even when canonical Zone 2/3/6/7/9
+    # were unresolved. The gate requires the TM to have at least one
+    # canonical zone-family eligibility flag set; otherwise they're left
+    # unplaced and surface as NEW_TM_NEEDS_ELIGIBILITY in the audit so
+    # Brian can configure them in the People page.
+    _CANONICAL_ELIG_COLS = (
+        "Zone 1","Zone 2","Zone 3","Zone 4","Zone 5","Zone 6","Zone 7",
+        "Zone 8","Zone 9","Zone 10","Zone 9 SR",
+        "Mens 1 + 2","Mens 6","Mens 7","Mens 8","Mens 10",
+        "Womens 1 + 2","Womens 6","Womens 7","Womens 8","Womens 10",
+        "Admin","Trash 1","Trash 2","MP 1","MP 2",
+    )
+    def _has_any_canonical_elig(rk: str) -> bool:
+        elig_map = roster.get(rk, {}).get("eligibility", {}) or {}
+        return any(elig_map.get(col, False) for col in _CANONICAL_ELIG_COLS)
+
+    unplaced_all = [tk for tk in gpool
+                    if roster[tk]["display_name"] not in placed
+                    and roster[tk]["display_name"] not in TRAINEE_DISPLAY]
+    # Split: overflow-eligible (have at least some canonical elig) vs
+    # un-configurable (zero canonical elig — placeable nowhere).
+    unplaced = [rk for rk in unplaced_all if _has_any_canonical_elig(rk)]
+    nowhere  = [rk for rk in unplaced_all if not _has_any_canonical_elig(rk)]
+
+    for rk in nowhere:
+        dn_no = roster[rk]["display_name"]
+        # Differentiate two cases:
+        #   • has_explicit_elig=False → no tm_eligibility rows at all →
+        #     supervisor hasn't set them up yet → loud warning so it
+        #     surfaces in the audit and gets configured.
+        #   • has_explicit_elig=True  → rows exist but all False →
+        #     supervisor explicitly marked them ineligible (e.g. day-shift
+        #     porters who occasionally pick up grave hours but shouldn't
+        #     be auto-placed) → silent. They're left unplaced as intended.
+        if not roster[rk].get("has_explicit_elig", False):
+            audit_items.append({
+                "severity": "warning",
+                "type":     "NEW_TM_NEEDS_ELIGIBILITY",
+                "tm_name":  dn_no,
+                "detail":   (
+                    f"{day} {d}: {dn_no} on schedule but has no "
+                    f"eligibility rows yet — left unplaced. Configure "
+                    f"in the People page to make them placeable."
+                ),
+            })
+
     if unplaced:
         overflow_targets = ["Z9SRBuddy", "Support3"] if day in BUDDY_DAYS else ["Support3"]
         for target_slot in overflow_targets:

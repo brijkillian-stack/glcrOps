@@ -943,6 +943,13 @@ def parse_daily_pools(
                 continue
             if "headcount" in first.lower():
                 continue
+            # Skip placeholder/section-header rows ("Grave Shift", "Day Shift",
+            # etc.) — same filter as fill_engine.py. Without it the auto-stub
+            # logic creates a fake TM every run.
+            _full = f"{first} {last}".strip().lower()
+            if _full in ("grave shift", "day shift", "pm shift", "swing shift",
+                         "total", "totals", "summary", "subtotal"):
+                continue
             # Phase Q.5 — alias-aware resolver (Stephen → Steve via 'stephen' alias)
             dn = resolve_entity_display_name(first, last, entity_lookup)
             if not dn:

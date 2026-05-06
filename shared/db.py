@@ -2454,6 +2454,13 @@ def get_engine_roster_from_db() -> "tuple[dict, dict]":
             for col in _ALL_ELIG_COLS:
                 tid_map.setdefault(col, False)
 
+        # Track which TM ids have explicit tm_eligibility rows (any value)
+        # so the engine can differentiate "explicitly ineligible" (all-False
+        # rows present — supervisor decided) from "missing config" (no rows
+        # at all — needs People-page setup). Used by fill_engine.py to
+        # decide whether to emit the NEW_TM_NEEDS_ELIGIBILITY warning.
+        tm_ids_with_rows = {row["tm_id"] for row in elig_rows}
+
         roster: dict = {}
         fn_lookup: dict = {}
         for p in profiles:
@@ -2471,6 +2478,7 @@ def get_engine_roster_from_db() -> "tuple[dict, dict]":
                 "pool":        pool,
                 "rank":        rank,
                 "eligibility": elig_by_tm.get(p["tm_id"], {}),
+                "has_explicit_elig": p["tm_id"] in tm_ids_with_rows,
             }
             fn_key = key.split()[0] if key else ""
             if fn_key:
