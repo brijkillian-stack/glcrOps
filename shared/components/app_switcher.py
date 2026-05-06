@@ -30,6 +30,6 @@ def app_switcher() -> rx.Component:
     is_zds = AppState.active_route.contains("/zds")
     return rx.el.div(
         _pill("GLCR", "/", ~is_zds),
-        _pill("ZDS",  "/zds/", is_zds),
+        _pill("ZDS",  "/zds", is_zds),
         class_name="app-switcher",
     )

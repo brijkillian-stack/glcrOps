@@ -637,7 +637,7 @@ def schedule_body() -> rx.Component:
                     rx.icon("home", size=13), "Go to Home",
                     variant="soft", size="2",
                 ),
-                href="/zds/",
+                href="/zds",
             ),
             align="center", gap="12px", padding="40px 0",
         ),

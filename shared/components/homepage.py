@@ -85,7 +85,7 @@ def home_page() -> rx.Component:
                     accent_class="home-card-shift",
                 ),
                 _app_card(
-                    href="/zds/",
+                    href="/zds",
                     name="ZDS",
                     tagline="Zone Deployment — weekly schedules, fill engine, deployment book.",
                     glyph="▦",

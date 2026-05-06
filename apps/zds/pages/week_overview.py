@@ -195,7 +195,7 @@ def week_overview() -> rx.Component:
             app_switcher(),
             rx.link(
                 rx.icon("arrow-left", size=16),
-                href="/zds/",
+                href="/zds",
                 color="#6b7280",
                 _hover={"color": "#111827"},
             ),

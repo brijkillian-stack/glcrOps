@@ -85,7 +85,7 @@ class ScheduleEditorState(rx.State):
     @rx.var
     def back_url(self) -> str:
         """Where the back arrow navigates — week overview for this week."""
-        return f"/zds/week/{self.current_week_id}" if self.current_week_id else "/zds/"
+        return f"/zds/week/{self.current_week_id}" if self.current_week_id else "/zds"
 
     @rx.var
     def filtered_rows(self) -> list[ScheduleRow]:
