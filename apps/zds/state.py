@@ -29,19 +29,19 @@ from .types import (
     ZoneSlot,
 )
 
-# Print-cache resolution:
-#   - Dev (`reflex run --env dev`): Vite serves from .web/public/, so we write
-#     there and the URL /print_cache/<file> hits Vite.
-#   - Prod / Render (Caddy + static export): Caddy serves from .web/build/client/,
-#     so we write the print HTML there instead. Same URL path, different dir.
+# Print-cache resolution (2026-05-06 — fixed 404):
+# Previously we tried to land print HTML inside Reflex's build output
+# (.web/build/client/print_cache/) so Caddy's catch-all file_server would
+# serve it. That path depended on `reflex export` succeeding AND on Caddy's
+# layout matching, which broke in production: when the export failed the
+# fallback path (.web/public/) wasn't served at all → 404.
+#
+# Stable fix: write to <project_root>/print_cache and add an explicit
+# Caddyfile handler that serves /print_cache/* from /app/print_cache/.
+# Decouples the print output from Reflex's build dir entirely.
 # state.py lives at apps/zds/state.py → up 3 to reach project root.
-_PROJ_ROOT = Path(__file__).parent.parent.parent
-_PROD_STATIC = _PROJ_ROOT / ".web" / "build" / "client"
-_PRINT_CACHE = (
-    _PROD_STATIC / "print_cache"
-    if _PROD_STATIC.exists()
-    else _PROJ_ROOT / ".web" / "public" / "print_cache"
-)
+_PROJ_ROOT   = Path(__file__).parent.parent.parent
+_PRINT_CACHE = _PROJ_ROOT / "print_cache"
 
 
 def _enrich_nights(nights: list[dict]) -> list[dict]:

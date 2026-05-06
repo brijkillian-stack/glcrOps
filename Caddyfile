@@ -38,6 +38,16 @@
         reverse_proxy localhost:8000
     }
 
+    # Print cache (2026-05-06 — fixes Print Day 404).
+    # apps/zds/state.py writes per-night and per-week deployment HTML to
+    # /app/print_cache/. Decoupled from Reflex's .web/build/client/ so it
+    # survives reflex-export hiccups and doesn't depend on the static-export
+    # path layout staying stable across Reflex versions.
+    handle /print_cache/* {
+        root * /app
+        file_server
+    }
+
     # Static frontend (pre-exported).
     handle {
         root * /app/.web/build/client

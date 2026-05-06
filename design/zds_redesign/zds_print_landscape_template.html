@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zone Deployment — Friday May 1, 2026 (Landscape)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Variables ── */
+:root {
+  --safe: 0.32in;
+  --page-w: 11in;
+  --page-h: 8.5in;
+
+  --ink-900: #0b1a2a;
+  --ink-700: #2c3e54;
+  --ink-500: #5a6b7d;
+  --ink-300: #94a2b1;
+  --ink-200: #c8d3dc;
+  --ink-100: #eef1f4;
+  --gold:    #c9a96e;
+  --gold-lt: #e8d5b4;
+  --hairline: rgba(11,26,42,0.10);
+  --hairline-strong: rgba(11,26,42,0.20);
+
+  --font: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+}
+
+html, body {
+  margin: 0; padding: 0;
+  background: #d0d4d8;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+body { display: flex; flex-direction: column; align-items: center; padding: 32px 24px; gap: 28px; }
+
+/* ── Page Shell ── */
+.page {
+  width: var(--page-w);
+  height: var(--page-h);
+  background: #fff;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  font-feature-settings: "tnum","ss01";
+  position: relative;
+}
+
+/* ── MASTHEAD ── */
+.mast {
+  padding: 14px var(--safe) 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 20px;
+  align-items: end;
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+}
+.mast::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 3px;
+  background: var(--day-color);
+}
+
+.mast-day { font-weight: 800; font-size: 72px; line-height: 0.82; letter-spacing: -0.05em; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.mast-day.outline { color: #fff; -webkit-text-stroke: 2.5px var(--ink-900); }
+
+.mast-meta { display: grid; gap: 4px; padding-bottom: 8px; }
+.day-name  { font-weight: 700; font-size: 28px; letter-spacing: -0.02em; color: var(--day-color); line-height: 1; }
+.month-str { font-weight: 400; font-size: 12px; color: var(--ink-500); }
+.status-row { display: flex; gap: 16px; margin-top: 5px; align-items: center; }
+.stat { display: inline-flex; align-items: center; gap: 5px; }
+.stat .num { font-weight: 700; font-size: 13px; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.stat .lbl { font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); }
+
+.break-bar { display: inline-flex; align-items: center; gap: 5px; }
+.break-bar .lbl { font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); margin-right: 2px; }
+.break-dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.break-dot.g1 { background: #1a2332; color: #fff; }
+.break-dot.g2 { background: #5a6b7d; color: #fff; }
+.break-dot.g3 { background: #c8d3dc; color: var(--ink-900); }
+
+.mast-right { display: grid; gap: 6px; padding-bottom: 8px; text-align: right; justify-items: end; }
+.shift-label { font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-700); }
+.week-dots { display: inline-flex; gap: 2px; }
+.week-dot { width: 22px; height: 22px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; color: var(--ink-300); font-variant-numeric: tabular-nums; }
+.week-dot.cur { background: var(--day-color); color: #fff; font-weight: 700; }
+.group-key { display: inline-flex; gap: 5px; align-items: center; font-size: 9px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); }
+.gp { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10px; }
+.gp.g1 { background: #1a2332; color: #fff; }
+.gp.g2 { background: #5a6b7d; color: #fff; }
+.gp.g3 { background: #c8d3dc; color: var(--ink-900); }
+
+/* ── BODY ── */
+.body { padding: 8px var(--safe) 6px; display: grid; grid-template-rows: minmax(0,1.4fr) minmax(0,0.85fr) auto auto; gap: 7px; min-height: 0; }
+
+/* ── SECTION LABEL ── */
+.section-lbl {
+  font-weight: 600; font-size: 10px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink-500);
+  margin: 0 0 6px 0;
+  display: flex; align-items: center; gap: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--gold-lt);
+}
+.section-lbl .meta { margin-left: auto; font-weight: 400; font-size: 9px; color: var(--ink-300); }
+.section-lbl svg { width: 12px; height: 12px; color: var(--ink-300); }
+
+/* ── ZONE GRID ── */
+.body > section:first-of-type { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.body > section:nth-of-type(2) { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.zones-grid { display: grid; grid-template-columns: repeat(5,1fr); grid-template-rows: 1fr 1fr; gap: 6px; min-height: 0; }
+
+/* ── ZONE CARD ── */
+.zone-card {
+  background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
+  padding: 0 10px 8px; display: grid; grid-template-rows: auto auto 1fr;
+  gap: 2px; position: relative; overflow: hidden;
+}
+.zone-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--card-color); }
+.zone-card .zone-meta { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 8px; }
+.zone-card .zone-num { font-weight: 700; font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--card-color); }
+.zone-card .gp-badge { width: 16px; height: 16px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 9.5px; }
+.zone-card .zone-name { font-weight: 700; font-size: 26px; letter-spacing: -0.03em; line-height: 1; color: var(--ink-900); }
+.zone-card .zone-name.unfilled { color: var(--ink-200); font-weight: 400; font-style: italic; }
+.zone-tasks { list-style: none; padding: 0; border-top: 1px solid var(--hairline); padding-top: 4px; margin-top: 3px; }
+.zone-tasks li { font-size: 9.5px; color: var(--ink-500); display: flex; align-items: center; gap: 4px; line-height: 1.25; padding: 1px 0; }
+.zone-tasks li::before { content: '·'; color: var(--card-color); font-size: 10px; flex-shrink: 0; opacity: 0.7; }
+
+/* ── RR GRID ── */
+.rr-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 7px; min-height: 0; align-items: start; }
+.rr-card { background: #fff; border: 1px solid var(--hairline); border-radius: 6px; position: relative; overflow: hidden; padding: 6px 10px 7px; }
+.rr-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--card-color); }
+.rr-head { font-weight: 700; font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--card-color); margin-top: 3px; margin-bottom: 6px; }
+.rr-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rr-side .who { font-size: 8.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-300); margin-bottom: 2px; }
+.rr-side .name { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; color: var(--ink-900); line-height: 1; }
+.rr-side .name.unfilled { color: var(--ink-200); font-weight: 400; font-style: italic; }
+.rr-tasks { list-style: none; border-top: 1px solid var(--hairline); padding: 4px 0 0; margin-top: 5px; }
+.rr-tasks li { font-size: 9.5px; color: var(--ink-500); padding: 1px 0; }
+.rr-tasks li::before { content: '· '; color: var(--ink-300); }
+
+/* ── AUX STRIP ── */
+.aux-strip { display: grid; grid-template-columns: repeat(6,1fr); gap: 7px; }
+.aux-card { background: #fff; border: 1px solid var(--hairline); border-radius: 6px; padding: 6px 9px 7px; position: relative; overflow: hidden; min-height: 48px; }
+.aux-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--card-color); }
+.aux-label { font-weight: 700; font-size: 9px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--card-color); margin-top: 3px; margin-bottom: 3px; }
+.aux-name { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; color: var(--ink-900); line-height: 1; }
+.aux-name.unfilled { color: var(--ink-200); font-weight: 400; font-style: italic; }
+
+/* ── OVERLAPS ── */
+.overlaps { display: grid; gap: 5px; }
+.overlap-row { display: grid; grid-template-columns: 70px 1fr; gap: 12px; align-items: start; }
+.overlap-time { font-weight: 700; font-size: 11.5px; color: var(--ink-900); line-height: 1.2; padding-top: 3px; }
+.overlap-time .kind { display: block; font-size: 9px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); margin-top: 1px; }
+.overlap-mini-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 5px; }
+.overlap-mini { background: #fff; border: 1px solid var(--hairline); border-radius: 5px; padding: 4px 8px; min-height: 30px; }
+.overlap-mini .om-name { font-weight: 700; font-size: 12px; letter-spacing: -0.01em; color: var(--ink-900); line-height: 1.1; }
+.overlap-mini .om-name.unfilled { color: var(--ink-200); font-weight: 400; font-style: italic; }
+.overlap-mini .om-task { font-size: 9.5px; color: var(--ink-500); line-height: 1.25; }
+
+/* ── FOOTER ── */
+.page-foot {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  gap: 14px; padding: 6px var(--safe) 7px;
+  position: relative; border-top: 1px solid var(--hairline);
+}
+.page-foot::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--day-color); }
+.foot-mark { display: inline-flex; align-items: center; gap: 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-500); }
+.foot-mark .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--day-color); }
+.foot-center { font-size: 9.5px; color: var(--ink-500); text-align: center; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.foot-center .now { color: var(--ink-900); font-weight: 700; }
+.foot-pn { font-size: 9.5px; font-weight: 700; letter-spacing: 0.10em; color: var(--ink-500); font-variant-numeric: tabular-nums; }
+.foot-pn .cur { color: var(--ink-900); }
+
+/* ── BREAK SHEET ── */
+.break-mast { padding: 14px var(--safe) 10px; display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: end; border-bottom: 1px solid var(--hairline); position: relative; }
+.break-mast::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--day-color); }
+
+.break-body { padding: 10px var(--safe) 10px; display: grid; grid-template-rows: auto 1fr; gap: 14px; min-height: 0; overflow: hidden; }
+
+/* Break waves */
+.break-cols { display: grid; grid-template-columns: repeat(3,1fr); gap: 22px; min-height: 0; }
+.break-col { border-top: 3px solid var(--col-color); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.break-col-head { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 10px; margin-bottom: 4px; }
+.break-col-num { font-weight: 800; font-size: 68px; line-height: 0.85; letter-spacing: -0.05em; color: var(--col-color); font-variant-numeric: tabular-nums; }
+.break-col-meta .break-lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-700); line-height: 1; }
+.break-col-meta .break-count { font-size: 10px; color: var(--ink-400, #7a8fa8); margin-top: 2px; }
+
+.break-section-div { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-300); margin: 6px 0 2px; display: flex; align-items: center; gap: 6px; }
+.break-section-div::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
+
+.break-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 5px 8px 6px; border-radius: 4px; background: #fff; border: 1px solid var(--hairline); position: relative; overflow: hidden; margin-bottom: 3px; }
+.break-row::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--row-color, var(--ink-200)); }
+.break-row .br-name { font-weight: 700; font-size: 13px; letter-spacing: -0.01em; color: var(--ink-900); line-height: 1; }
+.break-row .br-assign { font-size: 9.5px; color: var(--ink-500); margin-top: 1px; line-height: 1.2; }
+.break-row .br-slot { font-weight: 700; font-size: 9px; letter-spacing: 0.10em; text-transform: uppercase; white-space: nowrap; color: var(--row-color, var(--ink-300)); }
+
+/* Overlaps section */
+.ol-section { border-top: 1px solid var(--hairline); padding-top: 10px; }
+.ol-label { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-500); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--gold-lt); }
+.ol-label .meta { margin-left: auto; font-weight: 400; color: var(--ink-300); }
+.ol-row { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: start; margin-bottom: 6px; }
+.ol-time { font-weight: 700; font-size: 12px; color: var(--ink-900); line-height: 1.2; }
+.ol-time .kind { display: block; font-size: 9px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); margin-top: 2px; }
+.ol-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 7px; }
+.ol-cell { background: #fff; border: 1px solid var(--hairline); border-radius: 4px; padding: 4px 8px; }
+.ol-cell .ol-name { font-weight: 700; font-size: 12px; color: var(--ink-900); line-height: 1.1; }
+.ol-cell .ol-name.unfilled { color: var(--ink-200); font-weight: 400; font-style: italic; }
+.ol-cell .ol-task { font-size: 9.5px; color: var(--ink-500); line-height: 1.2; }
+
+
+/* Casino scatter background */
+.page { position: relative; }
+.casino-scatter {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.casino-scatter svg {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 100%;
+  height: auto;
+}
+.page > *:not(.casino-scatter) { position: relative; z-index: 1; }
+
+/* PRINT */
+@media print {
+  *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  html, body { background: #fff; padding: 0; margin: 0; gap: 0; }
+  @page { size: 11in 8.5in landscape; margin: 0; }
+  .page { box-shadow: none; page-break-after: always; }
+  body { display: block; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 1 — DEPLOYMENT SHEET
+═══════════════════════════════════════════ -->
+<article class="page" style="--day-color:#ef4444;">
+  <div class="casino-scatter" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 816" width="1056" height="816">
+  <defs>
+    
+    <path id="heart" d="M0,-10 C0,-18 -12,-20 -12,-10 C-12,0 0,10 0,10 C0,10 12,0 12,-10 C12,-20 0,-18 0,-10z"></path>
+    
+    <path id="diamond" d="M0,-14 L10,0 L0,14 L-10,0z"></path>
+    
+    <path id="club" d="M0,12 L-5,12 L-3,6 C-8,5 -10,0 -7,-4 C-4,-8 2,-8 4,-5 C4,-9 7,-12 10,-10 C13,-8 13,-3 10,0 C13,3 13,8 10,10 C7,12 3,10 2,7 C1,10 -1,12 0,12z M-6,12 L6,12"></path>
+    
+    <path id="spade" d="M0,-12 C-8,-4 -12,4 -8,8 C-5,11 -2,10 0,8 C-1,11 -3,13 -5,13 L5,13 C3,13 1,11 0,8 C2,10 5,11 8,8 C12,4 8,-4 0,-12z"></path>
+  </defs>
+
+  
+
+  
+  <g transform="translate(58,720) rotate(-15)">
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#94a2b1" opacity="0.35"></path>
+  </g>
+
+  
+  <g transform="translate(38,810) rotate(10) scale(0.6)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.25"></path>
+  </g>
+
+  
+  <g transform="translate(168,760) rotate(-3)">
+    <rect x="-26" y="-36" width="52" height="72" rx="5" ry="5" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-20" y="-22" font-family="Barlow,sans-serif" font-size="13" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <path d="M0,-4 C-5,-4 -6,0 -3,3 C-1,5 1,5 3,3 C6,0 5,-4 0,-4z" fill="#30b2ff" opacity="0.5" transform="translate(0,16)"></path>
+  </g>
+
+  
+  <g transform="translate(298,793) rotate(5) scale(0.8)">
+    <circle cx="0" cy="-6" r="6" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="-6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <rect x="-2" y="4" width="4" height="8" fill="#30b2ff" opacity="0.25"></rect>
+    <rect x="-6" y="11" width="12" height="2" fill="#30b2ff" opacity="0.25"></rect>
+  </g>
+
+  
+  <g transform="translate(460,760) rotate(2)">
+    <rect x="-22" y="-32" width="44" height="64" rx="5" ry="5" fill="white" stroke="#94a2b1" stroke-width="1.5" opacity="0.40"></rect>
+    <text x="-15" y="-18" font-family="Barlow,sans-serif" font-size="12" font-weight="600" fill="#94a2b1" opacity="0.40">A</text>
+  </g>
+
+  
+
+  
+  <g transform="translate(430,700) rotate(-8) scale(2.8)">
+    <circle cx="0" cy="-8" r="8" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="-8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <rect x="-3" y="7" width="6" height="10" fill="#e0cbb6" opacity="0.18"></rect>
+    <rect x="-8" y="16" width="16" height="2.5" fill="#e0cbb6" opacity="0.18"></rect>
+  </g>
+
+  
+  <g transform="translate(348,760) rotate(-20) scale(1.6)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(510,756) rotate(12) scale(1.2)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#94a2b1" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(602,640) rotate(22) scale(0.9)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(566,712) rotate(8) scale(1.4)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(584,788) rotate(-5) scale(1.3)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#e0cbb6" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(512,668)">
+    <circle cx="0" cy="0" r="28" fill="none" stroke="#94a2b1" stroke-width="2" stroke-dasharray="6 5" opacity="0.18"></circle>
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#94a2b1" stroke-width="1" opacity="0.14"></circle>
+    <circle cx="0" cy="0" r="8" fill="none" stroke="#94a2b1" stroke-width="1.5" opacity="0.14"></circle>
+  </g>
+
+  
+
+  
+  <g transform="translate(756,680) rotate(18)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.45"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.45">A</text>
+    
+    <g transform="translate(8, 10)" opacity="0.4">
+      <circle cx="0" cy="-8" r="8" fill="#30b2ff"></circle>
+      <circle cx="-8" cy="0" r="7" fill="#30b2ff"></circle>
+      <circle cx="8" cy="0" r="7" fill="#30b2ff"></circle>
+      <rect x="-3" y="7" width="6" height="9" fill="#30b2ff"></rect>
+      <rect x="-7" y="15" width="14" height="2.5" fill="#30b2ff"></rect>
+    </g>
+  </g>
+
+  
+  <g transform="translate(706,690) rotate(-12)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <text x="-34" y="-22" font-family="Barlow,sans-serif" font-size="11" font-weight="600" fill="#30b2ff" opacity="0.55">♣</text>
+    
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#30b2ff" opacity="0.30" transform="translate(0,14)"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(840,660) rotate(-10) scale(1.5)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#30b2ff" opacity="0.30"></path>
+  </g>
+
+  
+  <g transform="translate(920,670) rotate(8) scale(1.2)">
+    <path d="M0,-18 L14,0 L0,18 L-14,0z" fill="#e0cbb6" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(920,748) rotate(-5) scale(1.1)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#94a2b1" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(1010,790) scale(2.2)">
+    <circle cx="0" cy="-9" r="9" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="-9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <rect x="-3.5" y="8" width="7" height="11" fill="#30b2ff" opacity="0.28"></rect>
+    <rect x="-9" y="18" width="18" height="3" fill="#30b2ff" opacity="0.28"></rect>
+  </g>
+
+  
+  <g transform="translate(1040,710) rotate(-20) scale(0.9)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.25"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(268,596) rotate(25) scale(0.9)">
+    <path d="M0,10 C0,10 -11,2 -11,-4 C-11,-9 -5,-11 0,-6 C5,-11 11,-9 11,-4 C11,2 0,10 0,10z" fill="#e0cbb6" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(630,598) rotate(-30) scale(0.8)">
+    <path d="M0,-14 L10,0 L0,14 L-10,0z" fill="#94a2b1" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(176,656) rotate(15) scale(1.1)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.16"></path>
+  </g>
+
+</svg></div>
+
+  <header class="mast">
+    <div class="mast-day">1</div>
+    <div class="mast-meta">
+      <div class="day-name">Friday</div>
+      <div class="month-str">May 2026 · Day 5 of 7</div>
+      <div class="status-row">
+        <span class="break-bar">
+          <span class="lbl">Breaks</span>
+          <span class="break-dot g1">7</span>
+          <span class="break-dot g2">8</span>
+          <span class="break-dot g3">6</span>
+        </span>
+        <span class="stat"><span class="num">21</span><span class="lbl">Filled</span></span>
+        <span class="stat"><span class="num">6</span><span class="lbl">Open</span></span>
+      </div>
+    </div>
+    <div class="mast-right">
+      <div class="shift-label">Grave · 11PM – 7AM</div>
+      <div class="week-dots">
+        <div class="week-dot">F</div>
+        <div class="week-dot">S</div>
+        <div class="week-dot">S</div>
+        <div class="week-dot">M</div>
+        <div class="week-dot cur">T</div>
+        <div class="week-dot">W</div>
+        <div class="week-dot">T</div>
+      </div>
+      <div class="group-key">
+        Group <span class="gp g1">1</span><span class="gp g2">2</span><span class="gp g3">3</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- ZONES -->
+    <section>
+      <h2 class="section-lbl">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+        Zones <span class="meta">10 / 10 staffed</span>
+      </h2>
+      <div class="zones-grid">
+
+        <div class="zone-card" style="--card-color:#d97706;">
+          <div class="zone-meta"><span class="zone-num">Zone 1</span><span class="gp-badge g1">1</span></div>
+          <div class="zone-name">Nikki</div>
+          <ul class="zone-tasks"><li>Outdoor Smoking</li><li>Elevators &amp; Stairwells</li><li>Family Restroom</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#7c3aed;">
+          <div class="zone-meta"><span class="zone-num">Zone 2</span><span class="gp-badge g2">2</span></div>
+          <div class="zone-name">Gary</div>
+          <ul class="zone-tasks"><li>Lobby Trash Pull</li><li>Lobby Restrooms</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#dc2626;">
+          <div class="zone-meta"><span class="zone-num">Zone 3</span><span class="gp-badge g3">3</span></div>
+          <div class="zone-name">Liz</div>
+          <ul class="zone-tasks"><li style="font-style:italic; color:#94a2b1;">Support as needed</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#dc2626;">
+          <div class="zone-meta"><span class="zone-num">Zone 4</span><span class="gp-badge g1">1</span></div>
+          <div class="zone-name">Amanda</div>
+          <ul class="zone-tasks"><li>Poker Room Drink Trays</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#dc2626;">
+          <div class="zone-meta"><span class="zone-num">Zone 5</span><span class="gp-badge g2">2</span></div>
+          <div class="zone-name">Carter</div>
+          <ul class="zone-tasks"><li>High Limit Table Games</li><li>Indoor TM Smoking Room</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#2563eb;">
+          <div class="zone-meta"><span class="zone-num">Zone 6</span><span class="gp-badge g3">3</span></div>
+          <div class="zone-name">Jessica</div>
+          <ul class="zone-tasks"><li>Outdoor Smoking Area</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#ec4899;">
+          <div class="zone-meta"><span class="zone-num">Zone 7</span><span class="gp-badge g1">1</span></div>
+          <div class="zone-name">Kaiden</div>
+          <ul class="zone-tasks"><li>Smoking Room</li><li>Pit 1 &amp; 2</li><li>South Door Glass</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#92400e;">
+          <div class="zone-meta"><span class="zone-num">Zone 8</span><span class="gp-badge g2">2</span></div>
+          <div class="zone-name">Drew</div>
+          <ul class="zone-tasks"><li>Restrooms</li><li>Pit 3</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#dc2626;">
+          <div class="zone-meta"><span class="zone-num">Zone 9</span><span class="gp-badge g3">3</span></div>
+          <div class="zone-name">Peter</div>
+          <ul class="zone-tasks"><li>Assist with Smoking Room</li><li>Social Bar Tables</li></ul>
+        </div>
+
+        <div class="zone-card" style="--card-color:#16a34a;">
+          <div class="zone-meta"><span class="zone-num">Zone 10</span><span class="gp-badge g2">2</span></div>
+          <div class="zone-name">Jeff</div>
+          <ul class="zone-tasks"><li>High Limit Slots</li><li>East Door Glass</li><li>Outdoor Smoking Area</li><li>Pit 4</li></ul>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- RESTROOMS -->
+    <section>
+      <h2 class="section-lbl">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2c1 1.6 3 3.6 3 6.5a3 3 0 0 1-6 0C5 5.6 7 3.6 8 2z"/></svg>
+        Restrooms <span class="meta">10 / 10 staffed</span>
+      </h2>
+      <div class="rr-grid">
+
+        <div class="rr-card" style="--card-color:#d97706;">
+          <div class="rr-head">RR 1 + 2</div>
+          <div class="rr-split">
+            <div class="rr-side"><div class="who">Men's</div><div class="name">Mike S</div></div>
+            <div class="rr-side"><div class="who">Women's</div><div class="name">Abby</div></div>
+          </div>
+          <ul class="rr-tasks"><li>Buffet RR</li><li>Family RR</li></ul>
+        </div>
+
+        <div class="rr-card" style="--card-color:#2563eb;">
+          <div class="rr-head">RR 6</div>
+          <div class="rr-split">
+            <div class="rr-side"><div class="who">Men's</div><div class="name">Jack</div></div>
+            <div class="rr-side"><div class="who">Women's</div><div class="name">Sherry</div></div>
+          </div>
+          <ul class="rr-tasks"><li>131 Restroom</li></ul>
+        </div>
+
+        <div class="rr-card" style="--card-color:#ec4899;">
+          <div class="rr-head">RR 7</div>
+          <div class="rr-split">
+            <div class="rr-side"><div class="who">Men's</div><div class="name">Jared</div></div>
+            <div class="rr-side"><div class="who">Women's</div><div class="name">Jamie</div></div>
+          </div>
+          <ul class="rr-tasks"><li>Assist with Smoking Room</li></ul>
+        </div>
+
+        <div class="rr-card" style="--card-color:#64748b;">
+          <div class="rr-head">RR 8</div>
+          <div class="rr-split">
+            <div class="rr-side"><div class="who">Men's</div><div class="name">Alec</div></div>
+            <div class="rr-side"><div class="who">Women's</div><div class="name">Joy</div></div>
+          </div>
+          <ul class="rr-tasks"><li>Family RR</li><li>TDR Restroom</li><li>TMBR Locker Room</li></ul>
+        </div>
+
+        <div class="rr-card" style="--card-color:#16a34a;">
+          <div class="rr-head">RR 10</div>
+          <div class="rr-split">
+            <div class="rr-side"><div class="who">Men's</div><div class="name">Steve</div></div>
+            <div class="rr-side"><div class="who">Women's</div><div class="name">Tawnya</div></div>
+          </div>
+          <ul class="rr-tasks"><li>CBK Kitchen</li></ul>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- AUX -->
+    <section>
+      <h2 class="section-lbl">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M2.5 13c.6-2.2 2-3.5 3.5-3.5s2.9 1.3 3.5 3.5"/><path d="M9.5 13c.4-1.6 1.4-2.5 2.5-2.5s2.1.9 2.5 2.5"/></svg>
+        Auxiliary <span class="meta">5 / 6 staffed</span>
+      </h2>
+      <div class="aux-strip">
+        <div class="aux-card" style="--card-color:#dc2626;"><div class="aux-label">Z9 SR</div><div class="aux-name">Silvia</div></div>
+        <div class="aux-card" style="--card-color:#7c3aed;"><div class="aux-label">Admin</div><div class="aux-name">Sam</div></div>
+        <div class="aux-card" style="--card-color:#d97706;"><div class="aux-label">Trash 1</div><div class="aux-name">Robby</div></div>
+        <div class="aux-card" style="--card-color:#dc2626;"><div class="aux-label">Trash 2</div><div class="aux-name">Mike W</div></div>
+        <div class="aux-card" style="--card-color:#64748b;"><div class="aux-label">MP 1</div><div class="aux-name">Trenidee</div></div>
+        <div class="aux-card" style="--card-color:#64748b;"><div class="aux-label">MP 2</div><div class="aux-name unfilled">Unfilled</div></div>
+      </div>
+    </section>
+
+    <!-- OVERLAPS -->
+    <section class="overlaps">
+      <h2 class="section-lbl">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3v4l-2 2 2 2v4"/><path d="M12 3v4l2 2-2 2v4"/><path d="M4 9h8"/></svg>
+        Overlaps <span class="meta">8 / 12 staffed</span>
+      </h2>
+      <div class="overlap-row">
+        <div class="overlap-time">11p – 1a<span class="kind">Late Evening</span></div>
+        <div class="overlap-mini-grid">
+          <div class="overlap-mini"><div class="om-name">Missy</div><div class="om-task">Vacuum, B&amp;G</div></div>
+          <div class="overlap-mini"><div class="om-name">Polly</div><div class="om-task">Glass, Trash</div></div>
+          <div class="overlap-mini"><div class="om-name">Becca</div><div class="om-task">Tables, RR, B&amp;G</div></div>
+          <div class="overlap-mini"><div class="om-name unfilled">Unfilled</div><div class="om-task">Trash</div></div>
+          <div class="overlap-mini"><div class="om-name unfilled">Unfilled</div><div class="om-task">Trash</div></div>
+          <div class="overlap-mini"><div class="om-name unfilled">Unfilled</div><div class="om-task">Trash</div></div>
+        </div>
+      </div>
+      <div class="overlap-row">
+        <div class="overlap-time">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="overlap-mini-grid">
+          <div class="overlap-mini"><div class="om-name">Char</div><div class="om-task">CBK / Shkodé</div></div>
+          <div class="overlap-mini"><div class="om-name">ChyAnn</div><div class="om-task">CBK / Shkodé RR</div></div>
+          <div class="overlap-mini"><div class="om-name">Eric</div><div class="om-task">Hotel Offices</div></div>
+          <div class="overlap-mini"><div class="om-name">Mike</div><div class="om-task">Sandhill / Lobby Bar</div></div>
+          <div class="overlap-mini"><div class="om-name">Tiffany</div><div class="om-task">131 / CBK Office</div></div>
+          <div class="overlap-mini"><div class="om-name unfilled">Unfilled</div><div class="om-task">Trash</div></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="page-foot">
+    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="foot-center"><span class="now">Friday</span> · May 1, 2026 · Zone Deployment</span>
+    <span class="foot-pn"><span class="cur">1</span> / 2</span>
+  </footer>
+
+</article>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 2 — BREAK SHEET
+═══════════════════════════════════════════ -->
+<article class="page" style="--day-color:#ef4444;">
+  <div class="casino-scatter" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 816" width="1056" height="816">
+  <defs>
+    
+    <path id="heart" d="M0,-10 C0,-18 -12,-20 -12,-10 C-12,0 0,10 0,10 C0,10 12,0 12,-10 C12,-20 0,-18 0,-10z"></path>
+    
+    <path id="diamond" d="M0,-14 L10,0 L0,14 L-10,0z"></path>
+    
+    <path id="club" d="M0,12 L-5,12 L-3,6 C-8,5 -10,0 -7,-4 C-4,-8 2,-8 4,-5 C4,-9 7,-12 10,-10 C13,-8 13,-3 10,0 C13,3 13,8 10,10 C7,12 3,10 2,7 C1,10 -1,12 0,12z M-6,12 L6,12"></path>
+    
+    <path id="spade" d="M0,-12 C-8,-4 -12,4 -8,8 C-5,11 -2,10 0,8 C-1,11 -3,13 -5,13 L5,13 C3,13 1,11 0,8 C2,10 5,11 8,8 C12,4 8,-4 0,-12z"></path>
+  </defs>
+
+  
+
+  
+  <g transform="translate(58,720) rotate(-15)">
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#94a2b1" opacity="0.35"></path>
+  </g>
+
+  
+  <g transform="translate(38,810) rotate(10) scale(0.6)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.25"></path>
+  </g>
+
+  
+  <g transform="translate(168,760) rotate(-3)">
+    <rect x="-26" y="-36" width="52" height="72" rx="5" ry="5" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-20" y="-22" font-family="Barlow,sans-serif" font-size="13" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <path d="M0,-4 C-5,-4 -6,0 -3,3 C-1,5 1,5 3,3 C6,0 5,-4 0,-4z" fill="#30b2ff" opacity="0.5" transform="translate(0,16)"></path>
+  </g>
+
+  
+  <g transform="translate(298,793) rotate(5) scale(0.8)">
+    <circle cx="0" cy="-6" r="6" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="-6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <rect x="-2" y="4" width="4" height="8" fill="#30b2ff" opacity="0.25"></rect>
+    <rect x="-6" y="11" width="12" height="2" fill="#30b2ff" opacity="0.25"></rect>
+  </g>
+
+  
+  <g transform="translate(460,760) rotate(2)">
+    <rect x="-22" y="-32" width="44" height="64" rx="5" ry="5" fill="white" stroke="#94a2b1" stroke-width="1.5" opacity="0.40"></rect>
+    <text x="-15" y="-18" font-family="Barlow,sans-serif" font-size="12" font-weight="600" fill="#94a2b1" opacity="0.40">A</text>
+  </g>
+
+  
+
+  
+  <g transform="translate(430,700) rotate(-8) scale(2.8)">
+    <circle cx="0" cy="-8" r="8" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="-8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <rect x="-3" y="7" width="6" height="10" fill="#e0cbb6" opacity="0.18"></rect>
+    <rect x="-8" y="16" width="16" height="2.5" fill="#e0cbb6" opacity="0.18"></rect>
+  </g>
+
+  
+  <g transform="translate(348,760) rotate(-20) scale(1.6)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(510,756) rotate(12) scale(1.2)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#94a2b1" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(602,640) rotate(22) scale(0.9)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(566,712) rotate(8) scale(1.4)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(584,788) rotate(-5) scale(1.3)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#e0cbb6" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(512,668)">
+    <circle cx="0" cy="0" r="28" fill="none" stroke="#94a2b1" stroke-width="2" stroke-dasharray="6 5" opacity="0.18"></circle>
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#94a2b1" stroke-width="1" opacity="0.14"></circle>
+    <circle cx="0" cy="0" r="8" fill="none" stroke="#94a2b1" stroke-width="1.5" opacity="0.14"></circle>
+  </g>
+
+  
+
+  
+  <g transform="translate(756,680) rotate(18)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.45"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.45">A</text>
+    
+    <g transform="translate(8, 10)" opacity="0.4">
+      <circle cx="0" cy="-8" r="8" fill="#30b2ff"></circle>
+      <circle cx="-8" cy="0" r="7" fill="#30b2ff"></circle>
+      <circle cx="8" cy="0" r="7" fill="#30b2ff"></circle>
+      <rect x="-3" y="7" width="6" height="9" fill="#30b2ff"></rect>
+      <rect x="-7" y="15" width="14" height="2.5" fill="#30b2ff"></rect>
+    </g>
+  </g>
+
+  
+  <g transform="translate(706,690) rotate(-12)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <text x="-34" y="-22" font-family="Barlow,sans-serif" font-size="11" font-weight="600" fill="#30b2ff" opacity="0.55">♣</text>
+    
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#30b2ff" opacity="0.30" transform="translate(0,14)"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(840,660) rotate(-10) scale(1.5)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#30b2ff" opacity="0.30"></path>
+  </g>
+
+  
+  <g transform="translate(920,670) rotate(8) scale(1.2)">
+    <path d="M0,-18 L14,0 L0,18 L-14,0z" fill="#e0cbb6" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(920,748) rotate(-5) scale(1.1)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#94a2b1" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(1010,790) scale(2.2)">
+    <circle cx="0" cy="-9" r="9" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="-9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <rect x="-3.5" y="8" width="7" height="11" fill="#30b2ff" opacity="0.28"></rect>
+    <rect x="-9" y="18" width="18" height="3" fill="#30b2ff" opacity="0.28"></rect>
+  </g>
+
+  
+  <g transform="translate(1040,710) rotate(-20) scale(0.9)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.25"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(268,596) rotate(25) scale(0.9)">
+    <path d="M0,10 C0,10 -11,2 -11,-4 C-11,-9 -5,-11 0,-6 C5,-11 11,-9 11,-4 C11,2 0,10 0,10z" fill="#e0cbb6" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(630,598) rotate(-30) scale(0.8)">
+    <path d="M0,-14 L10,0 L0,14 L-10,0z" fill="#94a2b1" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(176,656) rotate(15) scale(1.1)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.16"></path>
+  </g>
+
+</svg></div>
+
+  <header class="break-mast">
+    <div class="mast-day outline">1</div>
+    <div class="mast-meta">
+      <div class="day-name">Break Sheet</div>
+      <div class="month-str">Friday · May 2026</div>
+      <div class="status-row">
+        <span class="stat"><span class="num">21</span><span class="lbl">In Rotation</span></span>
+        <span class="break-bar">
+          <span class="lbl">Breaks</span>
+          <span class="break-dot g1">7</span>
+          <span class="break-dot g2">8</span>
+          <span class="break-dot g3">6</span>
+        </span>
+      </div>
+    </div>
+    <div class="mast-right">
+      <div class="shift-label">By Break Wave</div>
+      <div style="font-size:10px; color:var(--ink-500); margin-top:4px; letter-spacing:0.06em;">Take breaks together</div>
+    </div>
+  </header>
+
+  <div class="break-body">
+
+    <!-- 3 break columns -->
+    <div class="break-cols">
+
+      <!-- GROUP 1 -->
+      <div class="break-col" style="--col-color:#1a2332;">
+        <div class="break-col-head">
+          <div class="break-col-num">1</div>
+          <div class="break-col-meta">
+            <div class="break-lbl">Break 1</div>
+            <div class="break-count">7 people</div>
+          </div>
+        </div>
+        <div class="break-section-div">Zones</div>
+        <div class="break-row" style="--row-color:#d97706;"><div><div class="br-name">Nikki</div><div class="br-assign">Outdoor Smoking · Elevators · Family RR</div></div><div class="br-slot">Zone 1</div></div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Amanda</div><div class="br-assign">Poker Drink Trays</div></div><div class="br-slot">Zone 4</div></div>
+        <div class="break-row" style="--row-color:#ec4899;"><div><div class="br-name">Kaiden</div><div class="br-assign">Smoking Rm · Pit 1&amp;2 · S. Door Glass</div></div><div class="br-slot">Zone 7</div></div>
+        <div class="break-section-div">Restrooms</div>
+        <div class="break-row" style="--row-color:#ec4899;"><div><div class="br-name">Sherry B</div><div class="br-assign">Women's · 131 RR</div></div><div class="br-slot">RR 6</div></div>
+        <div class="break-row" style="--row-color:#64748b;"><div><div class="br-name">Alec</div><div class="br-assign">Men's · Family · TDR · TMBR</div></div><div class="br-slot">RR 8</div></div>
+        <div class="break-row" style="--row-color:#16a34a;"><div><div class="br-name">Tawnya</div><div class="br-assign">Women's · CBK Kitchen</div></div><div class="br-slot">RR 10</div></div>
+        <div class="break-section-div">Auxiliary</div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Mike W</div><div class="br-assign">Zones 6–10 · Sweeper</div></div><div class="br-slot">Trash 2</div></div>
+        <div class="break-row" style="--row-color:#64748b;"><div><div class="br-name">Trenidee</div></div><div class="br-slot">MP 1</div></div>
+      </div>
+
+      <!-- GROUP 2 -->
+      <div class="break-col" style="--col-color:#5a6b7d;">
+        <div class="break-col-head">
+          <div class="break-col-num">2</div>
+          <div class="break-col-meta">
+            <div class="break-lbl">Break 2</div>
+            <div class="break-count">8 people</div>
+          </div>
+        </div>
+        <div class="break-section-div">Zones</div>
+        <div class="break-row" style="--row-color:#7c3aed;"><div><div class="br-name">Gary</div><div class="br-assign">Lobby Trash · Lobby RR</div></div><div class="br-slot">Zone 2</div></div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Carter</div><div class="br-assign">High Limit Tables · TM Smoking</div></div><div class="br-slot">Zone 5</div></div>
+        <div class="break-row" style="--row-color:#92400e;"><div><div class="br-name">Drew</div><div class="br-assign">Restrooms · Pit 3</div></div><div class="br-slot">Zone 8</div></div>
+        <div class="break-row" style="--row-color:#16a34a;"><div><div class="br-name">Jeff</div><div class="br-assign">HL Slots · E. Door Glass · Outdoor · Pit 4</div></div><div class="br-slot">Zone 10</div></div>
+        <div class="break-section-div">Restrooms</div>
+        <div class="break-row" style="--row-color:#d97706;"><div><div class="br-name">Mike S</div><div class="br-assign">Men's · Buffet · Family</div></div><div class="br-slot">RR 1+2</div></div>
+        <div class="break-row" style="--row-color:#ec4899;"><div><div class="br-name">Jack</div><div class="br-assign">Men's · 131 RR</div></div><div class="br-slot">RR 6</div></div>
+        <div class="break-row" style="--row-color:#ec4899;"><div><div class="br-name">Jamie</div><div class="br-assign">Women's · Smoking assist</div></div><div class="br-slot">RR 7</div></div>
+        <div class="break-section-div">Auxiliary</div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Silvia</div><div class="br-assign">Smoking Room</div></div><div class="br-slot">Z9 SR</div></div>
+        <div class="break-row" style="--row-color:#7c3aed;"><div><div class="br-name">Sam</div></div><div class="br-slot">Admin</div></div>
+        <div class="break-row" style="--row-color:#d97706;"><div><div class="br-name">Robby</div><div class="br-assign">Z 1–5 · Annex · Sweeper</div></div><div class="br-slot">Trash 1</div></div>
+      </div>
+
+      <!-- GROUP 3 -->
+      <div class="break-col" style="--col-color:#c8d3dc;">
+        <div class="break-col-head">
+          <div class="break-col-num">3</div>
+          <div class="break-col-meta">
+            <div class="break-lbl">Break 3</div>
+            <div class="break-count">6 people</div>
+          </div>
+        </div>
+        <div class="break-section-div">Zones</div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Liz</div><div class="br-assign">Support as needed</div></div><div class="br-slot">Zone 3</div></div>
+        <div class="break-row" style="--row-color:#2563eb;"><div><div class="br-name">Jessica</div><div class="br-assign">Outdoor Smoking</div></div><div class="br-slot">Zone 6</div></div>
+        <div class="break-row" style="--row-color:#dc2626;"><div><div class="br-name">Peter</div><div class="br-assign">Smoking assist · Social Bar Tables</div></div><div class="br-slot">Zone 9</div></div>
+        <div class="break-section-div">Restrooms</div>
+        <div class="break-row" style="--row-color:#d97706;"><div><div class="br-name">Abby</div><div class="br-assign">Women's · Buffet · Family</div></div><div class="br-slot">RR 1+2</div></div>
+        <div class="break-row" style="--row-color:#ec4899;"><div><div class="br-name">Jared</div><div class="br-assign">Men's · Smoking assist</div></div><div class="br-slot">RR 7</div></div>
+        <div class="break-row" style="--row-color:#64748b;"><div><div class="br-name">Joy</div><div class="br-assign">Women's · Family · TDR · TMBR</div></div><div class="br-slot">RR 8</div></div>
+      </div>
+
+    </div><!-- end break-cols -->
+
+    <!-- OVERLAPS -->
+    <div class="ol-section">
+      <div class="ol-label">
+        Overlaps
+        <span class="meta">7 / 12 staffed</span>
+      </div>
+      <div class="ol-row">
+        <div class="ol-time">11p – 1a<span class="kind">Late Evening</span></div>
+        <div class="ol-grid">
+          <div class="ol-cell"><div class="ol-name">Doug</div><div class="ol-task">Vacuum, Bottles &amp; Glass</div></div>
+          <div class="ol-cell"><div class="ol-name">Gage</div><div class="ol-task">Glass &amp; Counters, Trash</div></div>
+          <div class="ol-cell"><div class="ol-name">Polly</div><div class="ol-task">Tables &amp; Restroom, Bottles &amp; Glass</div></div>
+          <div class="ol-cell"><div class="ol-name unfilled">Unfilled</div><div class="ol-task">Trash</div></div>
+          <div class="ol-cell"><div class="ol-name unfilled">Unfilled</div><div class="ol-task">Trash</div></div>
+          <div class="ol-cell"><div class="ol-name unfilled">Unfilled</div><div class="ol-task">Trash</div></div>
+        </div>
+      </div>
+      <div class="ol-row">
+        <div class="ol-time">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="ol-grid">
+          <div class="ol-cell"><div class="ol-name">Auggie</div><div class="ol-task">CBK / Shkodé</div></div>
+          <div class="ol-cell"><div class="ol-name">Christina</div><div class="ol-task">CBK / Shkodé Restrooms</div></div>
+          <div class="ol-cell"><div class="ol-name">LeeAnn</div><div class="ol-task">Hotel Offices</div></div>
+          <div class="ol-cell"><div class="ol-name">Eric</div><div class="ol-task">Sandhill / Lobby Bar</div></div>
+          <div class="ol-cell"><div class="ol-name unfilled">Unfilled</div><div class="ol-task">131 / Group Room / CBK Office</div></div>
+          <div class="ol-cell"><div class="ol-name unfilled">Unfilled</div><div class="ol-task">Trash</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="page-foot">
+    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="foot-center"><span class="now">Friday</span> · May 1, 2026 · Break Sheet</span>
+    <span class="foot-pn"><span class="cur">2</span> / 2</span>
+  </footer>
+
+</article>
+
+</body>
+</html>
