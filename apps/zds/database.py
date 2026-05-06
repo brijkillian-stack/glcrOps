@@ -1446,9 +1446,16 @@ def sync_engine_to_week(
 
     # 6. Sync PMOL/AMOL overlap placements → overlap_assignments (Phase E)
     #    Engine emits these with zone_slot like "PMOL1"…"PMOL6" / "AMOL1"…"AMOL6".
-    #    The rows must already exist in overlap_assignments (created at week setup);
-    #    we upsert on the UNIQUE(night_id, overlap_window, position) constraint.
+    #    Two-pass:
+    #      6a. Upsert all positions present in the audit (placement happened).
+    #      6b. Clear any existing overlap_assignments rows for the week that
+    #          this run did NOT place — without 6b, stale tm_ids from a prior
+    #          engine run linger when pool size shrinks (e.g. Thu pool=0
+    #          but DB still shows Thu AMOL1=Eric from yesterday's run).
     overlap_updated = 0
+    overlap_cleared = 0
+    seen_overlap_keys: set[tuple[str, str, int]] = set()  # (night_id, window, position)
+
     for p in engine_result.get("placements", []):
         engine_slot = p.get("zone_slot", "")
         date_str    = p.get("date", "")
@@ -1487,9 +1494,42 @@ def sync_engine_to_week(
                 },
                 on_conflict="night_id,overlap_window,position",
             ).execute()
+            seen_overlap_keys.add((night_id, ov_window, position))
             overlap_updated += 1
         except Exception as ov_exc:
             print(f"[sync_engine_to_week] overlap upsert failed: {ov_exc}")
+
+    # 6b. Clear stale overlap rows: any existing row for nights this run
+    # touched but at a (window, position) not present in the audit gets its
+    # tm_id wiped + is_filled=false. Only clears rows for nights actually in
+    # this engine run (date_to_night domain), so a single-night sync doesn't
+    # nuke other nights' overlap data.
+    touched_nights = (
+        {target_night_id} if target_night_id
+        else {nid for nid in date_to_night.values() if nid}
+    )
+    if touched_nights:
+        try:
+            existing_overlaps = (
+                sb.table("overlap_assignments")
+                .select("id, night_id, overlap_window, position, tm_id, is_filled")
+                .in_("night_id", list(touched_nights))
+                .execute()
+                .data
+                or []
+            )
+            for row in existing_overlaps:
+                key = (row["night_id"], row["overlap_window"], row["position"])
+                if key in seen_overlap_keys:
+                    continue
+                # Stale: only update if it currently has a tm_id (idempotent)
+                if row.get("tm_id") or row.get("is_filled"):
+                    sb.table("overlap_assignments").update(
+                        {"tm_id": None, "is_filled": False}
+                    ).eq("id", row["id"]).execute()
+                    overlap_cleared += 1
+        except Exception as clear_exc:
+            print(f"[sync_engine_to_week] overlap stale-clear failed: {clear_exc}")
 
     return {
         "updated":            updated,
@@ -1497,5 +1537,6 @@ def sync_engine_to_week(
         "unmapped":           unmapped,
         "unresolved_cleared": unresolved_cleared,
         "overlap_updated":    overlap_updated,
+        "overlap_cleared":    overlap_cleared,
         "error":              None,
     }

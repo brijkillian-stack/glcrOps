@@ -1358,7 +1358,27 @@ for day in DAYS:
           f"grave={len(gpool)} pm={len(pmpool)} am={len(ampool)}")
 
 owb.save(OUTPUT_WB)
-print(f"\n  Board saved.  Filled: {filled_count} | Unresolved: {len(unresolved)}")
+# Compute severity counts inline so both the mid-run summary and the final
+# DONE line can speak the same language. Audit tagging happens later (it
+# also writes severity onto each unresolved dict for downstream consumers),
+# but the count itself is cheap to recompute here.
+_critical_now = sum(1 for u in unresolved if u.get("zone_slot") not in LOW_PRIORITY_SLOTS)
+_low_now      = len(unresolved) - _critical_now
+_overflow_now = sum(1 for i in audit_items if i.get("type") == "OVERFLOW_PLACED")
+if _critical_now == 0 and _low_now == 0:
+    _summary_line = f"All slots filled cleanly{' (with ' + str(_overflow_now) + ' overflow)' if _overflow_now else ''}"
+elif _critical_now == 0:
+    _summary_line = (
+        f"All critical areas covered ({_low_now} expected slot(s) unfilled"
+        + (f", {_overflow_now} overflow" if _overflow_now else "") + ")"
+    )
+else:
+    _summary_line = (
+        f"{_critical_now} critical shortage(s) "
+        f"({_low_now} expected slot(s) unfilled"
+        + (f", {_overflow_now} overflow" if _overflow_now else "") + ")"
+    )
+print(f"\n  Board saved.  Filled: {filled_count}.  {_summary_line}.")
 
 # ── 7. AUDIT + ARCHIVE ───────────────────────────────────────────────
 print("[7/7] Writing audit and archive...")
@@ -1527,7 +1547,10 @@ for row in ps.iter_rows(min_row=2, values_only=True):
     try:
         d_val = d_raw if isinstance(d_raw, (date, datetime)) else date.fromisoformat(str(d_raw)[:10])
         tm_zone_dates[tm_n][zone].append(d_val)
-    except: pass
+    except (ValueError, TypeError) as _arch_err:
+        # Bad date in archive sheet — log for data-quality follow-up rather
+        # than silently dropping the row. Keeps the archive build going.
+        print(f"  [archive] dropping row for {tm_n}/{zone}: bad date {d_raw!r} ({_arch_err})")
 
 for tm_n in sorted(tm_zone_dates.keys()):
     row_data = [tm_n]; total = 0
@@ -1544,5 +1567,31 @@ for tm_n in sorted(tm_zone_dates.keys()):
 awb.save(ARCHIVE_PATH)
 
 print(f"\n{'='*62}")
-print(f"DONE  |  Filled {filled_count}/{total_slots}  |  Unresolved: {len(unresolved)}")
+# Severity-aware DONE line. Same logic as the mid-run summary above —
+# critical (real shortages) gets surfaced, low (expected aux unfilled)
+# gets parenthesized, overflow placements (Z9SRBuddy / Support3) noted
+# when present. Brian asked for "All areas covered with # overflow"
+# or "Completed with # expected areas unfilled" rather than a raw
+# unresolved count that conflates both classes.
+_critical_done = sum(1 for u in unresolved if u.get("zone_slot") not in LOW_PRIORITY_SLOTS)
+_low_done      = len(unresolved) - _critical_done
+_overflow_done = sum(1 for i in audit_items if i.get("type") == "OVERFLOW_PLACED")
+if _critical_done == 0 and _low_done == 0:
+    _done_line = (
+        f"DONE  |  All slots filled cleanly"
+        + (f"  |  {_overflow_done} overflow" if _overflow_done else "")
+    )
+elif _critical_done == 0:
+    _done_line = (
+        f"DONE  |  All critical areas covered  |  "
+        f"{_low_done} expected unfilled"
+        + (f"  |  {_overflow_done} overflow" if _overflow_done else "")
+    )
+else:
+    _done_line = (
+        f"DONE  |  {_critical_done} critical shortage(s)  |  "
+        f"{_low_done} expected unfilled"
+        + (f"  |  {_overflow_done} overflow" if _overflow_done else "")
+    )
+print(_done_line)
 print(f"{'='*62}")
