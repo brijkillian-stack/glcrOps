@@ -98,8 +98,11 @@ class ZoneSlot(TypedDict):
     # "not_scheduled"  → TM is assigned but not in any schedule pool tonight
     # Empty string for unfilled slots.
     warning_status: str
-    # Phase E — notices (injected in state._load_night from the notices table)
-    notices: list  # list of {id, type, text, created_by, created_at}
+    # Phase E — notices (injected in state._load_night from the notices table).
+    # Must be `list[dict]` (not bare `list`) so Reflex can statically resolve
+    # subscript access like `notices[0]["type"]` inside rx.foreach. Without
+    # the item type, compile fails with UntypedVarError.
+    notices: list[dict]  # list of {id, type, text, created_by, created_at}
 
 
 class RRSlot(TypedDict):
