@@ -112,9 +112,13 @@ class ContextMenuState(rx.State):
     # In DEV MODE, can_edit_deployment is True for any unlocked user. When the
     # magic-link layer comes back, the AuthState.can_edit_deployment Var will
     # naturally tighten this without changes here.
+    #
+    # NOTE: this is a private async helper, NOT an @rx.event handler.
+    # Reflex 0.9 rejects underscore-prefixed event handlers as "private",
+    # but a regular async method called from within an event handler is fine
+    # — `self.get_state(...)` is available on any State instance.
 
-    @rx.event
-    async def _require_editor(self):
+    async def _require_editor(self) -> bool:
         auth = await self.get_state(AuthState)
         if not auth.can_edit_deployment:
             self.error = "Sign in as editor to make changes"
