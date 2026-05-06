@@ -1060,17 +1060,27 @@ for day in DAYS:
                             "tm_name":  _ov_dn or _tm_id_ov,
                             "detail":   f"Soft override noted for {d} (scoring integration: Phase K.4)",
                         })
-            # Apply hard filter: remove unavailable TMs from all pools for this night
+            # Apply hard filter: remove unavailable TMs from all pools for this night.
+            # NOTE: gpool/pmpool/ampool contain roster keys (rk), but
+            # `_unavail_dns` is a set of display names — the original filter
+            # compared rk against dn and never matched, so called-off TMs were
+            # silently still placed. Resolve each pool member's display name
+            # via the roster map and compare on that.
             if _unavail_dns:
-                removed_g  = [n for n in gpool  if n in _unavail_dns]
-                removed_pm = [n for n in pmpool if n in _unavail_dns]
-                removed_am = [n for n in ampool if n in _unavail_dns]
-                gpool  = [n for n in gpool  if n not in _unavail_dns]
-                pmpool = [n for n in pmpool if n not in _unavail_dns]
-                ampool = [n for n in ampool if n not in _unavail_dns]
-                all_removed = removed_g + removed_pm + removed_am
-                if all_removed:
-                    print(f"  [{day}] engine_overrides: removed {all_removed} from pools (unavailable)")
+                def _is_unavail(rk: str) -> bool:
+                    return roster.get(rk, {}).get("display_name") in _unavail_dns
+                removed_g  = [rk for rk in gpool  if _is_unavail(rk)]
+                removed_pm = [rk for rk in pmpool if _is_unavail(rk)]
+                removed_am = [rk for rk in ampool if _is_unavail(rk)]
+                gpool  = [rk for rk in gpool  if not _is_unavail(rk)]
+                pmpool = [rk for rk in pmpool if not _is_unavail(rk)]
+                ampool = [rk for rk in ampool if not _is_unavail(rk)]
+                all_removed_dns = [
+                    roster.get(rk, {}).get("display_name", rk)
+                    for rk in removed_g + removed_pm + removed_am
+                ]
+                if all_removed_dns:
+                    print(f"  [{day}] engine_overrides: removed {all_removed_dns} from pools (unavailable)")
 
     # Tell rotation_key what day it's filling so the area-diversity penalty
     # can compare against tm_areas_by_date[yesterday].

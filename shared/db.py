@@ -2257,16 +2257,29 @@ def get_engine_roster_from_db() -> "tuple[dict, dict]":
         tm_ids = [p["tm_id"] for p in profiles]
 
         # Fetch eligibility for all active TMs in one query
-        elig_res = (
-            sb.table("tm_eligibility")
-            .select("tm_id, slot_id, eligible")
-            .in_("tm_id", tm_ids)
-            .execute()
-        )
+        # Supabase / PostgREST silently caps responses at 1000 rows by default.
+        # tm_eligibility has ~38 rows per active TM (~1900+ total for 50 TMs),
+        # so a single .in_(tm_ids) query truncates and loses roughly half the
+        # data — TMs whose rows fall past the cutoff get ALL their eligibility
+        # silently defaulted to False, never get placed by the engine, and
+        # show up as unresolved. Chunk the .in_() into batches small enough
+        # that each batch's row count stays under 1000.  25 TMs × ~38 rows
+        # per TM ≈ 950 rows per batch — safely under the limit.
+        elig_rows: list = []
+        BATCH = 25
+        for i in range(0, len(tm_ids), BATCH):
+            chunk = tm_ids[i:i + BATCH]
+            r = (
+                sb.table("tm_eligibility")
+                .select("tm_id, slot_id, eligible")
+                .in_("tm_id", chunk)
+                .execute()
+            )
+            elig_rows.extend(r.data or [])
 
         # Pivot eligibility into {tm_id: {elig_col_name: bool}}
         elig_by_tm: dict[str, dict] = {p["tm_id"]: {} for p in profiles}
-        for row in (elig_res.data or []):
+        for row in elig_rows:
             tid = row["tm_id"]
             sid = row["slot_id"]
             val = bool(row["eligible"])
