@@ -48,6 +48,10 @@ class Night(TypedDict):
     stat_unfilled: int
     stat_locked: int
     stat_called_off: int
+    # Phase D — night-level lock
+    is_locked:  bool
+    locked_by:  str
+    locked_at:  str  # ISO timestamp string; "" when not locked
 
 
 class ZoneSlot(TypedDict):
@@ -220,6 +224,10 @@ EMPTY_NIGHT: Night = {
     "stat_unfilled": 0,
     "stat_locked": 0,
     "stat_called_off": 0,
+    # Phase D — night-level lock defaults
+    "is_locked": False,
+    "locked_by": "",
+    "locked_at": "",
 }
 
 

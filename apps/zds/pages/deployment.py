@@ -124,6 +124,49 @@ def _deployment_skeleton() -> rx.Component:
     )
 
 
+# ── Phase D — Night lock unlock-confirm dialog ────────────────────────────────
+
+def _night_unlock_dialog() -> rx.Component:
+    """Confirm dialog shown before clearing a night-level lock.
+
+    Shown when ZdsState.night_lock_confirm_open is True.
+    Uses rx.alert_dialog so it traps focus and is keyboard-dismissible.
+    """
+    return rx.alert_dialog.root(
+        rx.alert_dialog.content(
+            rx.alert_dialog.title("Unlock this night?"),
+            rx.alert_dialog.description(
+                "All editors will be able to edit slot assignments again. "
+                "Are you sure you want to unlock?",
+                size="2",
+                color="#6b7280",
+            ),
+            rx.hstack(
+                rx.alert_dialog.cancel(
+                    rx.button(
+                        "Keep locked",
+                        variant="soft",
+                        color_scheme="gray",
+                        on_click=ZdsState.cancel_night_unlock,
+                        cursor="pointer",
+                    ),
+                ),
+                rx.alert_dialog.action(
+                    rx.button(
+                        rx.icon("lock-open", size=14),
+                        "Unlock Night",
+                        color_scheme="amber",
+                        on_click=ZdsState.confirm_night_unlock,
+                        cursor="pointer",
+                    ),
+                ),
+                gap="12px", justify="end", width="100%", margin_top="16px",
+            ),
+        ),
+        open=ZdsState.night_lock_confirm_open,
+    )
+
+
 # ── Section header ────────────────────────────────────────────────────────────
 
 def _section_header(icon: str, label: str, staffed: str = "") -> rx.Component:
@@ -633,6 +676,18 @@ def deployment() -> rx.Component:
             rx.text(night["night_date"], size="2", color="#9ca3af",
                     align_self="flex-end", padding_bottom="2px"),
             rx.spacer(),
+            # Phase D — lock badge (visible when night is locked)
+            rx.cond(
+                ZdsState.current_night_is_locked,
+                rx.hstack(
+                    rx.icon("lock", size=13, color="#b45309"),
+                    rx.text("LOCKED", size="1", weight="700",
+                            color="#b45309", letter_spacing="0.08em",
+                            class_name="night-lock-badge"),
+                    gap="4px", align="center",
+                ),
+                rx.fragment(),
+            ),
             rx.hstack(
                 rx.text(night["in_rotation"], " in rotation",
                         size="2", color="#6b7280"),
@@ -641,6 +696,28 @@ def deployment() -> rx.Component:
                     "Breaks ", night["breaks_5"], " / ",
                     night["breaks_9"], " / ", night["breaks_4"],
                     size="2", color="#6b7280",
+                ),
+                # Phase D — Lock Night / Unlock Night toggle button
+                rx.separator(orientation="vertical"),
+                rx.button(
+                    rx.cond(
+                        ZdsState.current_night_is_locked,
+                        rx.icon("lock-open", size=13),
+                        rx.icon("lock", size=13),
+                    ),
+                    rx.cond(
+                        ZdsState.current_night_is_locked,
+                        "Unlock Night",
+                        "Lock Night",
+                    ),
+                    variant="ghost",
+                    size="1",
+                    color_scheme=rx.cond(
+                        ZdsState.current_night_is_locked, "amber", "gray"
+                    ),
+                    on_click=ZdsState.toggle_night_lock,
+                    cursor="pointer",
+                    title="Lock this night to prevent all edits",
                 ),
                 gap="8px", align="center",
             ),
@@ -820,14 +897,23 @@ def deployment() -> rx.Component:
 
         # Main content — toggled between deployment / break sheet / schedule
         rx.box(
-            rx.cond(
-                ZdsState.active_tab == "schedule",
-                schedule_body(),
+            rx.box(
                 rx.cond(
-                    ZdsState.show_break_sheet,
-                    break_sheet_body(),
-                    deployment_body(),
+                    ZdsState.active_tab == "schedule",
+                    schedule_body(),
+                    rx.cond(
+                        ZdsState.show_break_sheet,
+                        break_sheet_body(),
+                        deployment_body(),
+                    ),
                 ),
+                # Phase D — night-locked class disables pointer-events on all cards
+                class_name=rx.cond(
+                    ZdsState.current_night_is_locked,
+                    "night-locked",
+                    "",
+                ),
+                width="100%",
             ),
             padding="16px 24px 32px",
         ),
@@ -849,6 +935,9 @@ def deployment() -> rx.Component:
 
         # Engine result dialog — Phase K.1, pops up after Run Engine
         engine_result_dialog(),
+
+        # Phase D — unlock confirm dialog (mounted globally, shown when night_lock_confirm_open)
+        _night_unlock_dialog(),
 
         background="#f9fafb",
         min_height="100vh",

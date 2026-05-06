@@ -331,6 +331,36 @@ def create_night(week_id: str, night_date: str, day_name: str,
     return res.data[0] if res.data else {}
 
 
+def update_night_lock(night_id: str, is_locked: bool, locked_by: str = "") -> dict:
+    """Set or clear the night-level lock.
+
+    When locking, also stamps locked_by (editor email) and locked_at (now()).
+    When unlocking, clears locked_by and locked_at.
+    Returns the updated row.
+    """
+    import datetime as _dt
+    if is_locked:
+        payload: dict = {
+            "is_locked": True,
+            "locked_by": locked_by,
+            "locked_at": _dt.datetime.utcnow().isoformat() + "Z",
+        }
+    else:
+        payload = {
+            "is_locked": False,
+            "locked_by": None,
+            "locked_at": None,
+        }
+    res = (
+        _client()
+        .table("nights")
+        .update(payload)
+        .eq("id", night_id)
+        .execute()
+    )
+    return res.data[0] if res.data else {}
+
+
 # ── CALL-OFFS (Phase J) ───────────────────────────────────────────────────────
 # A call_off row marks a TM as unavailable for one specific night. Drives:
 #   - Schedule tab strikethrough on that TM's name

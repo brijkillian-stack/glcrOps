@@ -179,6 +179,21 @@ class ZdsState(rx.State):
     loading: bool = False
     error:   str = ""
 
+    # ── Theme (dark/light toggle) ─────────────────────────────────────────────
+    # "zds-dark" → dark mode (default). "light" → light mode.
+    # Bound to data_theme on the _with_zds_chrome wrapper.
+    # Session-scoped only — resets on reload.
+    theme: str = "zds-dark"
+
+    # ── Audit strip ───────────────────────────────────────────────────────────
+    # ISO timestamp of the last successful write this session; drives the
+    # audit strip's "Saved {time}" indicator.
+    last_saved_at: str = ""
+
+    # ── Night-level lock (Phase D) ────────────────────────────────────────────
+    # True while the unlock-confirm dialog is shown.
+    night_lock_confirm_open: bool = False
+
     # ── Audit banner (tracks user-driven mutations for the session) ───────────
     # Newest-first; capped at 100 entries via _log_change.
     change_log:      list[ChangeLogEntry] = []
@@ -186,6 +201,64 @@ class ZdsState(rx.State):
 
     def set_error(self, msg: str):
         self.error = msg
+
+    def toggle_theme(self):
+        """Toggle between dark and light mode."""
+        self.theme = "light" if self.theme == "zds-dark" else "zds-dark"
+
+    # ── Night-level lock handlers (Phase D) ───────────────────────────────────
+
+    @rx.event
+    async def toggle_night_lock(self):
+        """Lock or unlock the current night.
+
+        Requires zds_editor role.
+        • Locking is immediate.
+        • Unlocking opens the confirm dialog (night_lock_confirm_open = True).
+        """
+        from shared.auth import AuthState
+        auth = await self.get_state(AuthState)
+        if auth.editor_role not in ("zds_editor", "editor"):
+            self.error = "You need editor access to lock/unlock nights."
+            return
+        night = next(
+            (n for n in self.nights if n["id"] == self.current_night_id), {}
+        )
+        if not night:
+            return
+        if night.get("is_locked", False):
+            # Unlocking — ask for confirmation first
+            self.night_lock_confirm_open = True
+        else:
+            # Locking — apply immediately
+            try:
+                database.update_night_lock(
+                    self.current_night_id, True, auth.editor_email
+                )
+                updated = database.fetch_nights(self.current_week_id)
+                self.nights = _enrich_nights(updated)
+            except Exception as e:
+                self.error = str(e)
+
+    @rx.event
+    async def confirm_night_unlock(self):
+        """Called from the unlock confirm dialog — actually clears the lock."""
+        from shared.auth import AuthState
+        auth = await self.get_state(AuthState)
+        try:
+            database.update_night_lock(
+                self.current_night_id, False, auth.editor_email
+            )
+            updated = database.fetch_nights(self.current_week_id)
+            self.nights = _enrich_nights(updated)
+        except Exception as e:
+            self.error = str(e)
+        self.night_lock_confirm_open = False
+
+    @rx.event
+    def cancel_night_unlock(self):
+        """Dismiss the unlock confirm dialog without making changes."""
+        self.night_lock_confirm_open = False
 
     # =========================================================================
     # Computed vars
@@ -209,6 +282,14 @@ class ZdsState(rx.State):
     @rx.var
     def has_changes(self) -> bool:
         return self.change_count > 0
+
+    @rx.var
+    def current_night_is_locked(self) -> bool:
+        """True when the active night has a night-level lock set."""
+        for n in self.nights:
+            if n["id"] == self.current_night_id:
+                return bool(n.get("is_locked", False))
+        return False
 
     @rx.var
     def visible_changes(self) -> list[ChangeLogEntry]:
@@ -1236,6 +1317,8 @@ class ZdsState(rx.State):
             "source_slot_id": source_slot_id,
         }
         self.change_log = [entry] + self.change_log[:99]
+        # Stamp last_saved_at for the audit strip — "Saved {HH:MM}" indicator
+        self.last_saved_at = datetime.datetime.now().strftime("%I:%M %p").lstrip("0")
 
     def revert_change(self, entry_id: str):
         """
@@ -1358,8 +1441,13 @@ class ZdsState(rx.State):
     def assign_tm(self, tm_id: str):
         if not self.picker_slot_id:
             return
+        # Night-level lock guard (Phase D)
+        if self.current_night_is_locked:
+            self.error = "This night is locked. Unlock it before making changes."
+            self.close_picker()
+            return
         slot_id = self.picker_slot_id   # capture before close_picker resets it
-        # Guard: refuse to overwrite a locked slot
+        # Guard: refuse to overwrite a slot-locked slot
         slot_is_locked = False
         for s in self.zone_slots + self.aux_slots:
             if s["id"] == slot_id:
@@ -1403,6 +1491,11 @@ class ZdsState(rx.State):
         audit banner.
         """
         if not self.picker_slot_id:
+            return
+        # Night-level lock guard (Phase D)
+        if self.current_night_is_locked:
+            self.error = "This night is locked. Unlock it before making changes."
+            self.close_picker()
             return
         target_slot_id = self.picker_slot_id  # the slot we tapped to open the picker
 
@@ -1586,7 +1679,11 @@ class ZdsState(rx.State):
 
     @rx.event
     async def clear_slot(self, slot_id: str):
-        # Guard: refuse to clear a locked slot
+        # Night-level lock guard (Phase D)
+        if self.current_night_is_locked:
+            self.error = "This night is locked. Unlock it before making changes."
+            return
+        # Guard: refuse to clear a slot-locked slot
         for s in self.zone_slots + self.aux_slots:
             if s["id"] == slot_id and s.get("is_locked", False):
                 self.error = "This slot is locked. Unlock it first before clearing."
