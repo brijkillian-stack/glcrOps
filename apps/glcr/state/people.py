@@ -291,10 +291,6 @@ class PeopleState(AppState):
         self.loading = True
         yield
         result = get_people()
-        # Debug instrumentation (2026-05-05) — temporary, rip out once
-        # the empty-People-page mystery is resolved.
-        print(f"[people] load_people -> got {len(result)} rows; first 3: "
-              f"{[r.get('name') or r.get('id') for r in result[:3]]}")
         self.people = result
         self.loading = False
 

@@ -94,6 +94,99 @@ def list_schedule_files() -> list[str]:
     ]
 
 
+def get_active_schedule_path(week_id: str) -> Optional[Path]:
+    """Return the correct schedule xlsx for a specific week.
+
+    Three-tier fallback chain:
+
+      Tier 1 — DB link: weeks.schedule_path is set; file exists locally or
+                can be synced from Supabase Storage.
+      Tier 2 — Date-intersect scan: walk every xlsx in SCHEDULE_DIR, peek its
+                date headers, pick the one whose range overlaps the week's
+                [week_ending − 6 days, week_ending].
+      Tier 3 — mtime-newest fallback with a stderr warning (legacy behavior;
+                may produce empty pools if the wrong file is chosen).
+
+    Returns None if no schedule file can be found at all.
+    """
+    import sys
+
+    SCHEDULE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ── Tier 1: DB-linked path ─────────────────────────────────────────────────
+    db_path: Optional[str] = None
+    week_ending: Optional[str] = None
+    if week_id:
+        try:
+            from shared.db import get_client
+            sb = get_client()
+            row = (
+                sb.table("weeks")
+                .select("week_ending,schedule_path")
+                .eq("id", week_id)
+                .maybe_single()
+                .execute()
+            )
+            if row.data:
+                db_path = row.data.get("schedule_path") or ""
+                week_ending = row.data.get("week_ending") or ""
+        except Exception:
+            pass
+
+    if db_path:
+        local = SCHEDULE_DIR / db_path
+        if local.exists():
+            return local
+        # Not local — try to sync from Storage before giving up on Tier 1.
+        try:
+            from shared import storage
+            storage.sync_schedules_to(SCHEDULE_DIR)
+            if local.exists():
+                return local
+        except Exception:
+            pass
+        # Still not found — warn and fall through to Tier 2.
+        print(
+            f"[schedule_parser] DB-linked schedule '{db_path}' not found locally "
+            f"after Storage sync; falling back to date-intersect scan.",
+            file=sys.stderr,
+        )
+
+    # ── Tier 2: date-intersect scan ────────────────────────────────────────────
+    if week_ending and SCHEDULE_DIR.exists():
+        try:
+            we = date.fromisoformat(week_ending)
+            week_start = we - timedelta(days=6)
+            for p in SCHEDULE_DIR.glob("*.xlsx"):
+                try:
+                    peek = peek_schedule_dates(p)
+                    if not peek:
+                        continue
+                    file_dates = [date.fromisoformat(d) for d in peek["dates"]]
+                    if not file_dates:
+                        continue
+                    file_start = min(file_dates)
+                    file_end   = max(file_dates)
+                    # Overlap: the file's date range intersects [week_start, week_ending]
+                    if file_start <= we and file_end >= week_start:
+                        return p
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # ── Tier 3: mtime-newest fallback (legacy) ─────────────────────────────────
+    fallback = get_latest_schedule_path()
+    if fallback and week_id:
+        print(
+            f"[schedule_parser] WARNING: no schedule matched week {week_id!r} by "
+            f"DB link or date intersection; using mtime-newest ({fallback.name}). "
+            f"Pool dates may be wrong for this week.",
+            file=sys.stderr,
+        )
+    return fallback
+
+
 # ── Name matching ─────────────────────────────────────────────────────────────
 
 def _build_name_lookup(entities: list[dict]) -> dict[str, list[str]]:

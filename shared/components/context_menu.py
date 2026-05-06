@@ -67,8 +67,12 @@ class ContextMenuState(rx.State):
     target_id:     str = ""   # tm_id, slot_key, or composite
     target_label:  str = ""   # human-readable header for the menu
     surface:       str = ""   # 'deployment_grid' | 'schedule_tab' | 'week_overview' | 'tm_picker'
-    night_id:      str = ""
-    slot_key:      str = ""
+    # NOTE: prefixed with ctx_ to avoid shadowing the dynamic route args
+    # `[night_id]` and `[slot_key]` exposed by /zds/week/[week_id]/day/[night_id]
+    # and similar routes. Reflex 0.9 raises DynamicRouteArgShadowsStateVarError
+    # if a state var has the same name as any registered dynamic route segment.
+    ctx_night_id:  str = ""
+    ctx_slot_key:  str = ""
 
     # ── Status + transient feedback ──────────────────────────────────────────
     error:    str = ""
@@ -91,7 +95,9 @@ class ContextMenuState(rx.State):
         """Open the menu at the given client coords with full target context.
 
         Triggers call this from on_context_menu (desktop right-click) or via
-        the long-press JS handler dispatching the same event.
+        the long-press JS handler dispatching the same event. The incoming
+        `night_id` / `slot_key` args are stored on the `ctx_night_id` /
+        `ctx_slot_key` state fields to avoid shadowing dynamic route args.
         """
         self.x = int(x or 0)
         self.y = int(y or 0)
@@ -99,8 +105,8 @@ class ContextMenuState(rx.State):
         self.target_id    = target_id or ""
         self.target_label = target_label or target_id or ""
         self.surface      = surface or ""
-        self.night_id     = night_id or ""
-        self.slot_key     = slot_key or ""
+        self.ctx_night_id = night_id or ""
+        self.ctx_slot_key = slot_key or ""
         self.error        = ""
         self.open         = True
 
@@ -133,7 +139,7 @@ class ContextMenuState(rx.State):
         """Add a 'sweeper' highlight on the current target's slot/TM/night."""
         if not (await self._require_editor()):
             return
-        if not self.night_id or not self.slot_key:
+        if not self.ctx_night_id or not self.ctx_slot_key:
             self.error = "Missing night/slot context"
             self.last_action_ok = False
             return
@@ -143,8 +149,8 @@ class ContextMenuState(rx.State):
             existing = (
                 sb.table("assignment_highlights")
                 .select("id")
-                .eq("night_id", self.night_id)
-                .eq("slot_key", self.slot_key)
+                .eq("night_id", self.ctx_night_id)
+                .eq("slot_key", self.ctx_slot_key)
                 .eq("highlight_type", "sweeper")
                 .limit(1)
                 .execute()
@@ -157,8 +163,8 @@ class ContextMenuState(rx.State):
                 self.last_action_ok = True
             else:
                 row = {
-                    "night_id":       self.night_id,
-                    "slot_key":       self.slot_key,
+                    "night_id":       self.ctx_night_id,
+                    "slot_key":       self.ctx_slot_key,
                     "tm_id":          self.target_id if self.target_type in ("tm", "assignment") else None,
                     "highlight_type": "sweeper",
                     "note":           "Sweeper duty tonight",

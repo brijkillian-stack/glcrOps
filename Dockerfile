@@ -71,8 +71,8 @@ USER app
 # the browser will use to talk to the Reflex backend. Caddy on $PORT proxies
 # /_event/* to backend:8000, so the public URL is what the browser must hit.
 # ---------------------------------------------------------------------------
-ENV API_URL="https://glcrops.onrender.com"
-ENV DEPLOY_URL="https://glcrops.onrender.com"
+ENV API_URL="https://glcrops.onrender.com"    # intentional hardcode — baked into JS bundle at build time; matches Render service URL
+ENV DEPLOY_URL="https://glcrops.onrender.com" # intentional hardcode — same reason; update both if the Render service URL changes
 RUN reflex export --frontend-only --no-zip || \
     reflex export --frontend-only || \
     echo "[build] reflex export failed; runtime will compile on first request"

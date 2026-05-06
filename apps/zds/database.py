@@ -1222,6 +1222,16 @@ def fetch_all_tms() -> list[dict]:
     are excluded from this list — they're not part of the regular zone-
     deployment rotation. The People page (apps/glcr/) still surfaces them;
     only the ZDS engine-facing roster filters them out.
+
+    ── Dual-storage note (2026-05-05) ───────────────────────────────────────
+    This function reads from entities.metadata (legacy operational store).
+    The ZDS fill engine (fill_engine.py) now reads from the canonical TM
+    domain tables (tm_profiles, tm_eligibility, etc.) via shared.db engine
+    helpers. This web-facing ZDS reader has NOT migrated yet.
+
+    The roles filter above uses entities.metadata.roles for backwards compat.
+    See shared.db.get_people() for the full dual-storage migration plan.
+    ─────────────────────────────────────────────────────────────────────────
     """
     res = (
         _client()
@@ -1434,10 +1444,58 @@ def sync_engine_to_week(
         update_zone_assignment(slot_rec["id"], None)
         unresolved_cleared += 1
 
+    # 6. Sync PMOL/AMOL overlap placements → overlap_assignments (Phase E)
+    #    Engine emits these with zone_slot like "PMOL1"…"PMOL6" / "AMOL1"…"AMOL6".
+    #    The rows must already exist in overlap_assignments (created at week setup);
+    #    we upsert on the UNIQUE(night_id, overlap_window, position) constraint.
+    overlap_updated = 0
+    for p in engine_result.get("placements", []):
+        engine_slot = p.get("zone_slot", "")
+        date_str    = p.get("date", "")
+        tm_name     = p.get("tm_display_name", "")
+
+        if engine_slot.startswith("PMOL"):
+            ov_window = "pm"
+            try:
+                position = int(engine_slot[4:])
+            except ValueError:
+                continue
+        elif engine_slot.startswith("AMOL"):
+            ov_window = "am"
+            try:
+                position = int(engine_slot[4:])
+            except ValueError:
+                continue
+        else:
+            continue
+
+        night_id = date_to_night.get(date_str)
+        if not night_id:
+            continue
+        if target_night_id and night_id != target_night_id:
+            continue
+
+        tm_id = name_to_id.get(tm_name)  # None → unfilled slot
+        try:
+            sb.table("overlap_assignments").upsert(
+                {
+                    "night_id":       night_id,
+                    "overlap_window": ov_window,
+                    "position":       position,
+                    "tm_id":          tm_id,
+                    "is_filled":      bool(tm_id),
+                },
+                on_conflict="night_id,overlap_window,position",
+            ).execute()
+            overlap_updated += 1
+        except Exception as ov_exc:
+            print(f"[sync_engine_to_week] overlap upsert failed: {ov_exc}")
+
     return {
         "updated":            updated,
         "skipped_locked":     skipped_locked,
         "unmapped":           unmapped,
         "unresolved_cleared": unresolved_cleared,
+        "overlap_updated":    overlap_updated,
         "error":              None,
     }

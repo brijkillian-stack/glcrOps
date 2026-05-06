@@ -8,8 +8,6 @@ services:
     envVars:
       - key: SUPABASE_URL
         value: https://iazgrcainbokkdqunkok.supabase.co
-      - key: SUPABASE_ANON_KEY
-        sync: false         # Set in Render dashboard (anon public key)
       - key: SUPABASE_SERVICE_KEY
         sync: false         # Set in Render dashboard (service_role — secret)
       - key: SUPABASE_AUTH_REDIRECT

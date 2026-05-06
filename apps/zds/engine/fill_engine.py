@@ -65,6 +65,9 @@ from shared.db import (
     get_overlap_tasks_for_engine,
     get_training_schedule_from_db,
     create_new_tm_stub_in_db,
+    get_engine_overrides,
+    mark_engine_overrides_applied,
+    get_client as _get_db_client,
 )
 
 # BASE = the GLCR working directory. Resolved from this script's location so
@@ -131,6 +134,39 @@ if not DATE_COLS:
 _all_dates   = sorted(DATE_COLS.keys())
 ANCHOR_DATE  = _all_dates[0]
 WEEK_ENDING  = str(_all_dates[-1])
+
+# ── WEEK_ID — resolve the DB week record for engine_overrides queries ─────────
+# engine_overrides are keyed by week_id (UUID), but the engine only knows
+# WEEK_ENDING (date string). One small query bridges them.  If the week isn't
+# found (e.g. running stand-alone locally without a DB week record), engine
+# overrides are silently skipped — the engine still fills normally.
+_WEEK_ID: str = ""
+_tmid_to_dn: dict[str, str] = {}   # {tm_id: display_name} for override filtering
+try:
+    _sb_wk = _get_db_client()
+    _wk_row = (
+        _sb_wk.table("weeks")
+        .select("id")
+        .eq("week_ending", WEEK_ENDING)
+        .maybe_single()
+        .execute()
+    )
+    _WEEK_ID = ((_wk_row.data or {}).get("id") or "") if _wk_row else ""
+    if _WEEK_ID:
+        # Build tm_id → display_name lookup for override pool filtering
+        _prof_rows = (
+            _sb_wk.table("tm_profiles")
+            .select("tm_id,display_name")
+            .execute()
+        ).data or []
+        _tmid_to_dn = {r["tm_id"]: r["display_name"] for r in _prof_rows if r.get("tm_id")}
+except Exception as _wk_err:
+    print(f"  [warn] WEEK_ID lookup failed ({_wk_err}) — engine_overrides will be skipped.")
+if _WEEK_ID:
+    print(f"  Week ID (overrides): {_WEEK_ID[:8]}…  ({len(_tmid_to_dn)} TM display names indexed)")
+else:
+    print(f"  Week ID: not found — engine_overrides skipped for this run.")
+
 # Sort days by the order they appear in the schedule (Fri first → Thu last)
 DAYS = sorted(DAY_ORDER, key=lambda d: _all_dates.index(
     next((dt for dt in _all_dates if dt.strftime("%A") == d), _all_dates[0]))
@@ -970,6 +1006,11 @@ def training_prepass(day, placed):
             if elig(trainer_rk, SLOT_TO_ELIG[z_slot]) and z_slot in cell_map.get(day, {}):
                 if place_training(day, z_slot, trainer_name, placed, "Training-D6-Trainer"): break
 
+# ── Engine override accumulator ───────────────────────────────────────────────
+# Collects IDs of engine_overrides rows consumed this run so applied_count
+# can be incremented after the fill completes.
+_applied_override_ids: list[str] = []
+
 # ── MAIN FILL LOOP ───────────────────────────────────────────────────
 for day in DAYS:
     d      = DAY_DATES[day]
@@ -979,6 +1020,57 @@ for day in DAYS:
     placed = set()
     filled_slots = set()
     is_weekend = day in WEEKEND
+
+    # ── Phase D: ENGINE OVERRIDES — hard-filter unavailable TMs ──────────────
+    # Load supervisor knowledge for this night.  If WEEK_ID is unknown (e.g.
+    # stand-alone local run), this block is a no-op.
+    if _WEEK_ID:
+        try:
+            _day_overrides = get_engine_overrides(_WEEK_ID, d)
+        except Exception as _ov_err:
+            _day_overrides = {}
+            print(f"  [warn] engine_overrides fetch failed for {d}: {_ov_err}")
+
+        if _day_overrides:
+            _unavail_dns: set[str] = set()
+            for _tm_id_ov, _ov_list in _day_overrides.items():
+                for _ov in _ov_list:
+                    _ov_type = _ov.get("override_type", "")
+                    _ov_dn   = _tmid_to_dn.get(_tm_id_ov, "")
+                    if _ov_type == "unavailable":
+                        if _ov_dn:
+                            _unavail_dns.add(_ov_dn)
+                        _applied_override_ids.append(_ov["id"])
+                        audit_items.append({
+                            "severity": "info",
+                            "type":     "OVERRIDE_UNAVAILABLE",
+                            "tm_name":  _ov_dn or _tm_id_ov,
+                            "detail":   (
+                                f"Hard-filtered from {d} pools via engine_override "
+                                f"(reason: {(_ov.get('payload') or {}).get('reason', 'n/a')})"
+                            ),
+                        })
+                    # Soft override types (prefer_easier, avoid_high_load, etc.) are
+                    # tracked but not yet acted on — scoring integration is Phase K.4.
+                    elif _ov_type in ("prefer_easier", "avoid_high_load", "priority_placement",
+                                      "training_pair", "skip_rotation", "special_context"):
+                        audit_items.append({
+                            "severity": "info",
+                            "type":     f"OVERRIDE_{_ov_type.upper()}",
+                            "tm_name":  _ov_dn or _tm_id_ov,
+                            "detail":   f"Soft override noted for {d} (scoring integration: Phase K.4)",
+                        })
+            # Apply hard filter: remove unavailable TMs from all pools for this night
+            if _unavail_dns:
+                removed_g  = [n for n in gpool  if n in _unavail_dns]
+                removed_pm = [n for n in pmpool if n in _unavail_dns]
+                removed_am = [n for n in ampool if n in _unavail_dns]
+                gpool  = [n for n in gpool  if n not in _unavail_dns]
+                pmpool = [n for n in pmpool if n not in _unavail_dns]
+                ampool = [n for n in ampool if n not in _unavail_dns]
+                all_removed = removed_g + removed_pm + removed_am
+                if all_removed:
+                    print(f"  [{day}] engine_overrides: removed {all_removed} from pools (unavailable)")
 
     # Tell rotation_key what day it's filling so the area-diversity penalty
     # can compare against tm_areas_by_date[yesterday].
@@ -1244,7 +1336,8 @@ AUDIT_JSON.write_text(json.dumps({
     "week_ending":WEEK_ENDING,"run_timestamp":RUN_TS,"engine_version":"v8",
     "summary":{"total_slots":total_slots,"filled":filled_count,
                "unfilled":len(unresolved),"errors":len(errors_),"warnings":len(warnings_),
-               "audit_items_total":len(audit_items),"audit_items_unique":len(_deduped_audit)},
+               "audit_items_total":len(audit_items),"audit_items_unique":len(_deduped_audit),
+               "applied_overrides_count":len(_applied_override_ids)},
     # 5/3/26 #5: Capture engine config used for this run so the audit answers
     # "which weights produced this fill?" without spelunking the JSON files.
     "config":{
@@ -1255,8 +1348,18 @@ AUDIT_JSON.write_text(json.dumps({
         "rotation_weeks":ROTATION_WEEKS,
     },
     "training_schedule":TRAINING_SCHEDULE,
-    "placements":placements,"audit_items":_deduped_audit,"unresolved_slots":unresolved
+    "placements":placements,"audit_items":_deduped_audit,"unresolved_slots":unresolved,
+    # Phase D — engine_overrides consumed this run
+    "applied_override_ids":_applied_override_ids,
 }, indent=2))
+
+# ── Phase D: mark engine_overrides consumed this run as applied ───────────────
+if _applied_override_ids:
+    try:
+        mark_engine_overrides_applied(_applied_override_ids)
+        print(f"  engine_overrides: {len(_applied_override_ids)} override(s) marked applied.")
+    except Exception as _mark_err:
+        print(f"  [warn] Failed to mark overrides applied: {_mark_err}")
 
 # ── ARCHIVE ──────────────────────────────────────────────────────────
 (ARCHIVE_PATH.parent).mkdir(parents=True, exist_ok=True)

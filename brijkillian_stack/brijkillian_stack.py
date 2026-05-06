@@ -137,40 +137,50 @@ app = rx.App(
 )
 
 # ── Route registration ────────────────────────────────────────────────────────
-# Register public routes first (no auth), then protected routes with auth guard
+# Three auth tiers for GLCR routes:
+#
+#   TIER 1 — PUBLIC      No guard.  /unlock, /login, /auth/callback.
+#   TIER 2 — VIEWER_OK   PIN required; role is irrelevant. /, /today.
+#   TIER 3 — EDITOR_ANY  PIN + any editor role required. All other Memory pages.
+#                        Viewers see a redirect-to-home toast.
+#
+# ZDS routes all run at TIER 2 (viewer-OK). Per-action write gating for ZDS
+# lives at the event-handler level — see docs/role_gating_spec.md.
 
 ALL_PUBLIC_ROUTES = GLCR_PUBLIC + ZDS_PUBLIC
 
+
+def _on_load_for(route: str, base_on_load: list | None) -> list | None:
+    """Return the on_load chain for a GLCR route based on its auth tier.
+
+    Returns None for public routes (no on_load needed).
+    Returns a list with the appropriate auth guard prepended for protected routes.
+    """
+    base = base_on_load or []
+    if route in GLCR_PUBLIC:
+        return None                                              # TIER 1 — no guard
+    if route in GLCR_VIEWER_OK:
+        return [AuthState.require_unlock] + base                # TIER 2 — PIN only
+    return [AuthState.require_editor_any] + base                # TIER 3 — PIN + role
+
+
 # Register GLCR routes
-# Three guard tiers:
-#   - PUBLIC: no guard at all (unlock, login, auth callback)
-#   - VIEWER_OK: PIN required, role is irrelevant (homepage, /today)
-#   - default: PIN + any editor role required (everything else in Memory)
 for entry in GLCR_ROUTES:
     page_fn, route, title, on_load = entry
+    computed_on_load = _on_load_for(route, on_load)
 
     if route in GLCR_PUBLIC:
-        # Public route — no auth, no Grok
         app.add_page(page_fn, route=route, title=title)
-    elif route in GLCR_VIEWER_OK:
-        # Viewer-OK protected route — PIN required, role doesn't matter
-        kwargs = {"route": route, "title": title}
-        kwargs["on_load"] = [AuthState.require_unlock] + (on_load or [])
-        app.add_page(_with_grok(page_fn), **kwargs)
     else:
-        # Editor-required route — PIN + zds_editor or editor role.
-        # Viewers redirected to / with a toast.
-        kwargs = {"route": route, "title": title}
-        kwargs["on_load"] = [AuthState.require_editor_any] + (on_load or [])
+        kwargs: dict = {"route": route, "title": title, "on_load": computed_on_load}
         app.add_page(_with_grok(page_fn), **kwargs)
 
-# Register ZDS routes — viewer-OK (PIN is sufficient to view).
-# Per-action write gating happens at the event-handler level — see
-# docs/role_gating_spec.md. ZDS pages get the global context menu via
-# _with_zds_chrome wrapping.
+# Register ZDS routes (all TIER 2 — viewer-OK)
 for entry in ZDS_ROUTES:
     page_fn, route, title, on_load = entry
-
-    kwargs = {"route": route, "title": title}
-    kwargs["on_load"] = [AuthState.require_unlock] + (on_load or [])
+    kwargs = {
+        "route":   route,
+        "title":   title,
+        "on_load": [AuthState.require_unlock] + (on_load or []),
+    }
     app.add_page(_with_zds_chrome(page_fn), **kwargs)

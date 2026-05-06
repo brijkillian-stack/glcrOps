@@ -773,13 +773,20 @@ class ZdsState(rx.State):
         self.night_am_ol_pool = list(day.get("am_ol", []))
 
     def _reload_schedule(self):
-        """Load/refresh schedule pool data from the latest schedule Excel file."""
+        """Load/refresh schedule pool data for the current week's schedule file.
+
+        Uses get_active_schedule_path() (week-id-aware, Phase A fix) instead of
+        the legacy mtime-newest get_latest_schedule_path().  Opening a new week
+        no longer pulls in last week's file and produces empty pools for tonight.
+        """
         from . import schedule_parser
         try:
             entities = database.fetch_all_tms()
-            pools = schedule_parser.parse_daily_pools(entities)
+            # Phase A fix: resolve the correct xlsx for THIS week, not just the
+            # most-recently-modified file on disk.
+            path = schedule_parser.get_active_schedule_path(self.current_week_id)
+            pools = schedule_parser.parse_daily_pools(entities, schedule_path=path)
             self.schedule_pools = pools
-            path = schedule_parser.get_latest_schedule_path()
             self.schedule_file_name = path.name if path else ""
             # Phase J — display_name → tm_id lookup so the Schedule tab can
             # call mark_called_off / unmark_called_off with just a name.
@@ -1488,7 +1495,13 @@ class ZdsState(rx.State):
             self.mark_called_off(tm_id)
 
     def mark_called_off(self, tm_id: str, reason: str = ""):
-        """Mark a TM as called off for the currently-open night."""
+        """Mark a TM as called off for the currently-open night.
+
+        Writes to two tables:
+          - call_offs (Phase J) — drives UI warning badges and Schedule tab strikethrough
+          - engine_overrides (Phase C.2) — type='unavailable'; consumed by fill_engine
+            so the TM is hard-filtered from the candidate pool when the engine runs.
+        """
         night_date = ""
         for n in self.nights:
             if n["id"] == self.current_night_id:
@@ -1501,13 +1514,32 @@ class ZdsState(rx.State):
             if not ok:
                 self.error = "Failed to mark called off."
                 return
+            # Phase C.2 — mirror to engine_overrides so fill_engine hard-filters this TM
+            if self.current_week_id:
+                try:
+                    from shared.db import set_engine_override
+                    set_engine_override(
+                        week_id=self.current_week_id,
+                        tm_id=tm_id,
+                        override_date=night_date,
+                        override_type="unavailable",
+                        payload={"reason": reason or "called_off"},
+                        note=reason or None,
+                        created_by="supervisor",
+                    )
+                except Exception as oe:
+                    # Non-fatal — call_off is already written; log and continue
+                    print(f"[mark_called_off] engine_overrides write failed: {oe}")
             # Refresh — will recompute warning_status on every slot too
             self._load_night(self.current_night_id)
         except Exception as e:
             self.error = str(e)
 
     def unmark_called_off(self, tm_id: str):
-        """Remove a call-off mark for the currently-open night."""
+        """Remove a call-off mark for the currently-open night.
+
+        Removes from both call_offs and engine_overrides (unavailable).
+        """
         night_date = ""
         for n in self.nights:
             if n["id"] == self.current_night_id:
@@ -1517,6 +1549,18 @@ class ZdsState(rx.State):
             return
         try:
             database.remove_call_off(tm_id, night_date)
+            # Phase C.2 — remove the matching engine_overrides row
+            if self.current_week_id:
+                try:
+                    from shared.db import clear_engine_override
+                    clear_engine_override(
+                        week_id=self.current_week_id,
+                        tm_id=tm_id,
+                        override_date=night_date,
+                        override_type="unavailable",
+                    )
+                except Exception as oe:
+                    print(f"[unmark_called_off] engine_overrides clear failed: {oe}")
             self._load_night(self.current_night_id)
         except Exception as e:
             self.error = str(e)

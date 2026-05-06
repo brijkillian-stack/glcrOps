@@ -23,11 +23,14 @@ Schema (Supabase / Postgres):
   _schema:  key, value (metadata table for schema version)
 """
 
+import logging
 import os
 import time
 import traceback
 from datetime import date, datetime, timedelta
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 
@@ -49,7 +52,7 @@ def get_client():
         if not SUPABASE_URL or not SUPABASE_KEY:
             raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
         _client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"[db] Supabase client initialised → {SUPABASE_URL[:40]}…")
+        log.info("Supabase client initialised → %s…", SUPABASE_URL[:40])
     return _client
 
 
@@ -416,9 +419,34 @@ def get_people() -> list[dict]:
     Return all active TMs sorted by skill_score desc, then name.
     Extracts badge flags, score tier, and last observation reason
     from entity metadata for display on the People page.
+
+    ── Dual-storage note (2026-05-05) ───────────────────────────────────────
+    TM data currently lives in two places:
+
+    • entities.metadata  — legacy/operational store. Written to by the fill
+      engine, capture flows, glcr-memory pipelines, and various admin paths.
+      Contains skill_score, grave_pool, eligibility, preferences, badges,
+      last_obs_date, etc. This function and fetch_all_tms() (apps/zds/database.py)
+      both read from here.
+
+    • tm_profiles (+ tm_eligibility, tm_preferences, tm_accommodations, etc.)
+      — new canonical TM domain tables introduced in Phase K (2026-05-05).
+      The ZDS fill engine now reads from these via shared.db engine helpers.
+      Web-facing readers (People page, ZDS roster) have NOT migrated yet.
+
+    • entities.metadata.roles — roles array lives here for backwards compat
+      with existing get_people / fetch_all_tms readers, even though tm_profiles
+      is the intended home. The roles backfill (2026-05-05) wrote
+      roles=['porter'] to all 127 active TM entities.
+
+    Future migration path:
+      1. Mirror all writes to both stores until web readers are updated.
+      2. Migrate get_people() and fetch_all_tms() to read from tm_profiles.
+      3. Deprecate entities.metadata for TM data; keep entities for non-TM
+         entity types (areas, equipment, etc.).
+    ─────────────────────────────────────────────────────────────────────────
     """
     try:
-        print("[db] get_people -> query start")
         res = (
             get_client()
             .table("entities")
@@ -432,7 +460,6 @@ def get_people() -> list[dict]:
             .execute()
         )
         rows = res.data or []
-        print(f"[db] get_people -> got {len(rows)} rows from query")
 
         seen_ids: set = set()
         people = []
@@ -550,7 +577,6 @@ def get_people() -> list[dict]:
             })
 
         people.sort(key=lambda p: (-p["skill_score"], p["name"]))
-        print(f"[db] get_people -> returning {len(people)} people (skipped {skipped_count} rows)")
         return people
     except Exception:
         print(f"[db] get_people error:\n{traceback.format_exc()}")
@@ -2604,6 +2630,170 @@ def create_new_tm_stub_in_db(full_name: str, display_name: str, week_ending: str
         return True
     except Exception:
         print(f"[db] create_new_tm_stub_in_db error:\n{traceback.format_exc()}")
+        return False
+
+
+# ── Engine Overrides (Phase D / K.4) ─────────────────────────────────────────
+# Structured supervisor knowledge consumed by fill_engine.py before zone
+# placement.  The engine_overrides table is distinct from schedule_overrides
+# (which is the Phase N.3 schedule-editor cell-value table).
+
+def get_engine_overrides(week_id: str, override_date: "date | str") -> "dict[str, list[dict]]":
+    """Fetch all non-expired engine overrides for a specific week + night date.
+
+    Returns a dict keyed by tm_id, with each value being a list of override
+    dicts (a TM can have multiple override types on the same date).
+
+    Only rows whose expires_at is NULL or in the future are returned — this
+    matches the K.4 spec's intent that overrides auto-expire end-of-week.
+    """
+    from collections import defaultdict
+    try:
+        sb  = get_client()
+        now = datetime.utcnow().isoformat() + "Z"
+        date_str = override_date.isoformat() if hasattr(override_date, "isoformat") else str(override_date)
+        rows = (
+            sb.table("engine_overrides")
+            .select("*")
+            .eq("week_id", week_id)
+            .eq("override_date", date_str)
+            .or_(f"expires_at.is.null,expires_at.gt.{now}")
+            .execute()
+        ).data or []
+        by_tm: dict = defaultdict(list)
+        for r in rows:
+            by_tm[r["tm_id"]].append(r)
+        return dict(by_tm)
+    except Exception:
+        log.error("[db] get_engine_overrides error:\n%s", traceback.format_exc())
+        return {}
+
+
+def set_engine_override(
+    *,
+    week_id: str,
+    tm_id: str,
+    override_date: "date | str",
+    override_type: str,
+    payload: dict | None = None,
+    note: str = "",
+    created_by: str = "supervisor",
+    expires_at: str | None = None,
+) -> dict | None:
+    """Upsert a single engine override row.
+
+    Uses the (week_id, tm_id, override_date, override_type) unique constraint
+    for on-conflict update, so calling this twice is idempotent.
+
+    Returns the upserted row dict, or None on error.
+    """
+    try:
+        sb = get_client()
+        date_str = override_date.isoformat() if hasattr(override_date, "isoformat") else str(override_date)
+        row = {
+            "week_id":       week_id,
+            "tm_id":         tm_id,
+            "override_date": date_str,
+            "override_type": override_type,
+            "payload":       payload or {},
+            "note":          note or None,
+            "created_by":    created_by or None,
+        }
+        if expires_at:
+            row["expires_at"] = expires_at
+        result = (
+            sb.table("engine_overrides")
+            .upsert(row, on_conflict="week_id,tm_id,override_date,override_type")
+            .execute()
+        )
+        data = result.data or []
+        return data[0] if data else None
+    except Exception:
+        log.error("[db] set_engine_override error:\n%s", traceback.format_exc())
+        return None
+
+
+def clear_engine_override(
+    *,
+    week_id: str,
+    tm_id: str,
+    override_date: "date | str",
+    override_type: str,
+) -> bool:
+    """Delete a specific engine override row.  Returns True on success."""
+    try:
+        sb = get_client()
+        date_str = override_date.isoformat() if hasattr(override_date, "isoformat") else str(override_date)
+        (
+            sb.table("engine_overrides")
+            .delete()
+            .eq("week_id", week_id)
+            .eq("tm_id", tm_id)
+            .eq("override_date", date_str)
+            .eq("override_type", override_type)
+            .execute()
+        )
+        return True
+    except Exception:
+        log.error("[db] clear_engine_override error:\n%s", traceback.format_exc())
+        return False
+
+
+def list_engine_overrides_for_week(week_id: str) -> list[dict]:
+    """Return all engine_overrides rows for a week, newest-first.
+
+    Used by the Schedule Review page (K.4) to render override badges on the
+    week grid and populate the overrides pane.
+    """
+    try:
+        sb = get_client()
+        rows = (
+            sb.table("engine_overrides")
+            .select("*")
+            .eq("week_id", week_id)
+            .order("override_date", desc=False)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+        return rows
+    except Exception:
+        log.error("[db] list_engine_overrides_for_week error:\n%s", traceback.format_exc())
+        return []
+
+
+def mark_engine_overrides_applied(override_ids: list[str]) -> bool:
+    """Increment applied_count and set last_applied_at for consumed overrides.
+
+    Called by fill_engine.py (via engine_bridge.py) after a successful run to
+    record which overrides actually influenced the final placement.  Returns
+    True if all updates succeeded (best-effort — engine continues even on error).
+    """
+    if not override_ids:
+        return True
+    try:
+        sb  = get_client()
+        now = datetime.utcnow().isoformat() + "Z"
+        for oid in override_ids:
+            # Fetch current count, increment by 1
+            row = (
+                sb.table("engine_overrides")
+                .select("applied_count")
+                .eq("id", oid)
+                .maybe_single()
+                .execute()
+            ).data
+            if not row:
+                continue
+            current = int(row.get("applied_count") or 0)
+            (
+                sb.table("engine_overrides")
+                .update({"applied_count": current + 1, "last_applied_at": now})
+                .eq("id", oid)
+                .execute()
+            )
+        return True
+    except Exception:
+        log.error("[db] mark_engine_overrides_applied error:\n%s", traceback.format_exc())
         return False
 
 
