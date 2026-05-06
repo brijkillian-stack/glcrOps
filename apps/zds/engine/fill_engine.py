@@ -178,6 +178,34 @@ DATE_TO_DAY = {v: k for k, v in DAY_DATES.items()}
 WEEKEND     = {"Friday","Saturday","Sunday"}
 ROTATION_WEEKS = 8
 
+# ── Headcount targets + slot priority for unresolved-severity tagging ────────
+# Brian's expected grave headcount per day-type. Anything beyond these counts
+# the master template flags as a slot but no body is scheduled to fill it —
+# those are *expected* unfilled, not real shortages.
+TARGET_GRAVE_BY_DAY = {
+    "Friday":   25,
+    "Saturday": 25,
+    "Sunday":   20,
+    "Monday":   18,
+    "Tuesday":  18,
+    "Wednesday":18,
+    "Thursday": 18,
+}
+# Slots that are auxiliary by design — overflow / surge capacity. If unfilled,
+# audit them as severity=low (expected unfilled), not "couldn't fill."
+# PMOL/AMOL are included because their fill rate is bounded by pmpool/ampool
+# size (often 3–4 TMs against 6 slots) — slots beyond pool size are expected
+# to go unfilled and are now logged via the per-slot tracker in the PMOL/AMOL
+# fill loop (previously they were silently skipped; see pm_idx watermark fix).
+LOW_PRIORITY_SLOTS = {
+    "Trash1", "Trash2",
+    "MP1", "MP2",
+    "Support3",
+    "Z9SRBuddy",
+    "PMOL1","PMOL2","PMOL3","PMOL4","PMOL5","PMOL6",
+    "AMOL1","AMOL2","AMOL3","AMOL4","AMOL5","AMOL6",
+}
+
 OUTPUT_DIR  = BASE / "Outputs" / WEEK_ENDING
 OUTPUT_WB   = OUTPUT_DIR / f"Week Overview - Filled - {WEEK_ENDING}.xlsx"
 AUDIT_JSON  = OUTPUT_DIR / f"Grave Deployment Audit - {WEEK_ENDING}.json"
@@ -538,16 +566,46 @@ def parse(ws, ptype):
                 # PM/AM OL workers are swing/day shift with partial overlap
                 # — they don't need roster entries or training configs.
                 if ptype == "grave":
+                    # Auto-stub into entities + tm_profiles. Idempotent — returns
+                    # True if newly inserted, False if TM already existed.
+                    # NOTE: even when stub succeeds, the engine's in-memory roster
+                    # was loaded once at startup, so the new TM can't be placed
+                    # in THIS run. They become eligible next run after Brian
+                    # configures their tm_eligibility flags.
+                    _stub_threw = False
+                    _stub_created = False
                     try:
-                        # 5/5/26: Write stub to Supabase instead of TM Profiles.json
-                        _added = create_new_tm_stub_in_db(full_name, first, WEEK_ENDING)
-                        if _added:
+                        _stub_created = create_new_tm_stub_in_db(full_name, first, WEEK_ENDING)
+                        if _stub_created:
                             print(f"  ★ NEW GRAVE TM detected: {full_name} — stub added to DB")
                     except Exception as _e:
-                        pass
-                    audit_items.append({"severity":"error","type":"NEW_TM_NOT_IN_ROSTER",
-                        "tm_name": full_name,
-                        "detail": f"On grave schedule but not in Eligibility Roster — cannot place. Add to roster + configure training pair if needed."})
+                        # Real exception (vs. "already exists" False return).
+                        # Previously: silent `pass` swallowed the error completely.
+                        _stub_threw = True
+                        print(f"  ⚠ NEW GRAVE TM {full_name}: stub failed with {type(_e).__name__}: {_e}")
+
+                    if _stub_threw:
+                        audit_items.append({
+                            "severity": "error",
+                            "type":     "NEW_TM_STUB_FAILED",
+                            "tm_name":  full_name,
+                            "detail":   "On grave schedule, stub creation threw — see engine stderr. Add to roster manually.",
+                        })
+                    else:
+                        # Either stub_created=True (just inserted) or False
+                        # (idempotent no-op because already in tm_profiles).
+                        # Either way: TM exists in tm_profiles but needs
+                        # eligibility configured before they can be placed.
+                        audit_items.append({
+                            "severity": "warning",
+                            "type":     "NEW_TM_NEEDS_ELIGIBILITY",
+                            "tm_name":  full_name,
+                            "detail":   (
+                                "On grave schedule, stub exists in tm_profiles. "
+                                "Configure tm_eligibility flags + training pair "
+                                "(if applicable) so they're placeable next run."
+                            ),
+                        })
                 elif ptype != "grave":
                     # OL workers not in roster are expected — suppress warning
                     pass
@@ -1024,6 +1082,11 @@ for day in DAYS:
     # ── Phase D: ENGINE OVERRIDES — hard-filter unavailable TMs ──────────────
     # Load supervisor knowledge for this night.  If WEEK_ID is unknown (e.g.
     # stand-alone local run), this block is a no-op.
+    # K.4 (5/6/26): soft overrides now bias scoring. Each override_type
+    # collected per-TM gets passed to scorecard.set_soft_overrides_for_day()
+    # so score_placement() biases per-slot picks. Hard 'unavailable' is
+    # still filtered from the pool entirely (does not reach scoring).
+    _soft_overrides_by_dn: "dict[str, set[str]]" = {}
     if _WEEK_ID:
         try:
             _day_overrides = get_engine_overrides(_WEEK_ID, d)
@@ -1050,16 +1113,28 @@ for day in DAYS:
                                 f"(reason: {(_ov.get('payload') or {}).get('reason', 'n/a')})"
                             ),
                         })
-                    # Soft override types (prefer_easier, avoid_high_load, etc.) are
-                    # tracked but not yet acted on — scoring integration is Phase K.4.
+                    # K.4 — soft overrides bias placement via scorecard.
+                    # prefer_easier / avoid_high_load / priority_placement
+                    # have actual scoring components in scorecard.py;
+                    # training_pair / skip_rotation / special_context are
+                    # tracked + audited but not yet wired to a scoring rule.
                     elif _ov_type in ("prefer_easier", "avoid_high_load", "priority_placement",
                                       "training_pair", "skip_rotation", "special_context"):
+                        if _ov_dn:
+                            _soft_overrides_by_dn.setdefault(_ov_dn, set()).add(_ov_type)
+                        _applied_override_ids.append(_ov["id"])
+                        wired_types = {"prefer_easier", "avoid_high_load", "priority_placement"}
                         audit_items.append({
                             "severity": "info",
                             "type":     f"OVERRIDE_{_ov_type.upper()}",
                             "tm_name":  _ov_dn or _tm_id_ov,
-                            "detail":   f"Soft override noted for {d} (scoring integration: Phase K.4)",
+                            "detail":   (
+                                f"Soft override applied to scoring for {d}"
+                                if _ov_type in wired_types else
+                                f"Soft override noted for {d} (scoring integration pending)"
+                            ),
                         })
+
             # Apply hard filter: remove unavailable TMs from all pools for this night.
             # NOTE: gpool/pmpool/ampool contain roster keys (rk), but
             # `_unavail_dns` is a set of display names — the original filter
@@ -1081,6 +1156,16 @@ for day in DAYS:
                 ]
                 if all_removed_dns:
                     print(f"  [{day}] engine_overrides: removed {all_removed_dns} from pools (unavailable)")
+
+    # K.4 — refresh scorecard's per-night soft override map even if empty.
+    # Empty dict resets the previous night's overrides so they don't leak
+    # into subsequent days. Sits OUTSIDE the WEEK_ID guard so a stand-alone
+    # local run (no WEEK_ID) still resets cleanly between days.
+    try:
+        _sc.set_soft_overrides_for_day(_soft_overrides_by_dn)
+    except AttributeError:
+        # Defensive: older scorecard builds without the helper.
+        pass
 
     # Tell rotation_key what day it's filling so the area-diversity penalty
     # can compare against tm_areas_by_date[yesterday].
@@ -1196,9 +1281,18 @@ for day in DAYS:
             unresolved.append({"date":str(d),"zone_slot":mp_slot,"priority":"MP"})
 
     # ── PM OL ────────────────────────────────────────────────────────
+    # pm_idx is a *watermark* across slots: each TM gets at most one PMOL
+    # placement attempt for the night (a placed TM can't fill another PMOL
+    # slot, and a skipped one — placed elsewhere or not PM-OL eligible —
+    # doesn't get re-tried). When pm_idx exhausts pmpool, remaining PMOL
+    # slots in the loop go unfilled. Previously those silent skips never
+    # made it into `unresolved`, so the audit's filled+unresolved didn't
+    # account for them. Track per-slot placement and append to unresolved
+    # when the slot exits without a fill.
     pm_idx = 0
     for slot in ["PMOL1","PMOL2","PMOL3","PMOL4","PMOL5","PMOL6"]:
         if slot not in cell_map.get(day, {}): continue
+        _slot_filled = False
         while pm_idx < len(pmpool):
             rk = pmpool[pm_idx]; pm_idx += 1
             dn2 = roster[rk]["display_name"]
@@ -1207,12 +1301,17 @@ for day in DAYS:
             write_cell(day, slot, dn2)
             placed.add(dn2)
             _record_placement(day, slot, dn2, "pm_ol", "PM-OL")
+            _slot_filled = True
             break
+        if not _slot_filled:
+            unresolved.append({"date":str(d),"zone_slot":slot,"priority":"PM-OL"})
 
     # ── AM OL ────────────────────────────────────────────────────────
+    # Same watermark + per-slot tracking pattern as PM OL above.
     am_idx = 0
     for slot in ["AMOL1","AMOL2","AMOL3","AMOL4","AMOL5","AMOL6"]:
         if slot not in cell_map.get(day, {}): continue
+        _slot_filled = False
         while am_idx < len(ampool):
             rk = ampool[am_idx]; am_idx += 1
             dn2 = roster[rk]["display_name"]
@@ -1221,7 +1320,10 @@ for day in DAYS:
             write_cell(day, slot, dn2)
             placed.add(dn2)
             _record_placement(day, slot, dn2, "am_ol", "AM-OL")
+            _slot_filled = True
             break
+        if not _slot_filled:
+            unresolved.append({"date":str(d),"zone_slot":slot,"priority":"AM-OL"})
 
     # ── OVERFLOW (5/1/26) ────────────────────────────────────────────
     # Any unplaced grave-pool TMs land in the new conditional slots.
@@ -1342,10 +1444,27 @@ for _item in audit_items:
     if _key in _seen: continue
     _seen.add(_key); _deduped_audit.append(_item)
 
+# ── Severity tagging on unresolved (Brian's expected-unfilled vs. critical) ──
+# An unresolved slot is `severity=low` if it's an auxiliary/overflow slot that
+# regularly goes unfilled when the day's pool matches Brian's target headcount
+# (Trash, MP, Support3, Z9SRBuddy). It's `severity=critical` otherwise — those
+# are real shortages worth surfacing on the deployment book.
+# This is the "static priority list" version. A future refinement could
+# compute severity dynamically off TARGET_GRAVE_BY_DAY (i.e. tag any slot
+# beyond rank=N as low when N grave bodies are scheduled), but the static
+# version is easier to reason about and correct in the common case.
+for _u in unresolved:
+    _u["severity"] = "low" if _u.get("zone_slot") in LOW_PRIORITY_SLOTS else "critical"
+_unres_critical = sum(1 for _u in unresolved if _u.get("severity") == "critical")
+_unres_low      = len(unresolved) - _unres_critical
+
 AUDIT_JSON.write_text(json.dumps({
     "week_ending":WEEK_ENDING,"run_timestamp":RUN_TS,"engine_version":"v8",
     "summary":{"total_slots":total_slots,"filled":filled_count,
-               "unfilled":len(unresolved),"errors":len(errors_),"warnings":len(warnings_),
+               "unfilled":len(unresolved),
+               "unfilled_critical":_unres_critical,
+               "unfilled_low":_unres_low,
+               "errors":len(errors_),"warnings":len(warnings_),
                "audit_items_total":len(audit_items),"audit_items_unique":len(_deduped_audit),
                "applied_overrides_count":len(_applied_override_ids)},
     # 5/3/26 #5: Capture engine config used for this run so the audit answers

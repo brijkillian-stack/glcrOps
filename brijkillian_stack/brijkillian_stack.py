@@ -17,6 +17,7 @@ from shared.grok_state import GrokState
 from shared.components.grok_panel import grok_panel, grok_fab
 from shared.components.area_check import area_check_modal
 from shared.components.context_menu import global_context_menu
+from shared.components.highlight_toolbar import global_highlight_toolbar
 
 from apps.glcr.routes import (
     ROUTES as GLCR_ROUTES,
@@ -69,12 +70,12 @@ if ('serviceWorker' in navigator) {
 
 def _with_grok(page_fn):
     """Wrap a page component with Grok panel + Grok FAB + Area Check modal
-    + global context menu.
+    + global context menu + left-click highlight toolbar.
 
     The Area Check overlay is mounted globally here so the sidebar's
     "★ Area Check" action works on any protected GLCR page. The context
-    menu is mounted here so it's available on every protected page (ZDS
-    pages have their own wrapping below — the menu is also added there).
+    menu and highlight toolbar are mounted here so they're available on
+    every protected page (ZDS pages have their own wrapping below).
     """
     def wrapped() -> rx.Component:
         return rx.fragment(
@@ -83,17 +84,19 @@ def _with_grok(page_fn):
             grok_panel(),
             area_check_modal(),
             global_context_menu(),
+            global_highlight_toolbar(),
         )
     wrapped.__name__ = f"{page_fn.__name__}_with_grok"
     return wrapped
 
 
 def _with_zds_chrome(page_fn):
-    """Wrap a ZDS page with the global context menu only (no Grok yet)."""
+    """Wrap a ZDS page with the global context menu + highlight toolbar (no Grok yet)."""
     def wrapped() -> rx.Component:
         return rx.fragment(
             page_fn(),
             global_context_menu(),
+            global_highlight_toolbar(),
         )
     wrapped.__name__ = f"{page_fn.__name__}_zds"
     return wrapped
@@ -133,6 +136,9 @@ app = rx.App(
         # ── Context menu (right-click + long-press) ───────────────────────
         rx.el.link(rel="stylesheet", href="/context_menu.css"),
         rx.el.script(src="/context_menu.js"),
+        # ── Highlight toolbar (left-click highlight chips on TM spans) ────
+        rx.el.link(rel="stylesheet", href="/highlight_toolbar.css"),
+        rx.el.script(src="/highlight_toolbar.js"),
     ],
 )
 

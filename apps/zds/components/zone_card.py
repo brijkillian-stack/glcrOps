@@ -276,18 +276,26 @@ def zone_card(slot: dict) -> rx.Component:
                 overflow="hidden",
                 text_overflow="ellipsis",
                 max_width="100%",
-                # Phase 2026-05-05 — right-click / long-press opens the
-                # context menu. The JS in context_menu.js reads these
-                # data-* attributes and dispatches the Reflex event
-                # ContextMenuState.open_at with full coords + context.
-                class_name="ctx-menu-trigger",
+                # Phase 2026-05-05 — right-click / long-press → context menu
+                # (ContextMenuState.open_at via context_menu.js).
+                # Phase 2026-05-06 — left-click → highlight toolbar
+                # (HighlightToolbarState.open_at via highlight_toolbar.js).
+                # Both JS handlers read data-* attrs from this span.
+                # The highlight toolbar JS runs in capture phase and calls
+                # stopPropagation() so the parent on_click (picker) is suppressed.
+                class_name="ctx-menu-trigger ht-trigger",
                 custom_attrs={
+                    # Context menu attrs
                     "data-ctx-target-type":  "assignment",
                     "data-ctx-target-id":    slot["tm_id"],
                     "data-ctx-target-label": slot["display_name"],
                     "data-ctx-surface":      "deployment_grid",
                     "data-ctx-night-id":     ZdsState.current_night_id,
                     "data-ctx-slot-key":     slot["slot_key"],
+                    # Highlight toolbar attrs
+                    "data-ht-tm-id":         slot["tm_id"],
+                    "data-ht-night-id":      ZdsState.current_night_id,
+                    "data-ht-slot-key":      slot["slot_key"],
                 },
             ),
             rx.cond(

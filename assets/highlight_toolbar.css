@@ -1,0 +1,120 @@
+/*
+ * highlight_toolbar.css — Left-click highlight toolbar for ZDS deployment grid
+ *
+ * Mirrors context_menu.css chrome (shadow, z-index) but uses a horizontal
+ * chip-row layout instead of a vertical menu list.
+ *
+ * 44pt touch targets on each chip (matching HIG minimum for iPad).
+ */
+
+/*
+ * Apply on trigger elements so iOS Safari's magnifier / callout doesn't
+ * conflict with our custom left-click action. ctx-menu-trigger already sets
+ * this for right-click; we duplicate it here so .ht-trigger works standalone.
+ */
+.ht-trigger {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* ── Root container (position:fixed inset-0 non-interactive shell) ─────────── */
+
+.ht-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;  /* let clicks fall through the empty area */
+  z-index: 200;          /* above context menu (180) and drawer overlay (40/50) */
+}
+
+/* ── Backdrop — full-screen invisible hit area to close on outside tap ──────── */
+
+.ht-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;        /* within .ht-root stacking context */
+  pointer-events: all;
+  background: transparent;
+}
+
+/* ── Toolbar panel — horizontal row of chips, anchored below TM name span ───── */
+
+.ht-panel {
+  position: fixed;   /* coords set by HighlightToolbarState via inline style */
+  z-index: 2;        /* above backdrop, within .ht-root stacking context */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.10),
+    0 2px 4px -2px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  pointer-events: all;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Individual highlight chip ────────────────────────────────────────────── */
+
+.ht-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  /* 44pt minimum touch target (HIG) */
+  min-width:  44px;
+  min-height: 44px;
+  padding: 8px 6px;
+
+  border: 2px solid var(--ht-chip-color, #e5e7eb);
+  border-radius: 10px;
+  background: white;
+  color: var(--ht-chip-color, #374151);
+
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color            0.12s ease,
+    transform        0.08s ease,
+    box-shadow       0.12s ease;
+}
+
+.ht-chip:hover {
+  background: var(--ht-chip-color, #e5e7eb);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.ht-chip:active {
+  transform: scale(0.94);
+}
+
+/* ── Chip icon (emoji) ────────────────────────────────────────────────────── */
+
+.ht-chip-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: block;
+}
+
+/* ── Chip label (text below icon) ───────────────────────────────────────── */
+
+.ht-chip-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  display: block;
+  white-space: nowrap;
+}

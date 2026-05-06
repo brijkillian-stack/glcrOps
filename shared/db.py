@@ -1722,6 +1722,141 @@ def update_tm_eligibility(tm_id: str, eligibility: dict) -> bool:
     return update_tm_metadata(tm_id, {"eligibility": eligibility})
 
 
+def ensure_tm_profile_exists(tm_id: str, source: str = "auto_stub") -> bool:
+    """
+    Promote an `entities` TM into `tm_profiles` if not already present.
+
+    This closes a long-standing leak: the call-off UI (state.mark_called_off)
+    looks up TMs from `entities` (Memory layer), but `engine_overrides.tm_id`
+    has an FK to `tm_profiles` (ZDS-roster layer). When an entity-only TM
+    called off, the call_offs row would write fine but the engine_overrides
+    mirror silently failed (FK violation caught at the print() in state.py),
+    so the engine never knew the TM was unavailable.
+
+    This helper performs an idempotent upsert into tm_profiles using the
+    entity's name + metadata as defaults, so any entity-only TM gets
+    promoted to a real ZDS-roster member the first time they're acted on.
+
+    Returns True if a row already existed or was created; False on error.
+    Defaults are intentionally conservative — skill_score=3 (mid),
+    grave_pool/primary_section unset, eligibility populated only after
+    Brian configures it manually. This way an auto-stub is visible (newly
+    promoted TMs show up in roster drift queries) but doesn't accidentally
+    place them in slots they aren't trained for.
+
+    Args:
+        tm_id:  the entity id (also the tm_profiles primary key by convention)
+        source: a tag stored in metadata.stub_origin for traceability
+                (e.g. "mark_called_off", "schedule_parser", "manual_stub")
+    """
+    try:
+        sb = get_client()
+        # Fast path: tm_profiles row already exists.
+        existing = (
+            sb.table("tm_profiles")
+            .select("tm_id")
+            .eq("tm_id", tm_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            return True
+
+        # Fetch the entity for name + metadata defaults.
+        ent = (
+            sb.table("entities")
+            .select("name, metadata")
+            .eq("id", tm_id)
+            .single()
+            .execute()
+            .data
+        )
+        if not ent:
+            print(f"[ensure_tm_profile_exists] no entity for tm_id={tm_id}")
+            return False
+
+        name      = (ent.get("name") or "").strip()
+        meta      = ent.get("metadata") or {}
+        display   = (meta.get("display_name") or name.split()[0] or name).strip()
+
+        sb.table("tm_profiles").insert({
+            "tm_id":         tm_id,
+            "full_name":     name or display,
+            "display_name":  display,
+            "active":        True,
+            "status":        "active",
+            "skill_score":   3,
+            "schema_version":"2.1",
+            "metadata": {
+                "stub_origin":   source,
+                "source_entity": tm_id,
+                "auto_stubbed":  True,
+            },
+        }).execute()
+        return True
+    except Exception:
+        print(f"[ensure_tm_profile_exists] error stubbing tm_id={tm_id}:\n{traceback.format_exc()}")
+        return False
+
+
+def reconcile_porter_entities_to_profiles() -> dict:
+    """
+    Surface any drift between `entities` (porter-tagged) and `tm_profiles`.
+
+    Returns a dict for admin tooling:
+      {
+        "porter_entity_count":      int,
+        "tm_profiles_count":        int,
+        "missing_from_tm_profiles": list[{tm_id, name, has_events, has_call_offs}],
+        "missing_from_entities":    list[{tm_id, display_name}],
+      }
+
+    No mutations — read-only audit. Pair with ensure_tm_profile_exists() to
+    bulk-promote entity-only porters once Brian has triaged the list.
+    """
+    try:
+        sb = get_client()
+        ents = (
+            sb.table("entities")
+            .select("id, name, metadata")
+            .eq("entity_type", "tm")
+            .execute()
+            .data
+            or []
+        )
+        ents = [e for e in ents if "porter" in (e.get("metadata") or {}).get("roles", [])]
+
+        profiles = sb.table("tm_profiles").select("tm_id, display_name").execute().data or []
+        prof_ids = {p["tm_id"] for p in profiles}
+        ent_ids  = {e["id"] for e in ents}
+
+        missing_from_tm_profiles = [
+            {"tm_id": e["id"], "name": e.get("name", "")}
+            for e in ents
+            if e["id"] not in prof_ids
+        ]
+        missing_from_entities = [
+            {"tm_id": p["tm_id"], "display_name": p.get("display_name", "")}
+            for p in profiles
+            if p["tm_id"] not in ent_ids
+        ]
+
+        return {
+            "porter_entity_count":      len(ents),
+            "tm_profiles_count":        len(profiles),
+            "missing_from_tm_profiles": missing_from_tm_profiles,
+            "missing_from_entities":    missing_from_entities,
+        }
+    except Exception:
+        print(f"[reconcile_porter_entities_to_profiles] error:\n{traceback.format_exc()}")
+        return {
+            "porter_entity_count": 0, "tm_profiles_count": 0,
+            "missing_from_tm_profiles": [], "missing_from_entities": [],
+            "error": "see server logs",
+        }
+
+
 # ── Deployment Roster ─────────────────────────────────────────────────────────
 
 def get_patterns_data(window_days: int = 30) -> dict:
@@ -2256,26 +2391,38 @@ def get_engine_roster_from_db() -> "tuple[dict, dict]":
         profiles = profiles_res.data or []
         tm_ids = [p["tm_id"] for p in profiles]
 
-        # Fetch eligibility for all active TMs in one query
-        # Supabase / PostgREST silently caps responses at 1000 rows by default.
-        # tm_eligibility has ~38 rows per active TM (~1900+ total for 50 TMs),
-        # so a single .in_(tm_ids) query truncates and loses roughly half the
-        # data — TMs whose rows fall past the cutoff get ALL their eligibility
-        # silently defaulted to False, never get placed by the engine, and
-        # show up as unresolved. Chunk the .in_() into batches small enough
-        # that each batch's row count stays under 1000.  25 TMs × ~38 rows
-        # per TM ≈ 950 rows per batch — safely under the limit.
+        # Fetch eligibility for all active TMs.
+        # Supabase / PostgREST silently caps responses at 1000 rows by default;
+        # `.limit()` does NOT override the cap (server-side max-rows wins).
+        # tm_eligibility has ~38 rows per active TM (~1900+ total for ~50 TMs),
+        # so a single .in_() query truncates and loses ~half the data —
+        # TMs whose rows fall past the cutoff get ALL their eligibility silently
+        # defaulted to False, never get placed by the engine. Range pagination
+        # IS respected: request rows in pages of 1000 with .range(start, end-1)
+        # and stop when a page returns less than 1000 rows. ~170ms for two
+        # pages vs. ~250ms for the previous TM-id-chunked approach, AND robust
+        # to row-width changes (no need to re-tune chunk size if columns grow).
         elig_rows: list = []
-        BATCH = 25
-        for i in range(0, len(tm_ids), BATCH):
-            chunk = tm_ids[i:i + BATCH]
+        page_size = 1000
+        page = 0
+        while True:
+            start = page * page_size
+            end   = start + page_size - 1
             r = (
                 sb.table("tm_eligibility")
                 .select("tm_id, slot_id, eligible")
-                .in_("tm_id", chunk)
+                .in_("tm_id", tm_ids)
+                .range(start, end)
                 .execute()
             )
-            elig_rows.extend(r.data or [])
+            batch = r.data or []
+            elig_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            page += 1
+            if page > 50:  # hard guard — way more than expected
+                print(f"[get_engine_roster_from_db] stopped pagination at page {page}; investigate")
+                break
 
         # Pivot eligibility into {tm_id: {elig_col_name: bool}}
         elig_by_tm: dict[str, dict] = {p["tm_id"]: {} for p in profiles}
@@ -2530,6 +2677,37 @@ def get_overlap_tasks_for_engine(target_date: "date | None" = None) -> dict:
     except Exception:
         print(f"[db] get_overlap_tasks_for_engine error:\n{traceback.format_exc()}")
         return {"PM": {}, "AM": {}}
+
+
+def get_canonical_tasks_for_slot(slot_code: str) -> list[str]:
+    """Return the canonical task list for an overlap slot from the overlap_tasks table.
+
+    The overlap_tasks table stores one task string per slot (period + slot_id).
+    Overlap slot codes are "PMOL1"–"PMOL6" and "AMOL1"–"AMOL6"; zone / RR / aux
+    slots won't match any rows and will return [].
+
+    Args:
+        slot_code: The slot key as stored in overlap_tasks.slot_id (e.g. "PMOL3").
+                   Comparison is case-insensitive (the value is uppercased before query).
+
+    Returns:
+        List of task strings; empty list when no canonical tasks exist for this slot
+        or when the DB call fails.
+    """
+    if not slot_code:
+        return []
+    try:
+        sb = get_client()
+        res = (
+            sb.table("overlap_tasks")
+            .select("task")
+            .eq("slot_id", slot_code.upper())
+            .execute()
+        )
+        return [r["task"] for r in (res.data or []) if r.get("task")]
+    except Exception:
+        log.error("[db] get_canonical_tasks_for_slot error:\n%s", traceback.format_exc())
+        return []
 
 
 def get_training_schedule_from_db() -> dict:

@@ -50,6 +50,11 @@ _state = {
     "day_dates": {},           # {day_name: date}
     "anchor_date": None,
     "current_day_iso": None,
+    # Per-night soft engine_overrides — refreshed by fill_engine.py at the
+    # top of each day's fill loop. Keys are display_names; values are sets
+    # of override types active for that TM tonight (e.g. {"prefer_easier"}).
+    # See set_soft_overrides_for_day().
+    "soft_overrides": {},
 }
 
 DEFAULT_WEIGHTS = {
@@ -61,7 +66,19 @@ DEFAULT_WEIGHTS = {
     "area_diversity":      0.7,
     "fatigue_index":       0.8,
     "soft_prefer_set":     0.6,
+    # K.4 — soft engine_overrides actually bias placement now.
+    "override_prefer_easier":   1.5,   # nudges TM toward low-difficulty slots
+    "override_avoid_high_load": 1.5,   # nudges TM away from high-load slots
+    "override_priority_placement": 1.0,# small overall bonus when this TM is a candidate
 }
+
+# Threshold used by override scoring components. A slot with difficulty
+# > _OVERRIDE_DIFFICULTY_THRESHOLD is considered "hard" for prefer_easier;
+# a slot with load_score > _OVERRIDE_LOAD_THRESHOLD is considered "heavy"
+# for avoid_high_load. Both are tuned conservatively (mid-7 of 10) so the
+# override penalizes only genuinely demanding slots, not the median.
+_OVERRIDE_DIFFICULTY_THRESHOLD = 6
+_OVERRIDE_LOAD_THRESHOLD       = 6
 
 # SLOT_CATEGORY + SWEEPER_TAGGED_SLOTS imported above from glcr_engine.config
 # (consolidated 5/3/26 — was duplicated in fill_engine.py + here, now one source).
@@ -98,6 +115,22 @@ def init(*, roster, tm_skill, slot_difficulty,
 def set_current_day(iso_date_str):
     """Engine calls this at the start of each day's fill loop."""
     _state["current_day_iso"] = iso_date_str
+
+
+def set_soft_overrides_for_day(soft_by_dn):
+    """Engine calls this once per night after building per-night
+    engine_overrides, BEFORE running per-slot scoring. Replaces (does not
+    merge) the previous night's soft overrides.
+
+    Args:
+        soft_by_dn: dict mapping display_name -> set of override_type
+                    strings active for that TM on the current night,
+                    e.g. {"Eric": {"prefer_easier"}, "Joy": {"priority_placement"}}.
+                    Hard overrides (unavailable) are NOT included here —
+                    those are filtered from the candidate pool upstream
+                    in fill_engine.py before scoring runs.
+    """
+    _state["soft_overrides"] = soft_by_dn or {}
 
 
 # ── Slot label / target matching ─────────────────────────────────────
@@ -310,6 +343,22 @@ def score_placement(rk, slot_code, *, skill_priority=False,
     pair_aff  = pair_affinity_score(dn, slot_code, day_name)
     fatigue_p = fatigue_penalty(dn, slot_code, today_iso_str)
 
+    # K.4 — soft engine_overrides for this TM on the current night.
+    # Each component contributes a positive penalty (lower=better) when
+    # the override discourages this placement. priority_placement is the
+    # only one that *boosts* (negative penalty) — it's a "lean toward this
+    # TM" signal rather than slot-specific.
+    overrides_active = _state.get("soft_overrides", {}).get(dn, set())
+    override_prefer_easier = 0
+    if "prefer_easier" in overrides_active and diff > _OVERRIDE_DIFFICULTY_THRESHOLD:
+        override_prefer_easier = 1
+    override_avoid_high_load = 0
+    if "avoid_high_load" in overrides_active:
+        load = _state.get("slot_loads", {}).get(slot_code, 0) or 0
+        if load > _OVERRIDE_LOAD_THRESHOLD:
+            override_avoid_high_load = 1
+    override_priority_placement = -1 if "priority_placement" in overrides_active else 0
+
     components = {
         "skill_match":         skill_pen,
         "within_repeat":       within,
@@ -319,6 +368,9 @@ def score_placement(rk, slot_code, *, skill_priority=False,
         "preference_fit":      pref_fit,
         "pair_affinity":       pair_aff,
         "fatigue_index":       fatigue_p,
+        "override_prefer_easier":      override_prefer_easier,
+        "override_avoid_high_load":    override_avoid_high_load,
+        "override_priority_placement": override_priority_placement,
     }
     w = _state["weights"]
     total = sum(w.get(k, 1.0) * v for k, v in components.items())

@@ -55,6 +55,18 @@ import datetime as dt
 from pathlib import Path
 from openpyxl import load_workbook
 
+# 5/6/26: DB helpers — replace Rules/*.json file reads (Phase F closure).
+# shared/ lives at repo root (4 parents above this file).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from shared.db import (
+    get_overlap_tasks_for_engine,
+    get_training_schedule_from_db,
+    get_engine_roster_from_db,
+    get_engine_profiles_from_db,
+)
+
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
@@ -116,7 +128,9 @@ TASKS_AUX = {
     "z9_sr_buddy":  ("Z9 SR Buddy",    "Smoking Room (paired)"),
 }
 
-# Overlap task assignments — loaded from Rules/Overlap Tasks.json.
+# Overlap task assignments — loaded from Supabase (overlap_tasks table).
+# Defaults stay as a safety net if the DB is unavailable, but in normal
+# operation the canonical source is the engine's overlap_tasks table.
 _OVERLAP_DEFAULT_PM = [
     "Vacuum, Bottles & Glass",
     "Glass & Counters, Trash",
@@ -132,24 +146,25 @@ _OVERLAP_DEFAULT_AM = [
     "Trash",
 ]
 
-def load_overlap_tasks(rules_dir: Path) -> tuple[list[str], list[str], dict]:
-    """Single source of truth shared with fill_engine.py. Falls back to
-    hardcoded defaults if the JSON is missing or malformed."""
-    cfg_path = rules_dir / "Overlap Tasks.json"
-    if not cfg_path.exists():
-        return list(_OVERLAP_DEFAULT_PM), list(_OVERLAP_DEFAULT_AM), {}
+def load_overlap_tasks() -> tuple[list[str], list[str], dict]:
+    """Read PM/AM canonical overlap tasks from Supabase via
+    get_overlap_tasks_for_engine(). Per-day overrides live in
+    overlap_task_overrides and are picked up at render time per-date
+    (not loaded once globally as the old _per_day_overrides JSON did).
+
+    Returns (pm_list_of_6, am_list_of_6, empty_overrides_dict).
+    The third tuple element is kept for API compatibility; per-day
+    overrides are now resolved on-the-fly via tasks_for_date() below.
+    """
     try:
-        with cfg_path.open() as f:
-            cfg = json.load(f)
-        pm_map = cfg.get("PM", {})
-        am_map = cfg.get("AM", {})
+        cfg = get_overlap_tasks_for_engine()  # {"PM": {slot:task}, "AM": {slot:task}}
+        pm_map = cfg.get("PM", {}) or {}
+        am_map = cfg.get("AM", {}) or {}
         pm = [pm_map.get(f"PMOL{i}", _OVERLAP_DEFAULT_PM[i-1]) for i in range(1, 7)]
         am = [am_map.get(f"AMOL{i}", _OVERLAP_DEFAULT_AM[i-1]) for i in range(1, 7)]
-        overrides = {k: v for k, v in (cfg.get("_per_day_overrides", {}) or {}).items()
-                     if not k.startswith("_")}
-        return pm, am, overrides
-    except (json.JSONDecodeError, OSError, KeyError, IndexError) as e:
-        print(f"  [warn] Overlap Tasks.json present but unreadable ({e}) — using defaults")
+        return pm, am, {}
+    except Exception as e:
+        print(f"  [warn] overlap_tasks DB read failed ({e}) — using defaults")
         return list(_OVERLAP_DEFAULT_PM), list(_OVERLAP_DEFAULT_AM), {}
 
 TASKS_PM_OL: list[str] = list(_OVERLAP_DEFAULT_PM)
@@ -597,33 +612,20 @@ def render_break_col(group_num: int, rows: list) -> str:
 # Utility Porter info, fill_engine.py can write into this file directly.
 UTILITY_PORTERS_BY_DATE: dict = {}
 
-def load_utility_porters(rules_dir: Path) -> dict:
-    """Read per-day Utility Porter assignments from Rules/Utility Porters.json.
-    Returns {iso_date: [(role, name), ...]} (capped at 8 per day at render time).
-    Falls back to empty dict if file is missing or malformed."""
-    p = rules_dir / "Utility Porters.json"
-    if not p.exists():
-        return {}
-    try:
-        with p.open() as f:
-            data = json.load(f)
-        out = {}
-        for iso, entries in data.items():
-            if iso.startswith("_"):
-                continue
-            if not isinstance(entries, list):
-                continue
-            normalized = []
-            for e in entries:
-                if isinstance(e, dict):
-                    normalized.append((e.get("role", ""), e.get("name", "")))
-                elif isinstance(e, (list, tuple)) and len(e) == 2:
-                    normalized.append(tuple(e))
-            out[iso] = normalized
-        return out
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"  [warn] Utility Porters.json unreadable ({e}) — using empty data")
-        return {}
+def load_utility_porters() -> dict:
+    """Per-day Utility Porter assignments — currently empty.
+
+    Brian (4/29/26): "It will come from the schedules uploaded from now on."
+    Until the weekly schedule format includes Utility Porter rows, no source
+    of truth exists for this data. Previously the JSON file was manually
+    populated; that workflow was abandoned. Returns {} unconditionally so
+    the renderer's per-day attach loop just sees no entries.
+
+    When the schedule format adds Utility Porter info, fill_engine.py
+    can populate a `utility_porters` table (one row per (date, role, tm_id))
+    and this function can be wired to read it.
+    """
+    return {}
 
 # Sweeper routes — keyed by sweeper code; values are (display label, route zones)
 SWEEPER_ROUTES = {
@@ -690,54 +692,51 @@ def read_week(xlsx_path: Path) -> list[dict]:
 # Gender info + sweeper auto-assignment
 # --------------------------------------------------------------------------
 
-def load_training_config(rules_dir: Path) -> dict:
-    """Read Rules/Training Config.json — returns {iso_date: {trainee,trainer,day}}.
-    The renderer pairs trainee onto the trainer's zone card with a 'TRAINING D{n}' pill."""
-    cfg_path = rules_dir / "Training Config.json"
-    if not cfg_path.exists():
-        return {}
+def load_training_config() -> dict:
+    """Read training schedule from Supabase via get_training_schedule_from_db().
+    Returns {iso_date: {trainee, trainer, day}} so the renderer can pair the
+    trainee onto the trainer's zone card with a 'TRAINING D{n}' pill."""
     try:
-        with cfg_path.open() as f:
-            cfg = json.load(f)
+        cfg = get_training_schedule_from_db()  # {"schedule": {...}}
         return cfg.get("schedule", {}) or {}
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"  [warn] Training Config.json unreadable ({e}) — skipping training pairs")
+    except Exception as e:
+        print(f"  [warn] training_schedule DB read failed ({e}) — skipping training pairs")
         return {}
 
-def load_gender_info(rules_dir: Path) -> tuple[set, set, set]:
-    """(males, females, no_sweeper) derived from Eligibility Roster + TM Profiles."""
+def load_gender_info() -> tuple[set, set, set]:
+    """(males, females, no_sweeper) derived from Supabase tm_profiles +
+    tm_eligibility (formerly read from Eligibility Roster.xlsx + TM
+    Profiles.json under Rules/).
+
+    Gender derivation: `Mens X` columns true → male; `Womens X` true → female.
+    Mirrors the old Eligibility Roster-derived logic so the deployment book
+    renders identically to the file-based version.
+    """
     males, females, no_sweeper = set(), set(), set()
-    roster_path = rules_dir / "Eligibility Roster.xlsx"
-    if roster_path.exists():
-        wb = load_workbook(roster_path, data_only=True)
-        ws = wb.active
-        HEAD = 2
-        headers = {ws.cell(HEAD, c).value: c for c in range(1, ws.max_column + 1) if ws.cell(HEAD, c).value}
-        womens_cols = [c for h, c in headers.items() if str(h).startswith("Womens")]
-        mens_cols   = [c for h, c in headers.items() if str(h).startswith("Mens")]
-        name_col    = headers.get("Display Name", 2)
-        active_col  = headers.get("Active")
-        is_y = lambda v: v in (True, 1, "Y", "y", "TRUE", "True", "true")
-        for r in range(HEAD + 1, ws.max_row + 1):
-            dn_raw = ws.cell(r, name_col).value
-            if not dn_raw: continue
-            dn = str(dn_raw).strip()
-            if active_col:
-                av = ws.cell(r, active_col).value
-                if av in (False, 0, "N", "n", None) and av != "Y": continue
-            is_female = any(is_y(ws.cell(r, c).value) for c in womens_cols)
-            is_male   = any(is_y(ws.cell(r, c).value) for c in mens_cols)
+    try:
+        roster, _ = get_engine_roster_from_db()
+        for _key, info in (roster or {}).items():
+            dn = (info.get("display_name") or "").strip()
+            if not dn:
+                continue
+            elig = info.get("eligibility") or {}
+            is_female = any(elig.get(f"Womens {n}", False) for n in ("1 + 2", 6, 7, 8, 10))
+            is_male   = any(elig.get(f"Mens {n}",   False) for n in ("1 + 2", 6, 7, 8, 10))
             if is_female:
                 females.add(dn)
             elif is_male:
                 males.add(dn)
-    profiles_path = rules_dir / "TM Profiles.json"
-    if profiles_path.exists():
-        with profiles_path.open() as f:
-            data = json.load(f)
-        for dn, p in data.get("profiles", {}).items():
-            if p.get("slot_preference") == "no_sweeper":
+    except Exception as e:
+        print(f"  [warn] roster DB read failed ({e}) — gender info empty")
+
+    try:
+        profiles = get_engine_profiles_from_db().get("profiles", {}) or {}
+        for dn, p in profiles.items():
+            if isinstance(p, dict) and p.get("slot_preference") == "no_sweeper":
                 no_sweeper.add(dn)
+    except Exception as e:
+        print(f"  [warn] profiles DB read failed ({e}) — no_sweeper info empty")
+
     return males, females, no_sweeper
 
 
@@ -2351,17 +2350,17 @@ def main(argv):
     days = read_week(xlsx)
     week_end = days[-1]["date"]
 
-    script_root = Path(__file__).resolve().parent
-
+    # Phase F closure (5/6/26): all four config sources now read from Supabase
+    # via shared/db.py engine helpers. Rules/ folder no longer touched here.
     global TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES
-    TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES = load_overlap_tasks(script_root / "Rules")
+    TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES = load_overlap_tasks()
 
-    males, females, no_sweeper = load_gender_info(script_root / "Rules")
+    males, females, no_sweeper = load_gender_info()
 
-    training_schedule = load_training_config(script_root / "Rules")
+    training_schedule = load_training_config()
 
     global UTILITY_PORTERS_BY_DATE
-    UTILITY_PORTERS_BY_DATE = load_utility_porters(script_root / "Rules")
+    UTILITY_PORTERS_BY_DATE = load_utility_porters()
 
     # Attach utility porters per-day
     for d in days:

@@ -1,4 +1,20 @@
-"""TM picker drawer — slides in when a zone/RR/aux card is clicked."""
+"""TM picker drawer — slides in when a zone/RR/aux card is clicked.
+
+Layout (v2 — two-column):
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Header: "Assign TM" + slot label                         [X]   │
+  ├──────────────────────────────────┬───────────────────────────────┤
+  │  Left pane (TM list)             │  Right pane (canonical tasks) │
+  │  • Search input                  │  "What this slot does:"       │
+  │  • Legend chips                  │  • task 1                     │
+  │  • Scrollable TM roster          │  • task 2                     │
+  │                                  │  (empty state for zone slots) │
+  ├──────────────────────────────────┴───────────────────────────────┤
+  │  Footer: [Clear slot]                                            │
+  └──────────────────────────────────────────────────────────────────┘
+
+The right-pane task list is read-only (v1). Editing tasks inline is v2.
+"""
 
 import reflex as rx
 from ..state import ZdsState
@@ -152,12 +168,111 @@ def _tm_row(tm: dict) -> rx.Component:
     )
 
 
+# ── Left pane — TM list ───────────────────────────────────────────────────────
+
+def _left_pool_pane() -> rx.Component:
+    """Search input + legend + scrollable TM roster."""
+    return rx.vstack(
+        # Search
+        rx.box(
+            rx.input(
+                placeholder="Search by name…",
+                value=ZdsState.tm_search,
+                on_change=ZdsState.set_tm_search,
+                width="100%",
+                auto_focus=True,
+            ),
+            padding="12px 16px 6px",
+            width="100%",
+        ),
+        # Legend
+        rx.hstack(
+            rx.icon("star", size=10, color="#d97706", fill="#d97706"),
+            rx.text("Preferred", size="1", color="#9ca3af"),
+            rx.separator(orientation="vertical", height="10px"),
+            rx.box(width="8px", height="8px", background="#fffbeb",
+                   border="1px solid #fbbf24", border_radius="2px"),
+            rx.text("Placed", size="1", color="#9ca3af"),
+            rx.separator(orientation="vertical", height="10px"),
+            rx.box(width="22px", height="12px", background="#d1fae5",
+                   border_radius="2px"),
+            rx.text("Scheduled", size="1", color="#9ca3af"),
+            padding="0 16px 8px",
+            gap="4px", align="center",
+            flex_wrap="wrap",
+        ),
+        # TM list
+        rx.scroll_area(
+            rx.vstack(
+                rx.foreach(ZdsState.filtered_tms, _tm_row),
+                gap="0", width="100%",
+            ),
+            flex="1",
+            overflow_y="auto",
+            width="100%",
+        ),
+        flex="1",
+        min_width="0",
+        overflow="hidden",
+        gap="0",
+        align="start",
+        width="100%",
+    )
+
+
+# ── Right pane — canonical tasks ──────────────────────────────────────────────
+
+def _right_tasks_pane() -> rx.Component:
+    """Read-only canonical task list for the slot being assigned.
+
+    Source: overlap_tasks table (same data the engine uses). Zone / RR / aux
+    slots won't have rows and will show the empty-state message.
+    """
+    return rx.vstack(
+        rx.text(
+            "What this slot does:",
+            weight="bold", size="2", color="#374151",
+        ),
+        rx.cond(
+            ZdsState.picker_tasks.length() > 0,
+            rx.vstack(
+                rx.foreach(
+                    ZdsState.picker_tasks,
+                    lambda task: rx.hstack(
+                        rx.text("·", size="2", color="#9ca3af", flex_shrink="0",
+                                margin_top="1px"),
+                        rx.text(task, size="2", color="#374151", line_height="1.45",
+                                flex="1"),
+                        align="start", gap="8px", width="100%",
+                    ),
+                ),
+                gap="8px", width="100%",
+            ),
+            rx.text(
+                "No canonical tasks for this slot — add tasks after placement.",
+                size="1", color="#9ca3af", font_style="italic", line_height="1.5",
+            ),
+        ),
+        padding="16px",
+        width="220px",
+        flex_shrink="0",
+        border_left="1px solid #e5e7eb",
+        background="#f9fafb",
+        overflow_y="auto",
+        align="start",
+        gap="10px",
+        height="100%",
+    )
+
+
+# ── Main drawer ───────────────────────────────────────────────────────────────
+
 def tm_picker_drawer() -> rx.Component:
     return rx.drawer.root(
         rx.drawer.overlay(z_index="40"),
         rx.drawer.portal(
             rx.drawer.content(
-                # Header
+                # ── Header ──────────────────────────────────────────────────
                 rx.hstack(
                     rx.vstack(
                         rx.text("Assign TM", weight="bold", size="4"),
@@ -173,43 +288,19 @@ def tm_picker_drawer() -> rx.Component:
                     width="100%", align="center",
                     padding="16px 16px 12px",
                     border_bottom="1px solid #e5e7eb",
+                    flex_shrink="0",
                 ),
-                # Search
-                rx.box(
-                    rx.input(
-                        placeholder="Search by name…",
-                        value=ZdsState.tm_search,
-                        on_change=ZdsState.set_tm_search,
-                        width="100%",
-                        auto_focus=True,
-                    ),
-                    padding="12px 16px 6px",
-                ),
-                # Legend
+                # ── Body: left TM list + right tasks panel ───────────────
                 rx.hstack(
-                    rx.icon("star", size=10, color="#d97706", fill="#d97706"),
-                    rx.text("Preferred", size="1", color="#9ca3af"),
-                    rx.separator(orientation="vertical", height="10px"),
-                    rx.box(width="8px", height="8px", background="#fffbeb",
-                           border="1px solid #fbbf24", border_radius="2px"),
-                    rx.text("Placed", size="1", color="#9ca3af"),
-                    rx.separator(orientation="vertical", height="10px"),
-                    rx.box(width="22px", height="12px", background="#d1fae5",
-                           border_radius="2px"),
-                    rx.text("Scheduled", size="1", color="#9ca3af"),
-                    padding="0 16px 8px",
-                    gap="4px", align="center",
-                ),
-                # TM list
-                rx.scroll_area(
-                    rx.vstack(
-                        rx.foreach(ZdsState.filtered_tms, _tm_row),
-                        gap="0", width="100%",
-                    ),
+                    _left_pool_pane(),
+                    _right_tasks_pane(),
                     flex="1",
-                    overflow_y="auto",
+                    overflow="hidden",
+                    align="stretch",
+                    gap="0",
+                    width="100%",
                 ),
-                # Footer — clear slot
+                # ── Footer — clear slot ──────────────────────────────────
                 rx.box(
                     rx.button(
                         rx.icon("user-x", size=14),
@@ -225,11 +316,12 @@ def tm_picker_drawer() -> rx.Component:
                     ),
                     padding="12px 16px",
                     border_top="1px solid #e5e7eb",
+                    flex_shrink="0",
                 ),
                 # Drawer styles
                 top="0", right="0",
                 height="100%",
-                width="360px",
+                width="580px",       # wider than v1 (360px) to fit task panel
                 background="white",
                 display="flex",
                 flex_direction="column",

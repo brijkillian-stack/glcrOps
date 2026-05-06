@@ -144,6 +144,10 @@ class ZdsState(rx.State):
     picker_label:    str = ""
     eligible_tms:    list[TM] = []
     tm_search:       str = ""
+    # Canonical tasks for the currently-open slot (read from overlap_tasks via DB).
+    # Read-only side panel in the picker shows these before Brian picks a TM.
+    # Empty for zone / RR / aux slots; populated for PMOL / AMOL slots.
+    picker_tasks:    list[str] = []
 
     # ── Week overview ─────────────────────────────────────────────────────────
     week_info: Week = Week(id="", week_ending="", label="", status="")
@@ -1045,6 +1049,13 @@ class ZdsState(rx.State):
         self.picker_rr_side  = rr_side
         self.picker_label    = label
         self.tm_search       = ""
+        # Load canonical tasks for the slot (overlap_tasks table).
+        # Non-fatal: zone / RR / aux slots return [] which shows the empty state.
+        try:
+            from shared.db import get_canonical_tasks_for_slot
+            self.picker_tasks = get_canonical_tasks_for_slot(slot_key)
+        except Exception:
+            self.picker_tasks = []
         try:
             tms = database.fetch_eligible_tms_for_slot(
                 slot_key, rr_side if rr_side else None
@@ -1160,6 +1171,7 @@ class ZdsState(rx.State):
         self.show_picker = False
         self.picker_slot_id = ""
         self.tm_search = ""
+        self.picker_tasks = []
 
     def set_tm_search(self, val: str):
         self.tm_search = val
@@ -1514,10 +1526,17 @@ class ZdsState(rx.State):
             if not ok:
                 self.error = "Failed to mark called off."
                 return
-            # Phase C.2 — mirror to engine_overrides so fill_engine hard-filters this TM
+            # Phase C.2 — mirror to engine_overrides so fill_engine hard-filters this TM.
+            # Guard: ensure a tm_profiles row exists first. The call-off UI is
+            # entity-driven (anyone in entities can be called off), but
+            # engine_overrides.tm_id has an FK to tm_profiles. Without this
+            # guard, calling off any entity-only TM silently fails the engine
+            # mirror (caught here, logged, but engine never excluded the TM).
+            # ensure_tm_profile_exists is idempotent — no-op if profile exists.
             if self.current_week_id:
                 try:
-                    from shared.db import set_engine_override
+                    from shared.db import ensure_tm_profile_exists, set_engine_override
+                    ensure_tm_profile_exists(tm_id, source="mark_called_off")
                     set_engine_override(
                         week_id=self.current_week_id,
                         tm_id=tm_id,
@@ -1528,7 +1547,7 @@ class ZdsState(rx.State):
                         created_by="supervisor",
                     )
                 except Exception as oe:
-                    # Non-fatal — call_off is already written; log and continue
+                    # Non-fatal — call_off is already written; log and continue.
                     print(f"[mark_called_off] engine_overrides write failed: {oe}")
             # Refresh — will recompute warning_status on every slot too
             self._load_night(self.current_night_id)
