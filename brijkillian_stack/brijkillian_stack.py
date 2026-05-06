@@ -19,6 +19,7 @@ from shared.components.area_check import area_check_modal
 from shared.components.context_menu import global_context_menu
 from shared.components.highlight_toolbar import global_highlight_toolbar
 from shared.components.undo_toast import global_undo_toast
+from shared.components.audit_strip import audit_strip
 
 from apps.glcr.routes import (
     ROUTES as GLCR_ROUTES,
@@ -93,12 +94,14 @@ def _with_grok(page_fn):
 
 
 def _with_zds_chrome(page_fn):
-    """Wrap a ZDS page with dark-mode theme, casino-scatter bg, context menu + toolbar.
+    """Wrap a ZDS page with the theme system, casino-scatter bg, context menu + toolbar.
 
-    data-theme="zds-dark" on the outer box scopes all zds_dark.css overrides to
-    ZDS pages only — Memory/GLCR pages use _with_grok and are unaffected.
+    data_theme is bound to ZdsState.theme ("zds-dark" | "light") so the
+    theme toggle takes effect without a page reload.
     The .zds-casino-bg div is position:fixed so it renders behind all content.
     """
+    from apps.zds.state import ZdsState
+
     def wrapped() -> rx.Component:
         return rx.box(
             rx.box(class_name="zds-casino-bg"),   # fixed SVG scatter behind content
@@ -106,7 +109,8 @@ def _with_zds_chrome(page_fn):
             global_context_menu(),
             global_highlight_toolbar(),
             global_undo_toast(),
-            data_theme="zds-dark",
+            audit_strip(),
+            data_theme=ZdsState.theme,
             min_height="100vh",
             position="relative",
         )
