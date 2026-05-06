@@ -4,6 +4,41 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-06 — Session zds_handoff_phases_B_thru_F (Sonnet)
+
+### Phase B — Zone card typography + visual corrections
+- **`apps/zds/styles.py`** — `ZONE_COLORS` corrected: Zone 6 fixed to blue (`#2563eb`), Zone 7 to pink (`#ec4899`) (were swapped); Zone 2 corrected from purple to amber; all zone colors updated to match handoff spec.
+- **`apps/zds/components/zone_card.py`** — Label gets `class_name="card-slot-label"` (CSS: 9px/700/0.14em). TM name `class_name` emits `card-tm-name-calledoff` when `warning_status=="called_off"`. Color bar: filled=3px zone-color, unfilled=2px `#2e4357` dim. Card `min_height` bumped from 90px → 108px.
+- **`assets/zds_dark.css`** — Complete CSS token migration to `--zds-*` namespace with `[data-theme="light"]` override block. Zone 6↔7 colors corrected in CSS. Light mode tokens: GLCR blue `#0065bf` as `--zds-blue`, lighter surfaces. Casino scatter bg opacity 0.06 in light mode. Night tab fill bar: `28×3px border-radius:999`. Scoreboard day-name: `font-size:36px; font-weight:800`. Break wave badge classes (blue/green/violet). Called-off badge. Audit strip CSS. Notice dot CSS. Night lock CSS.
+
+### Phase C — Audit strip (commit `aff4f80`)
+- **`shared/components/audit_strip.py`** — New `audit_strip()` component: fixed bottom-right strip reads `ZdsState.last_saved_at` and `ZdsState.has_changes`. Green dot + "Saved {time}" when saved; amber dot + "Unsaved changes" when dirty; hidden when clean. CSS class `audit-strip` (already in `zds_dark.css`).
+- **`apps/zds/state.py`** — `last_saved_at: str = ""` field; stamped in `_log_change` after each successful write using `strftime("%I:%M %p")`.
+- **`brijkillian_stack/brijkillian_stack.py`** — `audit_strip()` imported and mounted in `_with_zds_chrome`.
+
+### Phase D — Night-level lock/unlock (commit `291bf99`)
+- **DB migration** (`zds_phase_d_night_lock`) — `nights.is_locked bool NOT NULL DEFAULT false`, `nights.locked_by text`, `nights.locked_at timestamptz`. Index `nights_locked_idx (week_id, is_locked)`.
+- **`apps/zds/types.py`** — `Night` TypedDict: `+is_locked`, `+locked_by`, `+locked_at`. `EMPTY_NIGHT` defaults added.
+- **`apps/zds/database.py`** — `update_night_lock(night_id, is_locked, locked_by)`: stamps `locked_at=now()` on lock, clears on unlock.
+- **`apps/zds/state.py`** — `night_lock_confirm_open: bool` state var. `current_night_is_locked` `@rx.var` (reads from `self.nights`). `toggle_night_lock()`: role gate (`zds_editor`+); lock immediate, unlock opens confirm dialog. `confirm_night_unlock()` / `cancel_night_unlock()`. Night-level guard prepended to `clear_slot`, `assign_tm`, `swap_tms`.
+- **`apps/zds/pages/deployment.py`** — `_night_unlock_dialog()`: `rx.alert_dialog` confirm before unlock. Night header: gold LOCKED badge + Lock/Unlock toggle button. Deployment body wrapped in `.night-locked` class when locked (CSS: `pointer-events:none; opacity:0.75` on all cards). Dialog mounted at page root.
+
+### Phase E — Notices system (commit `e5ea018`)
+- **DB migration** (`zds_phase_e_notices`) — `notices` table: `id, night_id, slot_key, type CHECK(alert|info|training|meeting), text, created_by, created_at`. Indexes on `night_id` and `(night_id, slot_key)`.
+- **`apps/zds/types.py`** — `ZoneSlot.notices: list` field (injected in `_load_night`).
+- **`apps/zds/database.py`** — `fetch_notices(night_id)`, `create_notice(...)`, `delete_notice(notice_id)` helpers.
+- **`apps/zds/state.py`** — `notice_form_open/slot_key/type/text` state vars. `open/close/set_type/set_text/submit_notice/delete_notice` handlers. `_load_night`: fetches notices, groups by `slot_key`, injects into each slot dict.
+- **`apps/zds/components/zone_card.py`** — `_notice_dot(notices)`: 8px colored dot top-left with CSS tooltip on hover, hidden when list empty. Dot color driven by `rx.match` on `notices[0]["type"]`.
+- **`shared/components/context_menu.py`** — `open_notice_for_ctx_slot()` handler (cross-state → `ZdsState.open_notice_form`). "Add notice 📌" item in both assignment and empty-slot menus.
+- **`apps/zds/pages/deployment.py`** — `_notice_form_dialog()`: type picker (4 color-coded buttons) + text input + submit; mounted at page root.
+- **`assets/zds_dark.css`** — `.notice-dot-wrapper` + `.notice-tooltip` hover-reveal styles added.
+
+### Phase F — Print layout landscape fixes + lock/notice integration
+- **`apps/zds/engine/render_deployment_book.py`** — `.body` grid rows `1.55fr/1fr` → `1.4fr/0.85fr`; padding `10px/8px` → `8px/6px`; gap `9px` → `7px`. `.zones-grid` gap `7px` → `6px`. `.foot-lock-stamp` CSS: gold 8.5px/700 for print-safe lock indicator. `.print-notice-*` CSS: inline badges with print-contrast darker palette.
+- **`apps/zds/print_renderer.py`** — `_fetch_night_data` fetches notices and groups by `slot_key`. `day` dict gains `is_locked`, `locked_by`, `notices_by_slot`. `_notice_badges_html()` helper renders `.print-notice` spans. `_render_deployment_page` emits lock stamp in footer when locked. (Notice badges available via helper for future zone card integration.)
+
+---
+
 ## 2026-05-06 — Session zds_phase4_undo_toast (Sonnet)
 
 ### Phase 4 — Client-side undo toast (no schema changes)

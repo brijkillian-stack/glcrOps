@@ -1002,11 +1002,14 @@ def _compute_sweeper_add(day, males, no_sweeper_tms):
 
 def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_tms=None,
                     training_pair=None):
-    """v2.3 daily deployment page (1 of 2 per day).
+    """LANDSCAPE daily deployment page (Phase 6, 5/6/26).
 
     `idx` is 1-based day index (Friday=1 ... Thursday=7); `total` is total days
     in the schedule (always 7). Page numbering at the foot reflects the 14-page
-    book: this page is `2*idx - 1` of `2*total`."""
+    book: this page is `2*idx - 1` of `2*total`.
+
+    Renders as 11in × 8.5in landscape with masthead, 4-row body grid (zones 2×5,
+    restrooms, auxiliary, overlaps), and footer slug."""
     males = males or set()
     no_sweeper_tms = no_sweeper_tms or set()
     weekday   = day["weekday"]
@@ -1159,34 +1162,40 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     page_num   = 2 * idx - 1
     page_total = 2 * total
 
-    return f"""<article class="page" data-screen-label="{weekday} {esc(day['date_short'])}" style="--day-color:{day_color};">
+    return f"""<article class="page" style="--day-color:{day_color};">
   <header class="mast">
-    <div class="mast-day-num">{day['day_num']}</div>
+    <div class="mast-day">{day['day_num']}</div>
     <div class="mast-meta">
       <div class="day-name">{weekday}</div>
-      <div class="month">{month_name} · Day {idx} of {total}</div>
-      <div class="status">
+      <div class="month-str">{month_name} · Day {idx} of {total}</div>
+      <div class="status-row">
         <span class="break-bar">
           <span class="lbl">Breaks</span>
-          <span class="dot" data-group="1" title="Break 1">{g1}</span>
-          <span class="dot" data-group="2" title="Break 2">{g2}</span>
-          <span class="dot" data-group="3" title="Break 3">{g3}</span>
+          <span class="break-dot g1">{g1}</span>
+          <span class="break-dot g2">{g2}</span>
+          <span class="break-dot g3">{g3}</span>
         </span>
       </div>
     </div>
-    <div class="mast-context">
-      <div class="shift">Grave · 11pm – 7am</div>
+    <div class="mast-right">
+      <div class="shift-label">Grave · 11pm – 7am</div>
+      <div class="week-dots">
+        <div class="week-dot">F</div>
+        <div class="week-dot">S</div>
+        <div class="week-dot">S</div>
+        <div class="week-dot">M</div>
+        <div class="week-dot{'  cur' if current_idx == idx - 1 else ''}">T</div>
+        <div class="week-dot">W</div>
+        <div class="week-dot">T</div>
+      </div>
       <div class="group-key">
-        Group <span class="gp" data-group="1">1</span>
-        <span class="gp" data-group="2">2</span>
-        <span class="gp" data-group="3">3</span>
+        Group <span class="gp g1">1</span><span class="gp g2">2</span><span class="gp g3">3</span>
       </div>
     </div>
   </header>
   <div class="body">
     <section>
-      <h2 class="section-label is-primary">
-        <svg class="glyph"><use href="#g-zones"/></svg>
+      <h2 class="section-lbl">
         Zones <span class="meta">{cs["zones"][0]} / {cs["zones"][1]} staffed</span>
       </h2>
       <div class="zones-grid">
@@ -1194,8 +1203,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
       </div>
     </section>
     <section>
-      <h2 class="section-label">
-        <svg class="glyph"><use href="#g-restroom"/></svg>
+      <h2 class="section-lbl">
         Restrooms <span class="meta">{cs["rr"][0]} / {cs["rr"][1]} staffed</span>
       </h2>
       <div class="rr-grid">
@@ -1203,41 +1211,39 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
       </div>
     </section>
     <section>
-      <h2 class="section-label">
-        <svg class="glyph"><use href="#g-aux"/></svg>
+      <h2 class="section-lbl">
         Auxiliary <span class="meta">{cs["aux"][0]} / {cs["aux"][1]} staffed</span>
       </h2>
       <div class="{aux_strip_cls}">
 {aux_html}
       </div>
     </section>
-    <section class="overlaps-section">
-      <h2 class="section-label">
-        <svg class="glyph"><use href="#g-overlap"/></svg>
+    <section>
+      <h2 class="section-lbl">
         Overlaps <span class="meta">{cs["overlaps"][0]} / {cs["overlaps"][1]} staffed</span>
       </h2>
       <div class="overlap-row">
-        <div class="overlap-window">11p – 1a<span class="kind">Late evening</span></div>
+        <div class="overlap-time">11p – 1a<span class="kind">Late evening</span></div>
         <div class="overlap-mini-grid">{pm_minis}</div>
       </div>
       <div class="overlap-row">
-        <div class="overlap-window">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="overlap-time">5a – 7a<span class="kind">Early AM</span></div>
         <div class="overlap-mini-grid">{am_minis}</div>
       </div>
     </section>
   </div>
   <footer class="page-foot">
-    <span class="slug-mark"><span class="swatch"></span>GLCR · Grave</span>
-    <span class="slug-path"><span class="now">{weekday}</span> {esc(day['date_short'])}<span class="sep">·</span>Zone Deployment</span>
-    <span class="slug-pn"><span class="pn-cur">{page_num}</span> / {page_total}</span>
+    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="foot-center"><span class="now">{weekday}</span> {esc(day['date_short'])} · Zone Deployment</span>
+    <span class="foot-pn"><span class="cur">{page_num}</span> / {page_total}</span>
   </footer>
 </article>"""
 
 def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
-    """v2.3 break sheet (page 2 of each day).
+    """LANDSCAPE break sheet (Phase 6, 5/6/26 — page 2 of each day).
 
     Buckets every staffed slot into Group 1/2/3 break waves and renders three
-    columns of rows in section order (Zones → Auxiliary → Restrooms)."""
+    columns of rows. Uses break-cols 3-column grid layout at landscape scale."""
     males = males or set()
     no_sweeper_tms = no_sweeper_tms or set()
     weekday   = day["weekday"]
@@ -1253,25 +1259,25 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
     page_num   = 2 * idx
     page_total = 2 * total
 
-    return f"""<article class="page break-page" data-screen-label="{weekday} {esc(day['date_short'])} — Break Sheet" style="--day-color:{day_color};">
+    return f"""<article class="page" style="--day-color:{day_color};">
   <header class="mast">
-    <div class="mast-day-num is-outline">{day['day_num']}</div>
+    <div class="mast-day outline">{day['day_num']}</div>
     <div class="mast-meta">
       <div class="day-name">Break Sheet</div>
-      <div class="month">{weekday} · {month_name}</div>
-      <div class="status">
+      <div class="month-str">{weekday} · {month_name}</div>
+      <div class="status-row">
         <span class="stat"><span class="num">{in_rotation}</span><span class="lbl">In Rotation</span></span>
         <span class="break-bar">
           <span class="lbl">Breaks</span>
-          <span class="dot" data-group="1">{g1}</span>
-          <span class="dot" data-group="2">{g2}</span>
-          <span class="dot" data-group="3">{g3}</span>
+          <span class="break-dot g1">{g1}</span>
+          <span class="break-dot g2">{g2}</span>
+          <span class="break-dot g3">{g3}</span>
         </span>
       </div>
     </div>
-    <div class="mast-context">
-      <div class="shift">By Break Wave</div>
-      <div class="group-key">Take breaks together</div>
+    <div class="mast-right">
+      <div class="shift-label">By Break Wave</div>
+      <div style="font-size:10px; color:var(--ink-500); margin-top:4px; letter-spacing:0.06em;">Take breaks together</div>
     </div>
   </header>
   <div class="body">
@@ -1280,94 +1286,136 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
     </div>
   </div>
   <footer class="page-foot">
-    <span class="slug-mark"><span class="swatch"></span>GLCR · Grave</span>
-    <span class="slug-path"><span class="now">{weekday}</span> {esc(day['date_short'])}<span class="sep">·</span>Break Sheet</span>
-    <span class="slug-pn">{page_num} / <span class="pn-cur">{page_total}</span></span>
+    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="foot-center"><span class="now">{weekday}</span> {esc(day['date_short'])} · Break Sheet</span>
+    <span class="foot-pn"><span class="cur">{page_num}</span> / {page_total}</span>
   </footer>
 </article>"""
 
 # --------------------------------------------------------------------------
-# CSS — Option A v2.3 (Brian's redesign, 4/29/26 — supersedes the v6 template).
-# Operational color taxonomy (zone families) preserved; brand display font
-# (Barlow) preserved; full GLCR marketing chrome (black masthead, gold rule,
-# blue/gold accents, GLC logo) intentionally not used — this is an internal
-# print artifact, not a marketing surface. Day color theming drives the
-# masthead day-name, the bottom 3px mast bar, and the footer accent.
+# CSS — LANDSCAPE REDESIGN (Phase 6, 5/6/26)
+# Lifted directly from design/zds_redesign/zds_print_landscape_template.html
+# Operational color taxonomy (DAY_COLORS, ZONE_COLOR, RR_COLOR) UNCHANGED.
+# Page model: 11in × 8.5in landscape. CSS variables inject --day-color and
+# --card-color per-page and per-card. Renders as-is with no mediator layer.
+# Casino scatter background: skipped for v1 (see template lines 219-234).
 # --------------------------------------------------------------------------
 
 CSS = r"""
-/* Atkinson Hyperlegible — Braille Institute's research-backed font for low-vision
-   readers. Primary body face (5/1/26). Barlow stays loaded as a fallback display
-   option for any future branded variants. */
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow:wght@300;400;500;600;700;800&display=swap');
+/* Landscape redesign (5/6/26): lift Barlow weights; drop Atkinson Hyperlegible
+   (portrait accessibility face). Landscape is read at table distance, not floor
+   distance, so viewport is larger. Landscape uses the template's ink palette. */
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --c-yellow:#B89708; --c-red:#E53935; --c-pink:#B7679A; --c-blue:#1E88E5;
-  --c-brown:#6B5346; --c-green:#43A047; --c-orange:#FB8C00; --c-purple:#8E24AA; --c-grey:#4a5568;
-  --c-teal:#0E7C86;
-  --c-alert:#B91C1C;
+  --safe: 0.32in;
+  --page-w: 11in;
+  --page-h: 8.5in;
 
-  --ink-900:#1d1d1f; --ink-700:#3a3a3c; --ink-500:#6e6e73;
-  --ink-300:#aeaeb2; --ink-200:#d2d2d7; --ink-100:#f5f5f7;
-  --hairline:rgba(0,0,0,0.10);
-  --hairline-strong:rgba(0,0,0,0.22);
+  --ink-900: #0b1a2a;
+  --ink-700: #2c3e54;
+  --ink-500: #5a6b7d;
+  --ink-300: #94a2b1;
+  --ink-200: #c8d3dc;
+  --ink-100: #eef1f4;
+  --gold:    #c9a96e;
+  --gold-lt: #e8d5b4;
+  --hairline: rgba(11,26,42,0.10);
+  --hairline-strong: rgba(11,26,42,0.20);
 
-  --font: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
-  --font-display: 'Atkinson Hyperlegible', 'Barlow', -apple-system, sans-serif;
-
-  --page-w:11in; --page-h:8.5in; --safe:0.32in;
+  --font: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
 }
 
-html, body { margin:0; padding:0; background:#e8e8ec; color:var(--ink-900);
-  font-family:var(--font); -webkit-font-smoothing:antialiased; }
-body { display:flex; flex-direction:column; align-items:center; padding:32px 24px; gap:24px; }
+html, body { margin: 0; padding: 0; background: #d0d4d8;
+  font-family: var(--font); -webkit-font-smoothing: antialiased; }
+body { display: flex; flex-direction: column; align-items: center; padding: 32px 24px; gap: 28px; }
 
 .page {
-  width:var(--page-w); height:var(--page-h);
-  background:#fff;
-  box-shadow:0 16px 48px rgba(0,0,0,0.18);
-  display:grid; grid-template-rows: auto 1fr auto;
-  overflow:hidden;
+  width: var(--page-w); height: var(--page-h);
+  background: #fff;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
   font-feature-settings: "tnum","ss01";
+  position: relative;
 }
 
-/* FOOTER SLUG */
-.page-foot {
-  display:grid;
+/* ── MASTHEAD ── */
+.mast {
+  padding: 14px var(--safe) 10px;
+  display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items:center;
-  gap: 14px;
-  padding: 6px var(--safe) 7px;
+  gap: 20px;
+  align-items: end;
+  border-bottom: 1px solid var(--hairline);
   position: relative;
-  border-top: 1px solid var(--hairline);
 }
-.page-foot::before {
-  content:""; position:absolute; left:0; right:0; top:-1px; height:2px;
-  background: var(--day-color); opacity: 0.85;
+.mast::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 3px;
+  background: var(--day-color);
 }
-.page-foot .slug-mark {
-  display:inline-flex; align-items:center; gap:7px;
-  font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+
+.mast-day { font-weight: 800; font-size: 72px; line-height: 0.82; letter-spacing: -0.05em; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.mast-day.outline { color: #fff; -webkit-text-stroke: 2.5px var(--ink-900); }
+
+.mast-meta { display: grid; gap: 4px; padding-bottom: 8px; }
+.day-name  { font-weight: 700; font-size: 28px; letter-spacing: -0.02em; color: var(--day-color); line-height: 1; }
+.month-str { font-weight: 400; font-size: 12px; color: var(--ink-500); }
+.status-row { display: flex; gap: 16px; margin-top: 5px; align-items: center; }
+.stat { display: inline-flex; align-items: center; gap: 5px; }
+.stat .num { font-weight: 700; font-size: 13px; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.stat .lbl { font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); }
+
+.break-bar { display: inline-flex; align-items: center; gap: 5px; }
+.break-bar .lbl { font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); margin-right: 2px; }
+.break-dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.break-dot.g1 { background: #1a2332; color: #fff; }
+.break-dot.g2 { background: #5a6b7d; color: #fff; }
+.break-dot.g3 { background: #c8d3dc; color: var(--ink-900); }
+
+.mast-right { display: grid; gap: 6px; padding-bottom: 8px; text-align: right; justify-items: end; }
+.shift-label { font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-700); }
+.week-dots { display: inline-flex; gap: 2px; }
+.week-dot { width: 22px; height: 22px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; color: var(--ink-300); font-variant-numeric: tabular-nums; }
+.week-dot.cur { background: var(--day-color); color: #fff; font-weight: 700; }
+.group-key { display: inline-flex; gap: 5px; align-items: center; font-size: 9px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-500); }
+.gp { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10px; }
+.gp.g1 { background: #1a2332; color: #fff; }
+.gp.g2 { background: #5a6b7d; color: #fff; }
+.gp.g3 { background: #c8d3dc; color: var(--ink-900); }
+
+/* ── BODY ── */
+.body { padding: 8px var(--safe) 6px; display: grid; grid-template-rows: minmax(0,1.4fr) minmax(0,0.85fr) auto auto; gap: 7px; min-height: 0; }
+
+/* ── SECTION LABEL ── */
+.section-lbl {
+  font-weight: 600; font-size: 10px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--ink-500);
+  margin: 0 0 6px 0;
+  display: flex; align-items: center; gap: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--gold-lt);
 }
-.page-foot .slug-mark .swatch {
-  width: 8px; height: 8px; border-radius: 2px; background: var(--day-color);
+.section-lbl .meta { margin-left: auto; font-weight: 400; font-size: 9px; color: var(--ink-300); }
+.section-lbl svg { width: 12px; height: 12px; color: var(--ink-300); }
+
+/* ── FOOTER ── */
+.page-foot {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  gap: 14px; padding: 6px var(--safe) 7px;
+  position: relative; border-top: 1px solid var(--hairline);
 }
-.page-foot .slug-path {
-  font-size: 9.5px; font-weight: 400; letter-spacing: 0.06em;
-  color: var(--ink-500); text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.page-foot .slug-path .sep {
-  display:inline-block; margin: 0 7px; color: var(--ink-300);
-}
-.page-foot .slug-path .now { color: var(--ink-900); font-weight: 600; }
-.page-foot .slug-pn {
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.10em;
-  text-transform: uppercase; color: var(--ink-500);
-  font-variant-numeric: tabular-nums;
-}
-.page-foot .slug-pn .pn-cur { color: var(--ink-900); font-weight: 700; }
+.page-foot::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--day-color); }
+.foot-mark { display: inline-flex; align-items: center; gap: 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-500); }
+.foot-mark .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--day-color); }
+.foot-center { font-size: 9.5px; color: var(--ink-500); text-align: center; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.foot-center .now { color: var(--ink-900); font-weight: 700; }
+.foot-pn { font-size: 9.5px; font-weight: 700; letter-spacing: 0.10em; color: var(--ink-500); font-variant-numeric: tabular-nums; }
+.foot-pn .cur { color: var(--ink-900); }
 
 /* Phase D — Night lock stamp in print footer */
 .foot-lock-stamp {
@@ -1511,26 +1559,18 @@ body { display:flex; flex-direction:column; align-items:center; padding:32px 24p
   font-variant-numeric: tabular-nums;
 }
 
-/* ZONES */
-.body > section:first-of-type {
-  display: grid; grid-template-rows: auto 1fr; min-height: 0;
-}
-.body > section:nth-of-type(2) {
-  display: grid; grid-template-rows: auto 1fr; min-height: 0;
-}
-.zones-grid {
-  display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: 1fr 1fr;
-  gap: 6px; min-height: 0;
-}
+/* ── ZONE GRID ── */
+.body > section:first-of-type { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.body > section:nth-of-type(2) { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.zones-grid { display: grid; grid-template-columns: repeat(5,1fr); grid-template-rows: 1fr 1fr; gap: 6px; min-height: 0; }
+
+/* ── ZONE CARD ── */
 .zone-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
-  padding: 6px 10px 7px; display: grid; grid-template-rows: auto auto 1fr;
+  padding: 0 10px 8px; display: grid; grid-template-rows: auto auto 1fr;
   gap: 2px; position: relative; overflow: hidden;
 }
-.zone-card::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
-  background: var(--card-color);
-}
+.zone-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--card-color); }
 .zone-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; min-width: 0; }
 .zone-meta .zone-num { min-width: 0; overflow: hidden; }
 .zone-num {
