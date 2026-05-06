@@ -681,7 +681,11 @@ def deployment() -> rx.Component:
                 ZdsState.current_night_is_locked,
                 rx.hstack(
                     rx.icon("lock", size=13, color="#b45309"),
-                    rx.text("LOCKED", size="1", weight="700",
+                    # Reflex 0.9: weight prop only accepts
+                    # light|regular|medium|bold — numeric strings ("700")
+                    # crash compile. Use weight="bold" + font_weight for
+                    # finer-grained CSS weight if needed.
+                    rx.text("LOCKED", size="1", weight="bold",
                             color="#b45309", letter_spacing="0.08em",
                             class_name="night-lock-badge"),
                     gap="4px", align="center",
