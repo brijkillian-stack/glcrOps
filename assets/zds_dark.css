@@ -161,14 +161,16 @@
   color: #f0f4f8 !important;
 }
 
-/* Task bullets */
+/* Task bullets — bumped from t3 (#4d6a82) to t2 (#8ba4be) for readability */
 [data-theme="zds-dark"] .zone-card .card-task-text {
-  color: #4d6a82 !important;
+  color: #8ba4be !important;
 }
 
-/* Empty-state text */
+/* Empty-state text — bumped from t4 (#2e4357) to a brighter mid-tone so
+   "Unfilled" actually reads against the dark surface. Italic + this color
+   still communicates "no body assigned" without disappearing. */
 [data-theme="zds-dark"] .zone-card .card-empty-label {
-  color: #2e4357 !important;
+  color: #6b85a0 !important;
 }
 
 /* Task section separator + text colors */
@@ -177,11 +179,15 @@
 }
 [data-theme="zds-dark"] .card-task-section p,
 [data-theme="zds-dark"] .card-task-section span {
-  color: #4d6a82 !important;
+  color: #8ba4be !important;
 }
-/* Override the inline "× remove" button and "+ task" button specifically */
+/* "+ task" + "× remove" buttons stay slightly dimmer than primary text
+   so they don't compete visually, but still visible. Up from #4d6a82. */
 [data-theme="zds-dark"] .card-task-section .chakra-button {
-  color: #4d6a82 !important;
+  color: #7a93ad !important;
+}
+[data-theme="zds-dark"] .card-task-section .chakra-button:hover {
+  color: #f0f4f8 !important;
 }
 
 /* ── Section gold rule + eyebrow ─────────────────────────────────────────── */
@@ -203,8 +209,10 @@
   display: block;
 }
 
+/* Bumped one tier brighter on dark surface — section labels like
+   ZONES / RESTROOMS / AUXILIARY are key wayfinders, shouldn't blend. */
 [data-theme="zds-dark"] .section-eyebrow {
-  color: #4d6a82;
+  color: #8ba4be;
 }
 
 /* ── Night tabs ──────────────────────────────────────────────────────────── */
@@ -216,7 +224,9 @@
 
 [data-theme="zds-dark"] .night-tab {
   background: transparent !important;
-  color: #4d6a82 !important;
+  /* Bumped from #4d6a82 — inactive day pills (Friday/Saturday/Sunday/...)
+     were too dim to scan quickly. */
+  color: #8ba4be !important;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
@@ -224,7 +234,7 @@
 }
 
 [data-theme="zds-dark"] .night-tab:hover {
-  color: #8ba4be !important;
+  color: #f0f4f8 !important;
   background: rgba(48,178,255,0.04) !important;
 }
 
@@ -272,7 +282,9 @@
 
 /* Scoreboard stat labels + values */
 [data-theme="zds-dark"] .scoreboard-label {
-  color: #4d6a82 !important;
+  /* Bumped from #4d6a82 so labels like "IN ROTATION", "BREAKS", "OPEN"
+     are readable at a glance without squinting. */
+  color: #8ba4be !important;
   font-size: 10px !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
@@ -280,6 +292,9 @@
 [data-theme="zds-dark"] .scoreboard-value {
   color: #f0f4f8 !important;
   font-weight: 700 !important;
+}
+[data-theme="zds-dark"] .scoreboard-pct {
+  color: #8ba4be !important;
 }
 [data-theme="zds-dark"] .scoreboard-value-blue { color: #30b2ff !important; }
 [data-theme="zds-dark"] .scoreboard-value-red  { color: #f87171 !important; }
@@ -308,7 +323,8 @@
   font-weight: 700 !important;
 }
 [data-theme="zds-dark"] .week-night-card .card-stat-label {
-  color: #4d6a82 !important;
+  /* Bumped from #4d6a82 for readability on the week-overview cards. */
+  color: #8ba4be !important;
   font-size: 9px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.08em !important;

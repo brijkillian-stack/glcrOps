@@ -659,12 +659,18 @@ def deployment() -> rx.Component:
                             ZdsState.night_filled_count.to_string(), " / ",
                             ZdsState.night_total_count.to_string(),
                             " filled",
-                            size="2", weight="bold", color="#111827",
+                            size="2", weight="bold",
+                            # Drop inline color; let .scoreboard-value class
+                            # control it per theme (dark = #f0f4f8, light defaults
+                            # via styles.css below). Same fix pattern as the
+                            # filled-TM-name issue we just shipped.
                             font_variant_numeric="tabular-nums",
+                            class_name="scoreboard-value",
                         ),
                         rx.text(
                             "(", ZdsState.night_fill_pct.to_string(), "%)",
-                            size="1", color="#9ca3af",
+                            size="1",
+                            class_name="scoreboard-pct",
                         ),
                         gap="6px", align="baseline",
                     ),

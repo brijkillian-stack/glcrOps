@@ -3430,3 +3430,13 @@ header .app-switcher {
 .zone-card .card-empty-label {
   color: #d1d5db;        /* same gray as the inline fallback */
 }
+
+/* Scoreboard value + pct — light-mode defaults so the deployment-header
+   "X / Y filled (N%)" reads on light backgrounds. Dark override lives
+   in zds_dark.css scoped to [data-theme="zds-dark"]. */
+.scoreboard-value {
+  color: #111827;
+}
+.scoreboard-pct {
+  color: #9ca3af;
+}
