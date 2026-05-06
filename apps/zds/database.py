@@ -1236,7 +1236,7 @@ def fetch_all_tms() -> list[dict]:
     res = (
         _client()
         .table("entities")
-        .select("id, display_name, metadata, status")
+        .select("id, name, display_name, metadata, status")
         .eq("entity_type", "tm")
         .eq("status", "active")
         .order("display_name")
@@ -1252,6 +1252,15 @@ def fetch_all_tms() -> list[dict]:
         score = meta.get("skill_score", 0) or 0
         tms.append({
             "id":           row["id"],
+            # Legal full name ("Aurora Fox-Stone") — needed by the schedule
+            # parser to match xlsx rows whose `first` cell is the legal name
+            # rather than the display nickname. Without this, build_entity_lookup
+            # only keys on display_name's first token ("Alistair") and the parser
+            # misses every nicknamed TM (Aurora→Alistair, Rebecca→Becca,
+            # Jeremy→JT, Andrew→Drew, Lee→LeeAnn, Michael→Mike, Melissa→Missy,
+            # etc.) — they show up correctly placed by the engine but
+            # incorrectly flagged "NOT SCHEDULED" in the deployment grid.
+            "name":         row.get("name") or "",
             "display_name": row["display_name"],
             "skill_score":  score,
             "skill_str":    str(score),   # Reflex can't call str() on Vars

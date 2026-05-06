@@ -425,28 +425,51 @@ def peek_shift_rosters_for_date(
 def build_entity_lookup(entities: list[dict]) -> dict:
     """Build a name lookup: lowercase-first-name → list of entity dicts.
 
-    Each entity contributes both its display_name's first token AND every
-    alias. Aliases are read from EITHER the top-level `aliases` field
-    (returned by fetch_all_tms post-Phase O) or from `metadata.aliases`
-    (raw entities row), to be tolerant of both shapes.
+    Each entity contributes:
+      • its display_name's first token (e.g. "Alistair" from display "Alistair")
+      • its legal name's first token (e.g. "Aurora" from name "Aurora Fox-Stone")
+      • every explicit alias from .aliases or .metadata.aliases
+
+    The legal-name key is critical: the weekly schedule xlsx uses legal first
+    names (Aurora, Rebecca, Jeremy, Andrew, Michael, Melissa, ...), not the
+    operational nicknames the entity carries on display_name (Alistair, Becca,
+    JT, Drew, Mike, Missy). Without keying on legal first name, the parser
+    misses every nicknamed TM — they're correctly placed by fill_engine.py
+    (which keys on employee_name) but the UI's per-night pool shows them as
+    "NOT SCHEDULED" because schedule_parser couldn't translate the xlsx row's
+    "Aurora" to the entity "Alistair".
+
+    Aliases are read from EITHER the top-level `aliases` field (returned by
+    fetch_all_tms post-Phase O) or from `metadata.aliases` (raw entities row),
+    to be tolerant of both shapes.
     """
     lookup: dict[str, list[dict]] = {}
+
+    def _add_key(key: str, entity: dict) -> None:
+        key = (key or "").strip().lower()
+        if not key:
+            return
+        bucket = lookup.setdefault(key, [])
+        if entity not in bucket:
+            bucket.append(entity)
+
     for e in entities or []:
         dn = (e.get("display_name") or "").strip()
         if not dn:
             continue
-        first_token = dn.split()[0].strip().lower()
-        if first_token:
-            lookup.setdefault(first_token, []).append(e)
-        # Try top-level first (flattened by fetch_all_tms), then metadata.
+        # 1. display_name's first token (Alistair, Becca, JT, ...)
+        _add_key(dn.split()[0], e)
+        # 2. legal name's first token (Aurora, Rebecca, Jeremy, ...)
+        legal = (e.get("name") or e.get("employee_name") or "").strip()
+        if legal:
+            _add_key(legal.split()[0], e)
+        # 3. explicit aliases (Mike W has alias "michael", etc.)
         aliases = e.get("aliases")
         if not aliases:
             meta = e.get("metadata") or {}
             aliases = meta.get("aliases") or []
         for alias in aliases:
-            key = str(alias).strip().lower()
-            if key and e not in lookup.setdefault(key, []):
-                lookup[key].append(e)
+            _add_key(str(alias), e)
     return lookup
 
 
@@ -460,11 +483,16 @@ def resolve_entity_display_name(
     Returns "" if no entity matches — caller should fall back to the
     xlsx-derived display.
 
-    Disambiguation when multiple candidates share a first name / alias:
-      1. Match by the second token of display_name ("Stephen H" → H)
-      2. Match by metadata.match_last_initial (for entities with single-word
-         display_names like "Steve" who need a hint to win over siblings)
-      3. First-match fallback
+    Disambiguation when multiple candidates share a first name / alias
+    (e.g. "Jeremy" → JT / Jeremy H, "Michael" → Mike / Mike S / Mike W):
+      0. Exact full-last-name match against the entity's legal `name`
+         field — strongest signal, beats every initial-based heuristic.
+         "Jeremy Laker" matches name="Jeremy Laker" → JT, even when both
+         JT and Jeremy H share first initial.
+      1. Match by metadata.match_last_initial (explicit per-entity hint).
+      2. Match by the second token of display_name ("Stephen H" → H).
+      3. First-match fallback (last resort — prints a debug if anyone has
+         logging enabled to surface the ambiguous case).
     """
     if not first:
         return ""
@@ -474,8 +502,24 @@ def resolve_entity_display_name(
         return ""
     if len(candidates) == 1:
         return candidates[0].get("display_name", "") or ""
-    # Multiple candidates share this first name — disambiguate by last initial.
-    ln_initial = (last or "").strip()[:1].upper()
+
+    last_norm = (last or "").strip().lower()
+    ln_initial = last_norm[:1].upper()
+
+    # Pass 0 — full last-name match against the entity's legal `name`.
+    # Strongest signal. If the schedule says "Jeremy Laker" and an entity
+    # has name="Jeremy Laker", that's an unambiguous identification.
+    if last_norm:
+        for e in candidates:
+            legal = (e.get("name") or e.get("employee_name") or "").strip().lower()
+            if not legal:
+                continue
+            legal_parts = legal.split()
+            # Match against any token after the first (handles middle names
+            # too, e.g. "Stephen W Edmunds" → matching last="Edmunds").
+            if last_norm in legal_parts[1:]:
+                return (e.get("display_name") or "").strip()
+
     if ln_initial:
         # Pass 1 — explicit hint from entity metadata (top-level or .metadata)
         for e in candidates:
@@ -491,7 +535,8 @@ def resolve_entity_display_name(
             parts = dn.split()
             if len(parts) > 1 and parts[1][:1].upper() == ln_initial:
                 return dn
-    # Fallback: first match
+    # Fallback: first match. Ambiguous — set metadata.match_last_initial
+    # on the entities involved or add an explicit alias to disambiguate.
     return candidates[0].get("display_name", "") or ""
 
 

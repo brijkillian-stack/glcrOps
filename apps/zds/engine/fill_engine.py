@@ -331,6 +331,22 @@ _profile_trainees = {
 TRAINEE_DISPLAY = _profile_trainees if _profile_trainees else {"Seth", "Trenidee"}
 
 def match(first, last):
+    """Resolve schedule (first, last) to a roster key.
+
+    Disambiguation order when multiple candidates share a first name
+    (e.g. "Jeremy" → JT (Jeremy Laker) AND Jeremy H (Jeremy Haner)):
+      0. Exact full-name match against a roster key ("jeremy laker").
+      1. Single candidate → return it.
+      2. Substring match of `last` against any token in the roster key
+         (catches when the roster key already includes the last name —
+         e.g. cand="jeremy laker", last="laker" → match).
+      3. NEW: match by display_name's second token's first letter
+         against last's first letter ("Jeremy H" → second token "H";
+         schedule's "Haner" → ln_initial "H" → match). Critical for
+         stub-style entities where the roster key is just "jeremy h"
+         and (2) would never fire because "haner" isn't in "h".
+      4. Fall through to first candidate (last resort).
+    """
     full = f"{first} {last}".lower().strip()
     if full in roster: return full
     fn = first.lower()
@@ -338,8 +354,20 @@ def match(first, last):
     if len(cands) == 1: return cands[0]
     if cands:
         ln = last.lower()
+        ln_initial = ln[:1].upper()
+        # Pass 2 — substring on roster-key tokens (existing behaviour)
         for c in cands:
-            if any(ln in p for p in c.split()): return c
+            if any(ln in p for p in c.split()):
+                return c
+        # Pass 3 — display_name's second token initial vs. ln initial.
+        # Picks "Jeremy H" for "Jeremy Haner" instead of falling through
+        # to the first candidate (JT, who's only scheduled some days).
+        if ln_initial:
+            for c in cands:
+                dn = (roster.get(c, {}).get("display_name") or "").strip()
+                parts = dn.split()
+                if len(parts) > 1 and parts[1][:1].upper() == ln_initial:
+                    return c
         return cands[0]
     return None
 
