@@ -1,0 +1,70 @@
+/* ── Undo toast ──────────────────────────────────────────────────────────────
+   Fixed bottom-right slide-in toast for last-action undo.
+
+   .undo-toast-root  — outer wrapper (pointer-events:none — never blocks clicks)
+   .undo-toast-panel — the visible card (pointer-events:all restored inside)
+
+   JS in undo_toast.js watches .undo-toast-panel via MutationObserver and
+   auto-dismisses after 5 seconds by dispatching undo_state.dismiss.
+
+   Works in both light (GLCR Memory pages) and dark (ZDS pages) contexts;
+   the dark navy background looks intentional on both.
+*/
+
+.undo-toast-root {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 400;
+  pointer-events: none;
+  /* max-width so very long labels don't stretch beyond the viewport edge */
+  max-width: min(360px, calc(100vw - 48px));
+}
+
+.undo-toast-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #1a2a3e;
+  border: 1px solid rgba(48, 178, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  pointer-events: all;
+  white-space: nowrap;
+  animation: undo-toast-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes undo-toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The Reflex rx.button "Undo" — keep it compact */
+.undo-toast-panel button[data-variant="solid"] {
+  flex-shrink: 0;
+}
+
+/* × dismiss button */
+.undo-toast-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: 2px;
+  transition: color 0.12s;
+}
+
+.undo-toast-close:hover {
+  color: #e8edf2;
+}

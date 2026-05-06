@@ -145,10 +145,11 @@ class ContextMenuState(rx.State):
             return
         try:
             sb = get_client()
-            # Idempotent: check for existing sweeper highlight on this row first
+            # Idempotent: check for existing sweeper highlight on this row first.
+            # select("*") so we have the full row for undo re-insert.
             existing = (
                 sb.table("assignment_highlights")
-                .select("id")
+                .select("*")
                 .eq("night_id", self.ctx_night_id)
                 .eq("slot_key", self.ctx_slot_key)
                 .eq("highlight_type", "sweeper")
@@ -161,6 +162,14 @@ class ContextMenuState(rx.State):
                 sb.table("assignment_highlights").delete().eq("id", existing[0]["id"]).execute()
                 self.error = ""
                 self.last_action_ok = True
+                # Queue undo: restore the deleted row
+                from shared.state.undo import UndoState
+                undo = await self.get_state(UndoState)
+                undo.queue(
+                    f"Cleared sweeper for {self.target_label}",
+                    "restore_highlight",
+                    {"action": "removed", "row": existing[0]},
+                )
             else:
                 row = {
                     "night_id":       self.ctx_night_id,
@@ -172,9 +181,18 @@ class ContextMenuState(rx.State):
                     "icon":           HIGHLIGHT_VISUALS["sweeper"]["icon"],
                     "created_by":     "site_session",
                 }
-                sb.table("assignment_highlights").insert(row).execute()
+                result = sb.table("assignment_highlights").insert(row).execute()
+                new_id = result.data[0]["id"] if result.data else None
                 self.error = ""
                 self.last_action_ok = True
+                # Queue undo: delete the row we just added
+                from shared.state.undo import UndoState
+                undo = await self.get_state(UndoState)
+                undo.queue(
+                    f"Marked {self.target_label} as sweeper",
+                    "restore_highlight",
+                    {"action": "added", "highlight_id": new_id},
+                )
         except Exception as exc:
             self.error = f"Save failed: {exc}"
             self.last_action_ok = False

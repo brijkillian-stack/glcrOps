@@ -4,6 +4,23 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-06 — Session zds_phase4_undo_toast (Sonnet)
+
+### Phase 4 — Client-side undo toast (no schema changes)
+
+- **`shared/state/__init__.py`** — New package marker for `shared.state` sub-package.
+- **`shared/state/undo.py`** — New `UndoState(rx.State)` with fields `last_label`, `last_inverse_kind`, `last_inverse_payload`, `toast_open`. Internal `queue(label, kind, payload)` method called via `await self.get_state(UndoState)` from other event handlers. Public `@rx.event dismiss()` (clear toast, wipe kind) and `@rx.event async undo()` (replay inverse by kind: `restore_assignment` → `update_zone_assignment + _load_night`; `restore_lock` → `update_slot_lock + _load_night`; `restore_highlight` → delete added row or re-insert removed row). Undo is best-effort; exceptions silently swallowed.
+- **`shared/components/undo_toast.py`** — New `global_undo_toast()` component. Fixed bottom-right position; conditionally renders `rx.cond(UndoState.toast_open, ...)`. Contains: rotate-ccw icon, label text, solid blue "Undo" button (`UndoState.undo`), and `×` dismiss button (`UndoState.dismiss`). CSS class `undo-toast-panel` is the MutationObserver sentinel.
+- **`assets/undo_toast.css`** — `.undo-toast-root` fixed bottom-right wrapper (z-index 400, pointer-events none). `.undo-toast-panel` dark-navy card (`background: #1a2a3e`, blue border, box-shadow), pointer-events restored, slide-in keyframe animation. `.undo-toast-close` minimal × button style.
+- **`assets/undo_toast.js`** — IIFE MutationObserver on `document.body`. When `.undo-toast-panel` appears, arms a 5-second `setTimeout`; when it disappears, cancels the timer. On timeout, dispatches `undo_state.dismiss` via `window._reflexDispatch`. No Reflex-side polling needed.
+- **`apps/zds/state.py`** — `clear_slot` converted to `@rx.event async def`; after successful `_log_change` (only when `prev_tm_id` is non-null), calls `undo.queue(label, "restore_assignment", {slot_id, tm_id, night_id})`. `toggle_slot_lock` converted to `@rx.event async def`; after `_log_change`, calls `undo.queue(label, "restore_lock", {slot_id, prev_lock, night_id})`. Both use lazy `from shared.state.undo import UndoState` inside the handler body to avoid circular imports.
+- **`shared/components/context_menu.py`** — `mark_sweeper`: changed `select("id")` → `select("*")` so the full row is available for undo re-insert. Remove branch queues `restore_highlight / action=removed / row=existing[0]`. Insert branch captures `result.data[0]["id"]` and queues `restore_highlight / action=added / highlight_id=new_id`. Lazy `UndoState` import inside both branches.
+- **`brijkillian_stack/brijkillian_stack.py`** — `global_undo_toast` imported and mounted in both `_with_grok` (GLCR Memory pages) and `_with_zds_chrome` (ZDS pages). `undo_toast.css` + `undo_toast.js` registered in `app.head_components`.
+
+**Strategy:** Pure client-side, zero schema changes. `UndoState` is a top-level `rx.State`; cross-state writes from `ZdsState`/`ContextMenuState` use `await self.get_state(UndoState)` which commits mutations in the same event batch. JS timer keeps dismiss logic out of Reflex's event loop entirely.
+
+---
+
 ## 2026-05-06 — Session zds_phase1_reskin (Sonnet)
 
 ### Phase 1 — Dark-mode visual reskin of all ZDS pages (no backend changes)

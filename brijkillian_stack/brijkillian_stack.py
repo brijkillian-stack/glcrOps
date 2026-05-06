@@ -18,6 +18,7 @@ from shared.components.grok_panel import grok_panel, grok_fab
 from shared.components.area_check import area_check_modal
 from shared.components.context_menu import global_context_menu
 from shared.components.highlight_toolbar import global_highlight_toolbar
+from shared.components.undo_toast import global_undo_toast
 
 from apps.glcr.routes import (
     ROUTES as GLCR_ROUTES,
@@ -85,6 +86,7 @@ def _with_grok(page_fn):
             area_check_modal(),
             global_context_menu(),
             global_highlight_toolbar(),
+            global_undo_toast(),
         )
     wrapped.__name__ = f"{page_fn.__name__}_with_grok"
     return wrapped
@@ -103,6 +105,7 @@ def _with_zds_chrome(page_fn):
             page_fn(),
             global_context_menu(),
             global_highlight_toolbar(),
+            global_undo_toast(),
             data_theme="zds-dark",
             min_height="100vh",
             position="relative",
@@ -150,6 +153,9 @@ app = rx.App(
         # ── Highlight toolbar (left-click highlight chips on TM spans) ────
         rx.el.link(rel="stylesheet", href="/highlight_toolbar.css"),
         rx.el.script(src="/highlight_toolbar.js"),
+        # ── Undo toast (5-second auto-dismiss + manual Undo / × buttons) ──
+        rx.el.link(rel="stylesheet", href="/undo_toast.css"),
+        rx.el.script(src="/undo_toast.js"),
     ],
 )
 

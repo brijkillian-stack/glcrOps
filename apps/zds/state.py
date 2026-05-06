@@ -1584,7 +1584,8 @@ class ZdsState(rx.State):
         except Exception as e:
             self.error = str(e)
 
-    def clear_slot(self, slot_id: str):
+    @rx.event
+    async def clear_slot(self, slot_id: str):
         # Guard: refuse to clear a locked slot
         for s in self.zone_slots + self.aux_slots:
             if s["id"] == slot_id and s.get("is_locked", False):
@@ -1605,10 +1606,23 @@ class ZdsState(rx.State):
                     accent="#b45309",
                     prev_tm_id=prev_tm_id,
                 )
+                # Queue undo — lets the toast restore the cleared TM
+                from shared.state.undo import UndoState
+                undo = await self.get_state(UndoState)
+                undo.queue(
+                    f"Cleared {prev_tm_name} from {target_label}",
+                    "restore_assignment",
+                    {
+                        "slot_id": slot_id,
+                        "tm_id":   prev_tm_id,
+                        "night_id": self.current_night_id,
+                    },
+                )
         except Exception as e:
             self.error = str(e)
 
-    def toggle_slot_lock(self, slot_id: str):
+    @rx.event
+    async def toggle_slot_lock(self, slot_id: str):
         """Toggle the position lock on a zone/RR/aux slot."""
         target_label, _tm_id, tm_name = self._describe_slot(slot_id)
         # Find current lock state
@@ -1640,6 +1654,18 @@ class ZdsState(rx.State):
                 accent="#a16207" if new_state else "#6b7280",
                 prev_lock=current,
                 new_lock=new_state,
+            )
+            # Queue undo — lets the toast restore the previous lock state
+            from shared.state.undo import UndoState
+            undo = await self.get_state(UndoState)
+            undo.queue(
+                f"{'Locked' if new_state else 'Unlocked'} {target_label}",
+                "restore_lock",
+                {
+                    "slot_id":   slot_id,
+                    "prev_lock": current,
+                    "night_id":  self.current_night_id,
+                },
             )
         except Exception as e:
             self.error = str(e)
