@@ -1009,7 +1009,12 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
         row["label"]        = ZONE_LABELS.get(sk, sk.replace("_", " ").title())
         row["color"]        = ZONE_COLORS.get(sk, "#6b7280")
         row["display_name"] = row["tm_name"] or "Unfilled"
-        row["name_color"]   = "#111827" if row["is_filled"] else "#d1d5db"
+        # Filled slots: leave empty so the .card-tm-name CSS class controls
+        # color (Reflex's color="" doesn't emit an inline style, letting CSS
+        # win). Unfilled stays inline gray — works on both light and dark.
+        # Without this, the inline #111827 beat dark-mode CSS and TM names
+        # rendered nearly invisible against the dark surface.
+        row["name_color"]   = "" if row["is_filled"] else "#d1d5db"
         row["name_style"]   = "normal"  if row["is_filled"] else "italic"
         # Crowding-based font size (for zone cards)
         if row.get("is_extra_crowded"):

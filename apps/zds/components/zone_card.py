@@ -284,7 +284,12 @@ def zone_card(slot: dict) -> rx.Component:
                 # Both JS handlers read data-* attrs from this span.
                 # The highlight toolbar JS runs in capture phase and calls
                 # stopPropagation() so the parent on_click (picker) is suppressed.
-                class_name="ctx-menu-trigger ht-trigger",
+                # Phase 1 dark-mode (2026-05-06): card-tm-name / card-empty-label
+                # classes let CSS pick the right color per theme — inline
+                # color is now empty for filled rows so the class wins.
+                class_name="ctx-menu-trigger ht-trigger " + rx.cond(
+                    slot["is_filled"], "card-tm-name", "card-empty-label"
+                ),
                 custom_attrs={
                     # Context menu attrs
                     "data-ctx-target-type":  "assignment",
@@ -396,9 +401,13 @@ def rr_card(slot: dict) -> rx.Component:
                 rx.text(
                     name,
                     font_size="18px", font_weight="700", line_height="1",
-                    color=rx.cond(name != "Unfilled", "#111827", "#d1d5db"),
+                    # Phase 1 dark mode: drop inline color for filled so the
+                    # .card-tm-name CSS rule wins on the dark theme. Unfilled
+                    # keeps the inline gray (works on both light + dark).
+                    color=rx.cond(name != "Unfilled", "", "#d1d5db"),
                     font_style=rx.cond(name != "Unfilled", "normal", "italic"),
                     white_space="nowrap", overflow="hidden", text_overflow="ellipsis",
+                    class_name=rx.cond(name != "Unfilled", "card-tm-name", "card-empty-label"),
                 ),
                 rx.cond(has_duplicate, _duplicate_banner(), rx.fragment()),
                 # Phase J — call-off / not-scheduled badge
@@ -476,9 +485,13 @@ def aux_card(slot: dict) -> rx.Component:
             rx.text(
                 slot["display_name"],
                 font_size="15px", font_weight="700", line_height="1.1",
+                # Phase 1 dark mode: name_color is "" for filled rows so the
+                # .card-tm-name CSS rule controls color per theme. Unfilled
+                # carries inline gray which works on both light and dark.
                 color=slot["name_color"],
                 font_style=slot["name_style"],
                 margin_top="3px",
+                class_name=rx.cond(slot["is_filled"], "card-tm-name", "card-empty-label"),
             ),
             rx.cond(slot["has_duplicate"], _duplicate_banner(), rx.fragment()),
             # Phase J — call-off / not-scheduled badge

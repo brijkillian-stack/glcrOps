@@ -3412,3 +3412,21 @@ header .app-switcher {
     right: 24px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Phase 1 dark-mode reskin (2026-05-06)
+   Light-theme defaults for the card-tm-name / card-empty-label
+   classes used by zone_card / rr_card / aux_card. The dark theme
+   override lives in assets/zds_dark.css scoped to
+   [data-theme="zds-dark"] and wins automatically when that
+   attribute is present (ZDS pages only — Memory pages stay light).
+   Without these defaults, the light-mode renders showed no color
+   because the rx.text inline color was dropped to let the dark
+   override win.
+   ───────────────────────────────────────────────────────────── */
+.zone-card .card-tm-name {
+  color: #111827;        /* dark ink on light card surface */
+}
+.zone-card .card-empty-label {
+  color: #d1d5db;        /* same gray as the inline fallback */
+}
