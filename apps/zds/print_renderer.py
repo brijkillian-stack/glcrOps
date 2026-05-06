@@ -85,6 +85,7 @@ def _fetch_night_data(night_id: str) -> tuple:
 
     assignments = database.fetch_zone_assignments(night_id)
     overlaps    = database.fetch_overlap_assignments(night_id)
+    notices     = database.fetch_notices(night_id)  # Phase E
 
     slot_map: dict[str, dict] = {}
     zones   = [""] * 10
@@ -134,18 +135,27 @@ def _fetch_night_data(night_id: str) -> tuple:
     # Use the actual calendar weekday of night_date (the morning the shift ends)
     # so labels match dates — same convention as the web UI.
     weekday = ndate.strftime("%A")
+    # Phase E — build slot_key → list[notice] map for print badges
+    notices_by_slot: dict[str, list] = {}
+    for n_row in notices:
+        notices_by_slot.setdefault(n_row["slot_key"], []).append(n_row)
+
     day   = {
-        "date":       ndate,
-        "label":      ndate.strftime("%A, %B %-d, %Y"),
-        "weekday":    weekday,
-        "date_short": ndate.strftime("%B %-d, %Y"),
-        "day_num":    ndate.day,
-        "zones":      zones,
-        "rr_mens":    rr_m,
-        "rr_womens":  rr_w,
-        "pm_ol":      pm_ol,
-        "am_ol":      am_ol,
-        "aux":        aux_d,
+        "date":           ndate,
+        "label":          ndate.strftime("%A, %B %-d, %Y"),
+        "weekday":        weekday,
+        "date_short":     ndate.strftime("%B %-d, %Y"),
+        "day_num":        ndate.day,
+        "zones":          zones,
+        "rr_mens":        rr_m,
+        "rr_womens":      rr_w,
+        "pm_ol":          pm_ol,
+        "am_ol":          am_ol,
+        "aux":            aux_d,
+        # Phase D + E additions
+        "is_locked":      bool(night.get("is_locked", False)),
+        "locked_by":      night.get("locked_by") or "",
+        "notices_by_slot": notices_by_slot,
     }
     return night, day, slot_map, overlaps
 
@@ -182,13 +192,30 @@ def _grp(sk: str, slot_map: dict) -> Optional[int]:
 
 # ── Deployment page renderer ───────────────────────────────────────────────────
 
+def _notice_badges_html(slot_key: str, notices_by_slot: dict) -> str:
+    """Phase E — render inline notice badges for print output.
+
+    Darker colors used for print contrast per handoff spec.
+    """
+    rows = notices_by_slot.get(slot_key, [])
+    if not rows:
+        return ""
+    parts = []
+    for n in rows:
+        t = n.get("type", "info")
+        parts.append(f'<span class="print-notice print-notice-{t}">{t.upper()}</span>')
+    return "".join(parts)
+
+
 def _render_deployment_page(night: dict, day: dict, slot_map: dict,
                               overlaps: list,
                               page_num: int, page_total: int,
                               day_idx: int, total_days: int) -> str:
-    weekday   = day["weekday"]
-    day_color = DAY_COLOR.get(weekday, "#444444")
-    sw_add    = _sweeper_add(slot_map)
+    weekday         = day["weekday"]
+    day_color       = DAY_COLOR.get(weekday, "#444444")
+    sw_add          = _sweeper_add(slot_map)
+    notices_by_slot = day.get("notices_by_slot", {})
+    is_locked       = day.get("is_locked", False)
 
     def zone_tasks(n: int) -> list:
         """Use DB display_tasks (respects custom overrides + sweeper); fallback to defaults."""
@@ -381,7 +408,10 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     </section>
   </div>
   <footer class="page-foot">
-    <span class="slug-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="slug-mark">
+      <span class="swatch"></span>GLCR · Grave
+      {"&nbsp;&nbsp;<span class='foot-lock-stamp'>🔒 LOCKED</span>" if is_locked else ""}
+    </span>
     <span class="slug-path"><span class="now">{weekday}</span> {esc(day['date_short'])}<span class="sep">·</span>Zone Deployment</span>
     <span class="slug-pn"><span class="pn-cur">{page_num}</span> / {page_total}</span>
   </footer>

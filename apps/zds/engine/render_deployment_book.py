@@ -1369,6 +1369,27 @@ body { display:flex; flex-direction:column; align-items:center; padding:32px 24p
 }
 .page-foot .slug-pn .pn-cur { color: var(--ink-900); font-weight: 700; }
 
+/* Phase D — Night lock stamp in print footer */
+.foot-lock-stamp {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 8.5px; font-weight: 700;
+  color: #8a6a3c;   /* gold-on-white readable for print */
+  letter-spacing: 0.10em; text-transform: uppercase;
+}
+
+/* Phase E — Notice badges in print (inline after TM name) */
+.print-notice {
+  display: inline-block;
+  font-size: 8px; font-weight: 800;
+  padding: 1px 5px; border-radius: 3px;
+  margin-left: 3px; vertical-align: middle;
+  line-height: 1.4;
+}
+.print-notice-alert    { background: #fef3c7; color: #b45309; }
+.print-notice-info     { background: #dbeafe; color: #0065bf; }
+.print-notice-training { background: #d1fae5; color: #047857; }
+.print-notice-meeting  { background: #ede9fe; color: #5b21b6; }
+
 /* MASTHEAD — bigger date, status row, group key */
 .mast {
   padding: 12px var(--safe) 10px;
@@ -1460,10 +1481,10 @@ body { display:flex; flex-direction:column; align-items:center; padding:32px 24p
 .gp[data-group="2"], .group-pill[data-group="2"] { background: #6e6e73; color: #fff; }
 .gp[data-group="3"], .group-pill[data-group="3"] { background: #d2d2d7; color: #1d1d1f; }
 
-/* BODY */
-.body { padding: 10px var(--safe) 8px; display: grid;
-  grid-template-rows: minmax(0, 1.55fr) minmax(0, 1fr) auto auto;
-  gap: 9px; min-height: 0; }
+/* BODY — Phase F: tighter row ratios per handoff spec */
+.body { padding: 8px var(--safe) 6px; display: grid;
+  grid-template-rows: minmax(0, 1.4fr) minmax(0, 0.85fr) auto auto;
+  gap: 7px; min-height: 0; }
 
 .section-label {
   font-weight: 500; font-size: 9.5px; letter-spacing: 0.16em;
@@ -1499,7 +1520,7 @@ body { display:flex; flex-direction:column; align-items:center; padding:32px 24p
 }
 .zones-grid {
   display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: 1fr 1fr;
-  gap: 7px; min-height: 0;
+  gap: 6px; min-height: 0;
 }
 .zone-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
