@@ -1,56 +1,199 @@
 /*
- * zds_dark.css — Dark-mode token overrides for ZDS pages.
+ * zds_dark.css — ZDS design token system + dark/light mode overrides
  *
- * Scoped to [data-theme="zds-dark"] so Memory/GLCR pages are unaffected.
- * All color values come from the v3 mock's T object (zds_dark_v3.html).
+ * Token namespace: --zds-*  (matches the v3 Developer Handoff spec)
+ * Scoped via data-theme attribute so Memory/GLCR pages are never affected:
+ *   [data-theme="zds-dark"]  — default dark mode
+ *   [data-theme="light"]     — light mode override (same component classes)
  *
- * Token reference (matching mock):
- *   bg0 #040a10  bg1 #080e14  bg2 #0d1520  bg3 #111d2b  bg4 #162236
- *   border rgba(48,178,255,0.10)   borderHover rgba(48,178,255,0.28)
- *   borderGold rgba(224,203,182,0.20)   borderSubtle rgba(255,255,255,0.05)
- *   t1 #f0f4f8   t2 #8ba4be   t3 #4d6a82   t4 #2e4357
- *   blue #30b2ff   gold #e0cbb6
- *   red #f87171   amber #fbbf24   green #34d399   violet #a78bfa
+ * ZdsState.theme toggles between "zds-dark" and "light".
+ * All component Python color args are left unchanged; CSS wins via specificity.
  */
 
-/* ── Base shell ──────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DARK MODE TOKENS (default)
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] {
-  background: #080e14;
-  color: #f0f4f8;
-  --surface-canvas:  #080e14;
-  --surface-card:    #0d1520;
-  --surface-raised:  #111d2b;
-  --surface-input:   #162236;
-  --fg-1:            #f0f4f8;
-  --fg-2:            #8ba4be;
-  --fg-3:            #4d6a82;
-  --fg-4:            #2e4357;
-  --border-subtle:   rgba(48,178,255,0.10);
-  --border-hover:    rgba(48,178,255,0.28);
-  --border-gold:     rgba(224,203,182,0.20);
-  --accent-blue:     #30b2ff;
-  --accent-gold:     #e0cbb6;
-  --status-red:      #f87171;
-  --status-amber:    #fbbf24;
-  --status-green:    #34d399;
-  --status-violet:   #a78bfa;
+  /* Backgrounds */
+  --zds-bg-0:      #040a10;
+  --zds-bg-1:      #080e14;
+  --zds-bg-2:      #0d1520;
+  --zds-bg-3:      #111d2b;
+  --zds-bg-4:      #162236;
+  --zds-bg-blue:   rgba(48,178,255,0.07);
+  --zds-bg-amber:  rgba(224,203,182,0.07);
+
+  /* Borders */
+  --zds-border:         rgba(48,178,255,0.10);
+  --zds-border-hover:   rgba(48,178,255,0.28);
+  --zds-border-gold:    rgba(224,203,182,0.20);
+  --zds-border-subtle:  rgba(255,255,255,0.05);
+
+  /* Text */
+  --zds-t1:  #f0f4f8;
+  --zds-t2:  #8ba4be;
+  --zds-t3:  #4d6a82;
+  --zds-t4:  #2e4357;
+
+  /* Brand */
+  --zds-blue:       #30b2ff;
+  --zds-blue-dim:   #1a9be8;
+  --zds-blue-muted: rgba(48,178,255,0.15);
+  --zds-gold:       #e0cbb6;
+  --zds-gold-dim:   #c9b094;
+
+  /* Status */
+  --zds-red:        #f87171;
+  --zds-red-bg:     rgba(248,113,113,0.12);
+  --zds-amber:      #fbbf24;
+  --zds-amber-bg:   rgba(251,191,36,0.12);
+  --zds-green:      #34d399;
+  --zds-green-bg:   rgba(52,211,153,0.10);
+  --zds-violet:     #a78bfa;
+  --zds-violet-bg:  rgba(167,139,250,0.12);
+
+  /* Typography */
+  --zds-font:      'Barlow', -apple-system, sans-serif;
+  --zds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Radii */
+  --zds-r-sm:   4px;
+  --zds-r-md:   8px;
+  --zds-r-lg:   10px;
+  --zds-r-pill: 999px;
+
+  /* Shadows */
+  --zds-shadow-card:   0 2px 8px rgba(0,0,0,0.3);
+  --zds-shadow-drawer: -20px 0 60px rgba(0,0,0,0.5);
+  --zds-shadow-menu:   0 8px 32px rgba(0,0,0,0.5);
+  --zds-glow-blue:     0 0 12px rgba(48,178,255,0.35);
+  --zds-glow-gold:     0 0 12px rgba(224,203,182,0.35);
+
+  /* Legacy aliases — keep until every component is migrated */
+  --surface-canvas:  var(--zds-bg-1);
+  --surface-card:    var(--zds-bg-2);
+  --surface-raised:  var(--zds-bg-3);
+  --surface-input:   var(--zds-bg-4);
+  --fg-1:            var(--zds-t1);
+  --fg-2:            var(--zds-t2);
+  --fg-3:            var(--zds-t3);
+  --fg-4:            var(--zds-t4);
+  --border-subtle:   var(--zds-border);
+  --border-hover:    var(--zds-border-hover);
+  --border-gold:     var(--zds-border-gold);
+  --accent-blue:     var(--zds-blue);
+  --accent-gold:     var(--zds-gold);
+  --status-red:      var(--zds-red);
+  --status-amber:    var(--zds-amber);
+  --status-green:    var(--zds-green);
+  --status-violet:   var(--zds-violet);
+  --accent-flag:     var(--zds-red);
+
+  background: var(--zds-bg-1);
+  color: var(--zds-t1);
 }
 
-/* Force background on the page shell Reflex renders */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LIGHT MODE TOKEN OVERRIDES
+   Toggle by setting data-theme="light" on the _with_zds_chrome wrapper.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --zds-bg-0:      #eef1f6;
+  --zds-bg-1:      #f4f7fb;
+  --zds-bg-2:      #ffffff;
+  --zds-bg-3:      #f0f4f9;
+  --zds-bg-4:      #e8edf3;
+  --zds-bg-blue:   rgba(37,99,235,0.06);
+  --zds-bg-amber:  rgba(180,83,9,0.05);
+
+  /* Borders */
+  --zds-border:         rgba(11,26,42,0.10);
+  --zds-border-hover:   rgba(37,99,235,0.35);
+  --zds-border-gold:    rgba(180,83,9,0.20);
+  --zds-border-subtle:  rgba(11,26,42,0.06);
+
+  /* Text */
+  --zds-t1:  #0b1a2a;
+  --zds-t2:  #2c3e54;
+  --zds-t3:  #5a6b7d;
+  --zds-t4:  #94a2b1;
+
+  /* Brand — toned down for light backgrounds */
+  --zds-blue:       #0065bf;   /* GLCR Pantone 3015 C */
+  --zds-blue-dim:   #0052a3;
+  --zds-blue-muted: rgba(0,101,191,0.10);
+  --zds-gold:       #8a6a3c;   /* darkened for legibility on white */
+  --zds-gold-dim:   #6b5030;
+
+  /* Status */
+  --zds-red:        #dc2626;
+  --zds-red-bg:     rgba(220,38,38,0.08);
+  --zds-amber:      #b45309;
+  --zds-amber-bg:   rgba(180,83,9,0.08);
+  --zds-green:      #059669;
+  --zds-green-bg:   rgba(5,150,105,0.08);
+  --zds-violet:     #7c3aed;
+  --zds-violet-bg:  rgba(124,58,237,0.08);
+
+  /* Shadows — lighter for light surfaces */
+  --zds-shadow-card:   0 1px 4px rgba(11,26,42,0.08);
+  --zds-shadow-drawer: -8px 0 32px rgba(11,26,42,0.16);
+  --zds-shadow-menu:   0 8px 24px rgba(11,26,42,0.14);
+  --zds-glow-blue:     none;
+  --zds-glow-gold:     none;
+
+  /* Legacy aliases */
+  --surface-canvas:  var(--zds-bg-1);
+  --surface-card:    var(--zds-bg-2);
+  --surface-raised:  var(--zds-bg-3);
+  --surface-input:   var(--zds-bg-4);
+  --fg-1:            var(--zds-t1);
+  --fg-2:            var(--zds-t2);
+  --fg-3:            var(--zds-t3);
+  --fg-4:            var(--zds-t4);
+  --border-subtle:   var(--zds-border);
+  --border-hover:    var(--zds-border-hover);
+  --border-gold:     var(--zds-border-gold);
+  --accent-blue:     var(--zds-blue);
+  --accent-gold:     var(--zds-gold);
+  --status-red:      var(--zds-red);
+  --status-amber:    var(--zds-amber);
+  --status-green:    var(--zds-green);
+  --status-violet:   var(--zds-violet);
+  --accent-flag:     var(--zds-red);
+
+  background: var(--zds-bg-1);
+  color: var(--zds-t1);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SHARED STRUCTURAL ELEMENTS (apply to both dark and light)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Force background on the Reflex-generated shell */
 [data-theme="zds-dark"] body,
 [data-theme="zds-dark"] .chakra-ui-light,
-[data-theme="zds-dark"] > div {
-  background: #080e14 !important;
+[data-theme="zds-dark"] > div,
+[data-theme="light"] body,
+[data-theme="light"] .chakra-ui-light,
+[data-theme="light"] > div {
+  background: var(--zds-bg-1) !important;
 }
 
-/* ── Scrollbars ──────────────────────────────────────────────────────────── */
-
-[data-theme="zds-dark"] ::-webkit-scrollbar {
+/* Scrollbars */
+[data-theme="zds-dark"] ::-webkit-scrollbar,
+[data-theme="light"] ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
-[data-theme="zds-dark"] ::-webkit-scrollbar-track {
+[data-theme="zds-dark"] ::-webkit-scrollbar-track,
+[data-theme="light"] ::-webkit-scrollbar-track {
   background: transparent;
 }
 [data-theme="zds-dark"] ::-webkit-scrollbar-thumb {
@@ -60,8 +203,24 @@
 [data-theme="zds-dark"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(48,178,255,0.40);
 }
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(11,26,42,0.20);
+  border-radius: 99px;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(11,26,42,0.35);
+}
 
-/* ── Casino-scatter background overlay ───────────────────────────────────── */
+/* Index / landing page */
+[data-theme="zds-dark"] .zds-index-page,
+[data-theme="light"] .zds-index-page {
+  background: var(--zds-bg-0) !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CASINO SCATTER BACKGROUND
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 .zds-casino-bg {
   position: fixed;
@@ -80,15 +239,33 @@
   -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
 }
 
-/* ── Chip-header — dotted-circle overlay on ZDS top nav ─────────────────── */
+/* Lighter on the light-mode surface */
+[data-theme="light"] .zds-casino-bg {
+  opacity: 0.06;
+}
 
-[data-theme="zds-dark"] .chip-header {
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CHIP HEADER — dotted-circle poker chip overlay
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="zds-dark"] .chip-header,
+[data-theme="light"] .chip-header {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
-  border-bottom: 1px solid rgba(48,178,255,0.10) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
 }
-[data-theme="zds-dark"] .chip-header::after {
+
+[data-theme="zds-dark"] .chip-header {
+  background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
+}
+
+[data-theme="light"] .chip-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%) !important;
+}
+
+[data-theme="zds-dark"] .chip-header::after,
+[data-theme="light"] .chip-header::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -99,98 +276,42 @@
   background-repeat: repeat;
 }
 
-/* Header text + app-switcher pills */
-[data-theme="zds-dark"] .chip-header .zds-header-title {
-  color: #f0f4f8 !important;
+/* App-switcher pills */
+[data-theme="zds-dark"] .chip-header .zds-header-title,
+[data-theme="light"] .chip-header .zds-header-title {
+  color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chip-header .app-pill-active {
-  background: #30b2ff !important;
-  color: #080e14 !important;
-  border-color: #30b2ff !important;
+
+[data-theme="zds-dark"] .chip-header .app-pill-active,
+[data-theme="light"] .chip-header .app-pill-active {
+  background: var(--zds-blue) !important;
+  color: #000 !important;
+  border-color: var(--zds-blue) !important;
 }
+
 [data-theme="zds-dark"] .chip-header .app-pill-inactive {
   background: transparent !important;
-  color: #8ba4be !important;
+  color: var(--zds-t2) !important;
   border-color: rgba(48,178,255,0.20) !important;
 }
 [data-theme="zds-dark"] .chip-header .app-pill-inactive:hover {
   background: rgba(48,178,255,0.08) !important;
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
+}
+[data-theme="light"] .chip-header .app-pill-inactive {
+  background: transparent !important;
+  color: var(--zds-t2) !important;
+  border-color: var(--zds-border) !important;
+}
+[data-theme="light"] .chip-header .app-pill-inactive:hover {
+  background: var(--zds-bg-3) !important;
+  color: var(--zds-t1) !important;
 }
 
-/* ── Zone cards ──────────────────────────────────────────────────────────── */
 
-[data-theme="zds-dark"] .zone-card,
-[data-theme="zds-dark"] .rr-card,
-[data-theme="zds-dark"] .aux-card {
-  background: #0d1520 !important;
-  border: 1px solid rgba(48,178,255,0.10) !important;
-  border-radius: 10px !important;
-  color: #f0f4f8 !important;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
-}
-
-[data-theme="zds-dark"] .zone-card-filled:hover,
-[data-theme="zds-dark"] .rr-card-filled:hover {
-  box-shadow: 0 0 0 1px rgba(48,178,255,0.35), 0 4px 20px rgba(48,178,255,0.12) !important;
-  border-color: rgba(48,178,255,0.28) !important;
-}
-
-[data-theme="zds-dark"] .zone-card-empty:hover,
-[data-theme="zds-dark"] .rr-card-empty:hover {
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08) !important;
-}
-
-[data-theme="zds-dark"] .zone-card-locked,
-[data-theme="zds-dark"] .rr-card-locked {
-  box-shadow: inset 0 0 0 1px rgba(224,203,182,0.18) !important;
-  border-color: rgba(224,203,182,0.22) !important;
-  background: linear-gradient(135deg, rgba(224,203,182,0.04) 0%, #0d1520 50%) !important;
-}
-
-/* Zone card header (slot code label) */
-[data-theme="zds-dark"] .zone-card .card-slot-label {
-  color: #4d6a82 !important;
-  font-size: 10px !important;
-  letter-spacing: 0.08em !important;
-  text-transform: uppercase !important;
-}
-
-/* TM name in filled card */
-[data-theme="zds-dark"] .zone-card .card-tm-name {
-  color: #f0f4f8 !important;
-}
-
-/* Task bullets — bumped from t3 (#4d6a82) to t2 (#8ba4be) for readability */
-[data-theme="zds-dark"] .zone-card .card-task-text {
-  color: #8ba4be !important;
-}
-
-/* Empty-state text — bumped from t4 (#2e4357) to a brighter mid-tone so
-   "Unfilled" actually reads against the dark surface. Italic + this color
-   still communicates "no body assigned" without disappearing. */
-[data-theme="zds-dark"] .zone-card .card-empty-label {
-  color: #6b85a0 !important;
-}
-
-/* Task section separator + text colors */
-[data-theme="zds-dark"] .card-task-section {
-  border-top-color: rgba(48,178,255,0.08) !important;
-}
-[data-theme="zds-dark"] .card-task-section p,
-[data-theme="zds-dark"] .card-task-section span {
-  color: #8ba4be !important;
-}
-/* "+ task" + "× remove" buttons stay slightly dimmer than primary text
-   so they don't compete visually, but still visible. Up from #4d6a82. */
-[data-theme="zds-dark"] .card-task-section .chakra-button {
-  color: #7a93ad !important;
-}
-[data-theme="zds-dark"] .card-task-section .chakra-button:hover {
-  color: #f0f4f8 !important;
-}
-
-/* ── Section gold rule + eyebrow ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   SECTION GOLD RULE + EYEBROW
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 .section-gold-rule {
   height: 1px;
@@ -199,68 +320,292 @@
   border: none;
 }
 
+[data-theme="light"] .section-gold-rule {
+  background: linear-gradient(90deg, rgba(180,83,9,0.3) 0%, rgba(180,83,9,0.08) 60%, transparent 100%);
+}
+
 .section-eyebrow {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #4d6a82;
+  color: var(--zds-t3);
   margin-bottom: 4px;
   display: block;
 }
 
-/* Bumped one tier brighter on dark surface — section labels like
-   ZONES / RESTROOMS / AUXILIARY are key wayfinders, shouldn't blend. */
 [data-theme="zds-dark"] .section-eyebrow {
-  color: #8ba4be;
+  color: var(--zds-t2);  /* bumped one tier brighter for dark surface legibility */
 }
 
-/* ── Night tabs ──────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ZONE CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="zds-dark"] .zone-card,
+[data-theme="zds-dark"] .rr-card,
+[data-theme="zds-dark"] .aux-card,
+[data-theme="light"] .zone-card,
+[data-theme="light"] .rr-card,
+[data-theme="light"] .aux-card {
+  background: var(--zds-bg-2) !important;
+  border: 1px solid var(--zds-border) !important;
+  border-radius: var(--zds-r-lg) !important;
+  color: var(--zds-t1) !important;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+  min-height: 108px;
+}
+
+/* Filled card hover */
+[data-theme="zds-dark"] .zone-card-filled:hover,
+[data-theme="zds-dark"] .rr-card-filled:hover {
+  box-shadow: 0 0 0 1px rgba(48,178,255,0.35), 0 4px 20px rgba(48,178,255,0.12) !important;
+  border-color: var(--zds-border-hover) !important;
+  background: var(--zds-bg-3) !important;
+}
+[data-theme="light"] .zone-card-filled:hover,
+[data-theme="light"] .rr-card-filled:hover {
+  box-shadow: 0 0 0 1.5px rgba(37,99,235,0.35), 0 2px 8px rgba(37,99,235,0.10) !important;
+  border-color: var(--zds-border-hover) !important;
+  background: var(--zds-bg-3) !important;
+}
+
+/* Empty card hover */
+[data-theme="zds-dark"] .zone-card-empty:hover,
+[data-theme="zds-dark"] .rr-card-empty:hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08) !important;
+  background: var(--zds-bg-3) !important;
+}
+[data-theme="light"] .zone-card-empty:hover,
+[data-theme="light"] .rr-card-empty:hover {
+  box-shadow: 0 0 0 1px rgba(11,26,42,0.10) !important;
+  background: var(--zds-bg-3) !important;
+}
+
+/* Locked card */
+[data-theme="zds-dark"] .zone-card-locked,
+[data-theme="zds-dark"] .rr-card-locked {
+  box-shadow: inset 0 0 0 1px rgba(224,203,182,0.18) !important;
+  border-color: rgba(224,203,182,0.22) !important;
+  background: linear-gradient(135deg, rgba(224,203,182,0.04) 0%, #0d1520 50%) !important;
+}
+[data-theme="light"] .zone-card-locked,
+[data-theme="light"] .rr-card-locked {
+  border-color: rgba(180,83,9,0.22) !important;
+  background: linear-gradient(135deg, rgba(180,83,9,0.03) 0%, #fff 50%) !important;
+}
+
+/* ── Zone label (slot code) ─────────────────────── */
+[data-theme="zds-dark"] .zone-card .card-slot-label,
+[data-theme="light"] .zone-card .card-slot-label,
+[data-theme="zds-dark"] .rr-card .card-slot-label,
+[data-theme="light"] .rr-card .card-slot-label {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  color: var(--zds-t3) !important;
+}
+
+/* ── TM name — filled state ──────────────────────── */
+[data-theme="zds-dark"] .zone-card .card-tm-name,
+[data-theme="light"] .zone-card .card-tm-name,
+[data-theme="zds-dark"] .rr-card .card-tm-name,
+[data-theme="light"] .rr-card .card-tm-name {
+  font-size: 23px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.025em !important;
+  color: var(--zds-t1) !important;
+  cursor: pointer;
+  transition: text-shadow 0.15s ease;
+}
+
+/* TM name hover glow — zone color applied via inline style on the element.
+   We can't reference the exact zone color from CSS without a custom property,
+   so we apply a generic blue glow in dark mode and none in light. */
+[data-theme="zds-dark"] .zone-card .card-tm-name:hover {
+  text-shadow: 0 0 20px rgba(48,178,255,0.35) !important;
+}
+
+/* ── TM name — unfilled state ────────────────────── */
+[data-theme="zds-dark"] .zone-card .card-empty-label,
+[data-theme="light"] .zone-card .card-empty-label,
+[data-theme="zds-dark"] .rr-card .card-empty-label,
+[data-theme="light"] .rr-card .card-empty-label {
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  font-style: italic !important;
+  color: var(--zds-t4) !important;
+  opacity: 0.8;
+}
+
+[data-theme="zds-dark"] .zone-card .card-empty-label {
+  color: #6b85a0 !important;  /* bumped from t4 so "Unfilled" reads on dark bg */
+}
+
+/* ── TM name — called-off state ──────────────────── */
+[data-theme="zds-dark"] .zone-card .card-tm-name-calledoff,
+[data-theme="light"] .zone-card .card-tm-name-calledoff,
+[data-theme="zds-dark"] .rr-card .card-tm-name-calledoff,
+[data-theme="light"] .rr-card .card-tm-name-calledoff {
+  font-size: 23px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.025em !important;
+  color: var(--zds-red) !important;
+}
+
+/* Called-off badge pill */
+.called-off-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--zds-red-bg);
+  border: 1px solid rgba(248,113,113,0.30);
+  color: var(--zds-red);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+[data-theme="light"] .called-off-badge {
+  background: rgba(220,38,38,0.08);
+  border-color: rgba(220,38,38,0.25);
+  color: #dc2626;
+}
+
+/* ── Task list bullets ───────────────────────────── */
+[data-theme="zds-dark"] .card-task-section,
+[data-theme="light"] .card-task-section {
+  border-top: 1px solid var(--zds-border-subtle) !important;
+}
+
+[data-theme="zds-dark"] .card-task-section {
+  border-top-color: rgba(48,178,255,0.08) !important;
+}
+
+[data-theme="zds-dark"] .zone-card .card-task-text,
+[data-theme="zds-dark"] .rr-card .card-task-text {
+  font-size: 9.5px !important;
+  color: var(--zds-t2) !important;
+}
+[data-theme="light"] .zone-card .card-task-text,
+[data-theme="light"] .rr-card .card-task-text {
+  font-size: 9.5px !important;
+  color: var(--zds-t3) !important;
+}
+
+[data-theme="zds-dark"] .card-task-section p,
+[data-theme="zds-dark"] .card-task-section span,
+[data-theme="light"] .card-task-section p,
+[data-theme="light"] .card-task-section span {
+  color: var(--zds-t2) !important;
+}
+
+[data-theme="zds-dark"] .card-task-section .chakra-button,
+[data-theme="light"] .card-task-section .chakra-button {
+  color: var(--zds-t3) !important;
+}
+[data-theme="zds-dark"] .card-task-section .chakra-button:hover,
+[data-theme="light"] .card-task-section .chakra-button:hover {
+  color: var(--zds-t1) !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NIGHT TABS BAR
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .night-tabs-bar {
   background: linear-gradient(180deg, #0a1420 0%, #080e14 100%) !important;
-  border-bottom: 1px solid rgba(48,178,255,0.08) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
+}
+[data-theme="light"] .night-tabs-bar {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
 }
 
-[data-theme="zds-dark"] .night-tab {
+[data-theme="zds-dark"] .night-tab,
+[data-theme="light"] .night-tab {
   background: transparent !important;
-  /* Bumped from #4d6a82 — inactive day pills (Friday/Saturday/Sunday/...)
-     were too dim to scan quickly. */
-  color: #8ba4be !important;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+  padding-bottom: 0 !important;
 }
 
+[data-theme="zds-dark"] .night-tab {
+  color: var(--zds-t2) !important;
+}
+[data-theme="light"] .night-tab {
+  color: var(--zds-t3) !important;
+}
 [data-theme="zds-dark"] .night-tab:hover {
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.04) !important;
 }
-
+[data-theme="light"] .night-tab:hover {
+  color: var(--zds-t1) !important;
+  background: var(--zds-bg-3) !important;
+}
 [data-theme="zds-dark"] .night-tab-active {
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.05) !important;
 }
-
-/* Mini fill bar track inside each tab */
-[data-theme="zds-dark"] .night-tab-fill-track {
-  background: #162236 !important;
-  border-radius: 99px !important;
-  height: 3px !important;
-  width: 100% !important;
-  overflow: hidden !important;
+[data-theme="light"] .night-tab-active {
+  color: var(--zds-t1) !important;
+  background: var(--zds-bg-3) !important;
 }
 
-/* ── Night scoreboard strip ──────────────────────────────────────────────── */
+/* Fill mini-bar track: exactly 28px wide × 3px tall per spec */
+[data-theme="zds-dark"] .night-tab-fill-track,
+[data-theme="light"] .night-tab-fill-track {
+  height: 3px !important;
+  width: 28px !important;
+  border-radius: var(--zds-r-pill) !important;
+  overflow: hidden !important;
+  margin-top: 4px;
+}
+[data-theme="zds-dark"] .night-tab-fill-track {
+  background: var(--zds-bg-4) !important;
+}
+[data-theme="light"] .night-tab-fill-track {
+  background: var(--zds-bg-4) !important;
+}
+
+/* Locked tab: fill bar replaced by gold lock icon via ::after — CSS only */
+[data-theme="zds-dark"] .night-tab-locked .night-tab-fill-track,
+[data-theme="light"] .night-tab-locked .night-tab-fill-track {
+  display: none !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NIGHT SCOREBOARD HEADER
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .night-scoreboard,
 [data-theme="zds-dark"] .deployment-header-strip {
   background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
-  border-bottom: 1px solid rgba(48,178,255,0.08) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
   position: relative;
   overflow: hidden;
 }
+[data-theme="light"] .night-scoreboard,
+[data-theme="light"] .deployment-header-strip {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative rings — dark mode only */
 [data-theme="zds-dark"] .night-scoreboard::before {
   content: '';
   position: absolute;
@@ -280,188 +625,376 @@
   pointer-events: none;
 }
 
-/* Scoreboard stat labels + values */
+/* Day name — big glowing display text */
+[data-theme="zds-dark"] .scoreboard-day-name,
+[data-theme="light"] .scoreboard-day-name {
+  font-size: 36px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.04em !important;
+  line-height: 1 !important;
+}
+/* Glow is applied inline via Python style dict — zone color varies per night */
+
+/* Rotation count */
+[data-theme="zds-dark"] .scoreboard-rotation-count,
+[data-theme="light"] .scoreboard-rotation-count {
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  color: var(--zds-t1) !important;
+}
+
+/* Stat labels + values */
 [data-theme="zds-dark"] .scoreboard-label {
-  /* Bumped from #4d6a82 so labels like "IN ROTATION", "BREAKS", "OPEN"
-     are readable at a glance without squinting. */
-  color: #8ba4be !important;
+  color: var(--zds-t2) !important;
   font-size: 10px !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
 }
-[data-theme="zds-dark"] .scoreboard-value {
-  color: #f0f4f8 !important;
+[data-theme="light"] .scoreboard-label {
+  color: var(--zds-t3) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+[data-theme="zds-dark"] .scoreboard-value,
+[data-theme="light"] .scoreboard-value {
+  color: var(--zds-t1) !important;
   font-weight: 700 !important;
 }
-[data-theme="zds-dark"] .scoreboard-pct {
-  color: #8ba4be !important;
+[data-theme="zds-dark"] .scoreboard-pct,
+[data-theme="light"] .scoreboard-pct { color: var(--zds-t2) !important; }
+
+[data-theme="zds-dark"] .scoreboard-value-blue,
+[data-theme="light"] .scoreboard-value-blue  { color: var(--zds-blue) !important; }
+[data-theme="zds-dark"] .scoreboard-value-red,
+[data-theme="light"] .scoreboard-value-red   { color: var(--zds-red) !important; }
+[data-theme="zds-dark"] .scoreboard-value-amber,
+[data-theme="light"] .scoreboard-value-amber { color: var(--zds-amber) !important; }
+[data-theme="zds-dark"] .scoreboard-value-green,
+[data-theme="light"] .scoreboard-value-green { color: var(--zds-green) !important; }
+
+/* Break wave badges — 26×26px square with wave color */
+.break-wave-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
-[data-theme="zds-dark"] .scoreboard-value-blue { color: #30b2ff !important; }
-[data-theme="zds-dark"] .scoreboard-value-red  { color: #f87171 !important; }
-[data-theme="zds-dark"] .scoreboard-value-amber{ color: #fbbf24 !important; }
-[data-theme="zds-dark"] .scoreboard-value-green{ color: #34d399 !important; }
+.break-wave-badge-1 { background: rgba(48,178,255,0.18); color: #30b2ff; border: 1px solid rgba(48,178,255,0.35); }
+.break-wave-badge-2 { background: rgba(52,211,153,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.35); }
+.break-wave-badge-3 { background: rgba(167,139,250,0.15); color: #a78bfa; border: 1px solid rgba(167,139,250,0.35); }
 
-/* ── Week Overview night cards ───────────────────────────────────────────── */
 
-[data-theme="zds-dark"] .week-night-card {
-  background: #0d1520 !important;
-  border: 1px solid rgba(48,178,255,0.10) !important;
-  border-radius: 10px !important;
-  color: #f0f4f8 !important;
+/* ══════════════════════════════════════════════════════════════════════════════
+   WEEK OVERVIEW NIGHT CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="zds-dark"] .week-night-card,
+[data-theme="light"] .week-night-card {
+  background: var(--zds-bg-2) !important;
+  border: 1px solid var(--zds-border) !important;
+  border-radius: var(--zds-r-lg) !important;
+  color: var(--zds-t1) !important;
   transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
 }
 [data-theme="zds-dark"] .week-night-card:hover {
   box-shadow: 0 0 0 1px rgba(48,178,255,0.28), 0 4px 16px rgba(48,178,255,0.08) !important;
   border-color: rgba(48,178,255,0.22) !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-date-label {
-  color: #8ba4be !important;
+[data-theme="light"] .week-night-card:hover {
+  box-shadow: 0 0 0 1px rgba(37,99,235,0.25), 0 2px 8px rgba(37,99,235,0.06) !important;
+  border-color: var(--zds-border-hover) !important;
+}
+[data-theme="zds-dark"] .week-night-card .card-date-label,
+[data-theme="light"] .week-night-card .card-date-label {
+  color: var(--zds-t2) !important;
   font-size: 11px !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-weekday {
-  color: #f0f4f8 !important;
+[data-theme="zds-dark"] .week-night-card .card-weekday,
+[data-theme="light"] .week-night-card .card-weekday {
+  color: var(--zds-t1) !important;
   font-weight: 700 !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-stat-label {
-  /* Bumped from #4d6a82 for readability on the week-overview cards. */
-  color: #8ba4be !important;
+[data-theme="zds-dark"] .week-night-card .card-stat-label,
+[data-theme="light"] .week-night-card .card-stat-label {
+  color: var(--zds-t2) !important;
   font-size: 9px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.08em !important;
 }
 [data-theme="zds-dark"] .week-night-card .card-stat-value {
-  color: #30b2ff !important;
+  color: var(--zds-blue) !important;
+  font-weight: 700 !important;
+}
+[data-theme="light"] .week-night-card .card-stat-value {
+  color: var(--zds-blue) !important;
   font-weight: 700 !important;
 }
 
-/* ── Index / landing page ────────────────────────────────────────────────── */
 
-[data-theme="zds-dark"] .zds-index-page {
-  background: #080e14 !important;
+/* ══════════════════════════════════════════════════════════════════════════════
+   NOTICE DOT (zone card corner indicator — Phase E)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* notice-dot-wrapper — absolute container holding the dot + tooltip */
+.notice-dot-wrapper {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
 }
 
-/* ── Generic surface overrides ───────────────────────────────────────────── */
+/* The colored dot itself — 8×8px */
+.notice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: default;
+  transition: transform 0.12s;
+}
+.notice-dot-wrapper:hover .notice-dot {
+  transform: scale(1.25);
+}
+
+.notice-dot-alert   { background: var(--zds-amber); box-shadow: 0 0 6px rgba(251,191,36,0.7); }
+.notice-dot-info    { background: var(--zds-blue);  box-shadow: 0 0 6px rgba(48,178,255,0.7); }
+.notice-dot-training{ background: var(--zds-green); box-shadow: 0 0 6px rgba(52,211,153,0.7); }
+.notice-dot-meeting { background: var(--zds-violet);box-shadow: 0 0 6px rgba(167,139,250,0.7);}
+
+/* Tooltip — hidden by default, revealed on wrapper hover */
+.notice-tooltip {
+  display: none;
+  position: absolute;
+  top: 14px;
+  left: 0;
+  min-width: 160px;
+  max-width: 220px;
+  padding: 6px 10px;
+  background: var(--zds-bg-2, #1a2a3e);
+  border: 1px solid var(--zds-border, rgba(48,178,255,0.15));
+  border-radius: 6px;
+  box-shadow: var(--zds-shadow-menu, 0 8px 32px rgba(0,0,0,0.5));
+  font-size: 11px;
+  color: var(--zds-t2, #c9d4e0);
+  white-space: normal;
+  z-index: 20;
+  pointer-events: none;
+}
+.notice-dot-wrapper:hover .notice-tooltip {
+  display: block;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NIGHT-LEVEL LOCK OVERLAY (Phase D)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* When .night-locked is applied to the zone grid wrapper, all cards inside
+   become non-interactive. Individual slot locks (zone_card-locked) still work. */
+.night-locked .zone-card,
+.night-locked .rr-card,
+.night-locked .aux-card {
+  pointer-events: none !important;
+  opacity: 0.75 !important;
+  transition: opacity 0.3s ease !important;
+}
+
+/* Gold lock badge shown in the fill bar strip when night is locked */
+.night-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(224,203,182,0.12);
+  border: 1px solid rgba(224,203,182,0.30);
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--zds-gold);
+  letter-spacing: 0.06em;
+}
+.night-lock-badge .lock-meta {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--zds-t4);
+  letter-spacing: 0;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   AUDIT STRIP (Phase C — fixed bottom-right status indicator)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.audit-strip {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(13,21,32,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--zds-border);
+  border-radius: 7px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+[data-theme="light"] .audit-strip {
+  background: rgba(244,247,251,0.92);
+  border-color: var(--zds-border);
+}
+
+.audit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.audit-dot-saved   { background: var(--zds-green); box-shadow: 0 0 6px rgba(52,211,153,0.6); }
+.audit-dot-unsaved { background: var(--zds-amber); box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+
+.audit-text-saved   { color: var(--zds-t2); }
+.audit-text-unsaved { color: var(--zds-amber); font-weight: 600; }
+.audit-text-locked  { color: var(--zds-gold); font-weight: 700; letter-spacing: 0.04em; }
+.audit-text-meta    { color: var(--zds-t4); }
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GENERIC SURFACE OVERRIDES
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 /* Sidebar */
 [data-theme="zds-dark"] .sidebar,
 [data-theme="zds-dark"] [data-component="sidebar"] {
-  background: #040a10 !important;
-  border-right: 1px solid rgba(48,178,255,0.08) !important;
+  background: var(--zds-bg-0) !important;
+  border-right: 1px solid var(--zds-border) !important;
 }
 [data-theme="zds-dark"] .sidebar a,
 [data-theme="zds-dark"] [data-component="sidebar"] a {
-  color: #8ba4be !important;
+  color: var(--zds-t2) !important;
 }
 [data-theme="zds-dark"] .sidebar a:hover,
 [data-theme="zds-dark"] [data-component="sidebar"] a:hover {
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.06) !important;
 }
 [data-theme="zds-dark"] .sidebar a.active,
 [data-theme="zds-dark"] [data-component="sidebar"] a.active {
-  color: #30b2ff !important;
+  color: var(--zds-blue) !important;
   background: rgba(48,178,255,0.10) !important;
 }
 
 /* Chakra text + heading fallbacks */
 [data-theme="zds-dark"] .chakra-text,
 [data-theme="zds-dark"] .chakra-heading {
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chakra-divider {
-  border-color: rgba(48,178,255,0.10) !important;
-}
+[data-theme="zds-dark"] .chakra-divider { border-color: var(--zds-border) !important; }
 
-/* Generic white cards that missed a specific override */
+/* White cards that missed a component-level override */
 [data-theme="zds-dark"] .chakra-card,
-[data-theme="zds-dark"] [data-component="card"],
-[data-theme="zds-dark"] .rx-el-box[style*="background: white"],
-[data-theme="zds-dark"] .rx-el-box[style*="background:white"],
-[data-theme="zds-dark"] .rx-el-box[style*="background-color: white"],
-[data-theme="zds-dark"] .rx-el-box[style*="background-color:#f9fafb"],
-[data-theme="zds-dark"] .rx-el-box[style*="background: #f9fafb"],
-[data-theme="zds-dark"] .rx-el-box[style*="background: #ffffff"],
-[data-theme="zds-dark"] .rx-el-box[style*="background:#ffffff"] {
-  background: #0d1520 !important;
-  border-color: rgba(48,178,255,0.10) !important;
-  color: #f0f4f8 !important;
+[data-theme="zds-dark"] [data-component="card"] {
+  background: var(--zds-bg-2) !important;
+  border-color: var(--zds-border) !important;
+  color: var(--zds-t1) !important;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .chakra-button[data-variant="solid"],
 [data-theme="zds-dark"] .chakra-button:not([data-variant]) {
-  background: #30b2ff !important;
-  color: #080e14 !important;
+  background: var(--zds-blue) !important;
+  color: var(--zds-bg-1) !important;
   font-weight: 600 !important;
 }
 [data-theme="zds-dark"] .chakra-button[data-variant="solid"]:hover {
-  background: #1a9be8 !important;
+  background: var(--zds-blue-dim) !important;
 }
 [data-theme="zds-dark"] .chakra-button[data-variant="ghost"] {
   background: transparent !important;
-  color: #8ba4be !important;
+  color: var(--zds-t2) !important;
   border: 1px solid rgba(48,178,255,0.20) !important;
 }
 [data-theme="zds-dark"] .chakra-button[data-variant="ghost"]:hover {
   background: rgba(48,178,255,0.08) !important;
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
 }
 [data-theme="zds-dark"] .chakra-button[data-colorscheme="red"] {
-  background: rgba(248,113,113,0.15) !important;
-  color: #f87171 !important;
+  background: var(--zds-red-bg) !important;
+  color: var(--zds-red) !important;
   border: 1px solid rgba(248,113,113,0.25) !important;
 }
 
-/* ── Badges / chips ──────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BADGES + CHIPS
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .chakra-badge {
-  background: rgba(48,178,255,0.12) !important;
-  color: #30b2ff !important;
+  background: var(--zds-blue-muted) !important;
+  color: var(--zds-blue) !important;
 }
 [data-theme="zds-dark"] .chakra-badge[data-colorscheme="red"] {
-  background: rgba(248,113,113,0.12) !important;
-  color: #f87171 !important;
+  background: var(--zds-red-bg) !important;
+  color: var(--zds-red) !important;
 }
 [data-theme="zds-dark"] .chakra-badge[data-colorscheme="yellow"],
 [data-theme="zds-dark"] .chakra-badge[data-colorscheme="orange"] {
-  background: rgba(251,191,36,0.12) !important;
-  color: #fbbf24 !important;
+  background: var(--zds-amber-bg) !important;
+  color: var(--zds-amber) !important;
 }
 [data-theme="zds-dark"] .chakra-badge[data-colorscheme="green"] {
-  background: rgba(52,211,153,0.10) !important;
-  color: #34d399 !important;
+  background: var(--zds-green-bg) !important;
+  color: var(--zds-green) !important;
 }
 
-/* ── Inputs ──────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   INPUTS
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .chakra-input,
 [data-theme="zds-dark"] .chakra-select,
 [data-theme="zds-dark"] input[type="text"],
 [data-theme="zds-dark"] input[type="search"] {
-  background: #162236 !important;
-  border-color: rgba(48,178,255,0.15) !important;
-  color: #f0f4f8 !important;
+  background: var(--zds-bg-4) !important;
+  border-color: var(--zds-border) !important;
+  color: var(--zds-t1) !important;
 }
 [data-theme="zds-dark"] .chakra-input:focus,
-[data-theme="zds-dark"] .chakra-select:focus,
 [data-theme="zds-dark"] input[type="text"]:focus,
 [data-theme="zds-dark"] input[type="search"]:focus {
-  border-color: #30b2ff !important;
+  border-color: var(--zds-blue) !important;
   box-shadow: 0 0 0 1px rgba(48,178,255,0.30) !important;
 }
 [data-theme="zds-dark"] .chakra-input::placeholder,
 [data-theme="zds-dark"] input::placeholder {
-  color: #2e4357 !important;
+  color: var(--zds-t4) !important;
 }
 
-/* ── Drawer / modal ──────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DRAWER / MODAL
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .chakra-drawer__content,
 [data-theme="zds-dark"] .chakra-modal__content {
-  background: #0d1520 !important;
-  border: 1px solid rgba(48,178,255,0.12) !important;
-  color: #f0f4f8 !important;
+  background: var(--zds-bg-2) !important;
+  border: 1px solid var(--zds-border) !important;
+  color: var(--zds-t1) !important;
 }
 [data-theme="zds-dark"] .chakra-drawer__overlay,
 [data-theme="zds-dark"] .chakra-modal__overlay {
@@ -469,36 +1002,32 @@
 }
 [data-theme="zds-dark"] .chakra-drawer__header,
 [data-theme="zds-dark"] .chakra-modal__header {
-  color: #f0f4f8 !important;
-  border-bottom: 1px solid rgba(48,178,255,0.10) !important;
+  color: var(--zds-t1) !important;
+  border-bottom: 1px solid var(--zds-border) !important;
 }
 
-/* ── TM picker (drawer) overrides ────────────────────────────────────────── */
-
+/* TM Picker drawer */
 [data-theme="zds-dark"] .tm-picker-drawer .tm-row {
   border-bottom: 1px solid rgba(48,178,255,0.06) !important;
-  color: #f0f4f8 !important;
+  color: var(--zds-t1) !important;
 }
 [data-theme="zds-dark"] .tm-picker-drawer .tm-row:hover {
   background: rgba(48,178,255,0.06) !important;
 }
 [data-theme="zds-dark"] .tm-picker-drawer .tasks-pane {
-  background: #111d2b !important;
-  border-left: 1px solid rgba(48,178,255,0.10) !important;
+  background: var(--zds-bg-3) !important;
+  border-left: 1px solid var(--zds-border) !important;
 }
 [data-theme="zds-dark"] .tm-picker-drawer .task-bullet {
-  color: #4d6a82 !important;
+  color: var(--zds-t3) !important;
 }
 
-/* ── Context menu (already white-bg; let it stay light for contrast) ─────── */
-/* (context_menu.css handles its own chrome; no overrides needed here)       */
 
-/* ── Highlight toolbar (already handles its own chrome) ─────────────────── */
-/* (highlight_toolbar.css is correct; no overrides needed here)              */
-
-/* ── Skeleton loading states ─────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   SKELETON LOADING
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 [data-theme="zds-dark"] .chakra-skeleton {
-  background: linear-gradient(90deg, #0d1520 25%, #162236 50%, #0d1520 75%) !important;
+  background: linear-gradient(90deg, var(--zds-bg-2) 25%, var(--zds-bg-4) 50%, var(--zds-bg-2) 75%) !important;
   background-size: 200% 100% !important;
 }

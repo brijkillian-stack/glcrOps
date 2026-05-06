@@ -25,7 +25,79 @@ from shared.components.context_menu import ContextMenuState
 
 # ── Shared sub-components ─────────────────────────────────────────────────────
 
+# Phase E — notice type → dot color
+_NOTICE_COLORS: dict[str, str] = {
+    "alert":    "#fbbf24",
+    "info":     "#30b2ff",
+    "training": "#34d399",
+    "meeting":  "#a78bfa",
+}
+_NOTICE_ICONS: dict[str, str] = {
+    "alert":    "⚠",
+    "info":     "ℹ",
+    "training": "🎓",
+    "meeting":  "📅",
+}
+
 _LOCK_GOLD = "#b45309"
+
+
+def _notice_dot(notices) -> rx.Component:
+    """Phase E — colored dot in the top-left corner of a card when notices exist.
+
+    `notices` is a Reflex Var (list[dict]) — may be empty.
+    When non-empty, shows the dot colored by the first (newest) notice's type,
+    plus a CSS tooltip listing all notices on hover.
+
+    The dot is purely decorative CSS; on-hover tooltip is a sibling div
+    revealed by the .notice-dot:hover ~ .notice-tooltip selector in zds_dark.css.
+    """
+    # Map the top notice type to a color via rx.match
+    dot_color = rx.match(
+        notices[0]["type"],
+        ("alert",    "#fbbf24"),
+        ("info",     "#30b2ff"),
+        ("training", "#34d399"),
+        ("meeting",  "#a78bfa"),
+        "#fbbf24",   # default
+    )
+    return rx.cond(
+        notices.length() > 0,
+        rx.box(
+            # The dot itself
+            rx.box(
+                class_name="notice-dot",
+                background=dot_color,
+                box_shadow=rx.match(
+                    notices[0]["type"],
+                    ("alert",    "0 0 6px rgba(251,191,36,0.55)"),
+                    ("info",     "0 0 6px rgba(48,178,255,0.55)"),
+                    ("training", "0 0 6px rgba(52,211,153,0.55)"),
+                    ("meeting",  "0 0 6px rgba(167,139,250,0.55)"),
+                    "0 0 6px rgba(251,191,36,0.55)",
+                ),
+            ),
+            # Tooltip (revealed by CSS :hover on parent)
+            rx.box(
+                rx.foreach(
+                    notices,
+                    lambda n: rx.box(
+                        rx.text(
+                            n["type"].upper() + " · " + n["text"],
+                            size="1", color="#e8edf2",
+                        ),
+                        padding="2px 0",
+                    ),
+                ),
+                class_name="notice-tooltip",
+            ),
+            class_name="notice-dot-wrapper",
+            position="absolute",
+            top="6px", left="6px",
+            z_index="5",
+        ),
+        rx.fragment(),
+    )
 
 
 def _lock_icon(slot_id, is_locked) -> rx.Component:
@@ -247,16 +319,25 @@ def zone_card(slot: dict) -> rx.Component:
     """
     return rx.box(
         # Absolute decorations
-        _color_bar(slot["color"]),
+        # Filled: 3px bar with zone color. Unfilled: 2px dim bar (no glow).
+        rx.cond(
+            slot["is_filled"],
+            _color_bar(slot["color"], height="3px"),
+            _color_bar("#2e4357", height="2px"),
+        ),
         rx.cond(slot["has_alert"], _alert_banner(slot["alert_target"]), rx.fragment()),
+        # Phase E — notice dot (top-left, color by notice type)
+        _notice_dot(slot["notices"]),
         # Lock icon (top-right) and inline clear × (left of lock, only when filled)
         _lock_icon(slot["id"], slot["is_locked"]),
         rx.cond(slot["is_filled"], _inline_clear(slot["id"]), rx.fragment()),
         # ── Clickable "assign TM" area ──
         rx.box(
             rx.hstack(
+                # card-slot-label class: CSS overrides to 9px/700/0.14em tracking
                 rx.text(slot["label"], size="1", weight="bold", color=slot["color"],
-                        letter_spacing="0.08em", text_transform="uppercase"),
+                        letter_spacing="0.08em", text_transform="uppercase",
+                        class_name="card-slot-label"),
                 rx.cond(
                     slot["has_group"],
                     _group_badge(slot["group_num"]),
@@ -287,8 +368,15 @@ def zone_card(slot: dict) -> rx.Component:
                 # Phase 1 dark-mode (2026-05-06): card-tm-name / card-empty-label
                 # classes let CSS pick the right color per theme — inline
                 # color is now empty for filled rows so the class wins.
+                # card-tm-name-calledoff → red text via CSS; card-tm-name → normal filled
                 class_name="ctx-menu-trigger ht-trigger " + rx.cond(
-                    slot["is_filled"], "card-tm-name", "card-empty-label"
+                    slot["is_filled"],
+                    rx.cond(
+                        slot["warning_status"] == "called_off",
+                        "card-tm-name card-tm-name-calledoff",
+                        "card-tm-name",
+                    ),
+                    "card-empty-label",
                 ),
                 custom_attrs={
                     # Context menu attrs
@@ -344,7 +432,7 @@ def zone_card(slot: dict) -> rx.Component:
             ),
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
-        min_height="90px",
+        min_height="108px",
     )
 
 

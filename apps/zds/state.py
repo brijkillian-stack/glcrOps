@@ -194,6 +194,13 @@ class ZdsState(rx.State):
     # True while the unlock-confirm dialog is shown.
     night_lock_confirm_open: bool = False
 
+    # ── Notices form (Phase E) ────────────────────────────────────────────────
+    # Add-notice dialog state — opened via the context menu "Add Notice" item.
+    notice_form_open:     bool = False
+    notice_form_slot_key: str  = ""
+    notice_form_type:     str  = "alert"   # "alert"|"info"|"training"|"meeting"
+    notice_form_text:     str  = ""
+
     # ── Audit banner (tracks user-driven mutations for the session) ───────────
     # Newest-first; capped at 100 entries via _log_change.
     change_log:      list[ChangeLogEntry] = []
@@ -259,6 +266,67 @@ class ZdsState(rx.State):
     def cancel_night_unlock(self):
         """Dismiss the unlock confirm dialog without making changes."""
         self.night_lock_confirm_open = False
+
+    # ── Notice handlers (Phase E) ─────────────────────────────────────────────
+
+    @rx.event
+    def open_notice_form(self, slot_key: str):
+        """Open the Add Notice dialog pre-filled for `slot_key`."""
+        self.notice_form_slot_key = slot_key
+        self.notice_form_type     = "alert"
+        self.notice_form_text     = ""
+        self.notice_form_open     = True
+
+    @rx.event
+    def close_notice_form(self):
+        self.notice_form_open = False
+
+    @rx.event
+    def set_notice_type(self, t: str):
+        self.notice_form_type = t
+
+    @rx.event
+    def set_notice_text(self, t: str):
+        self.notice_form_text = t
+
+    @rx.event
+    async def submit_notice(self):
+        """Persist the notice and reload slot data for the current night."""
+        if not self.notice_form_slot_key:
+            self.notice_form_open = False
+            return
+        from shared.auth import AuthState
+        auth = await self.get_state(AuthState)
+        if auth.editor_role not in ("zds_editor", "editor"):
+            self.error = "You need editor access to add notices."
+            self.notice_form_open = False
+            return
+        try:
+            database.create_notice(
+                night_id    = self.current_night_id,
+                slot_key    = self.notice_form_slot_key,
+                notice_type = self.notice_form_type,
+                text        = self.notice_form_text,
+                created_by  = auth.editor_email,
+            )
+            self._load_night(self.current_night_id)
+        except Exception as e:
+            self.error = str(e)
+        self.notice_form_open = False
+
+    @rx.event
+    async def delete_notice(self, notice_id: str):
+        """Remove a notice by ID and reload."""
+        from shared.auth import AuthState
+        auth = await self.get_state(AuthState)
+        if auth.editor_role not in ("zds_editor", "editor"):
+            self.error = "You need editor access to remove notices."
+            return
+        try:
+            database.delete_notice(notice_id)
+            self._load_night(self.current_night_id)
+        except Exception as e:
+            self.error = str(e)
 
     # =========================================================================
     # Computed vars
@@ -1014,6 +1082,13 @@ class ZdsState(rx.State):
                 self.night_called_off = []
 
             all_slots = database.fetch_zone_assignments(night_id)
+            # Phase E — enrich slots with their notices
+            _raw_notices = database.fetch_notices(night_id)
+            _notices_by_key: dict[str, list] = {}
+            for _n in _raw_notices:
+                _notices_by_key.setdefault(_n["slot_key"], []).append(_n)
+            for _s in all_slots:
+                _s["notices"] = _notices_by_key.get(_s["slot_key"], [])
             self.zone_slots = [s for s in all_slots if s["slot_type"] == "zone"]
             self.aux_slots  = [s for s in all_slots if s["slot_type"] == "aux"]
 

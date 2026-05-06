@@ -98,6 +98,8 @@ class ZoneSlot(TypedDict):
     # "not_scheduled"  → TM is assigned but not in any schedule pool tonight
     # Empty string for unfilled slots.
     warning_status: str
+    # Phase E — notices (injected in state._load_night from the notices table)
+    notices: list  # list of {id, type, text, created_by, created_at}
 
 
 class RRSlot(TypedDict):

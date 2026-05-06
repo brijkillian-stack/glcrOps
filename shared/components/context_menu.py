@@ -209,6 +209,17 @@ class ContextMenuState(rx.State):
         self.open = False
         return PeopleState.open_drawer(self.target_id)
 
+    @rx.event
+    async def open_notice_for_ctx_slot(self):
+        """Phase E — open the ZDS add-notice dialog for ctx_slot_key."""
+        slot_key = self.ctx_slot_key
+        self.open = False
+        if not slot_key:
+            return
+        from apps.zds.state import ZdsState
+        zds = await self.get_state(ZdsState)
+        zds.open_notice_form(slot_key)
+
 
 # ── Component ────────────────────────────────────────────────────────────────
 
@@ -258,8 +269,10 @@ def _items_for_target() -> rx.Component:
                            on_click=s.mark_sweeper),
                 _menu_item(label="View profile", icon="◍",
                            on_click=s.view_profile),
-                # Future actions (mark called off, swap, add note, etc.)
-                # land here — see docs/context_menu_remaining_surfaces.md
+                _menu_divider(),
+                # Phase E — Add Notice (opens ZdsState notice form dialog)
+                _menu_item(label="Add notice", icon="📌",
+                           on_click=s.open_notice_for_ctx_slot),
             ),
         ),
 
@@ -267,8 +280,9 @@ def _items_for_target() -> rx.Component:
         rx.cond(
             (s.surface == "deployment_grid") & (s.target_type == "slot"),
             rx.fragment(
-                _menu_item(label="Mark slot priority", icon="⚑",
-                           on_click=s.mark_sweeper),  # TODO: dedicated handler
+                # Phase E — notices available on empty slots too
+                _menu_item(label="Add notice", icon="📌",
+                           on_click=s.open_notice_for_ctx_slot),
             ),
         ),
 

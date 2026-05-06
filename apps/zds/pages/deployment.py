@@ -124,6 +124,99 @@ def _deployment_skeleton() -> rx.Component:
     )
 
 
+# ── Phase E — Notice type colors ──────────────────────────────────────────────
+
+_NOTICE_TYPE_OPTS = [
+    ("alert",    "⚠ Alert",    "#fbbf24", "rgba(251,191,36,0.12)"),
+    ("info",     "ℹ Info",     "#30b2ff", "rgba(48,178,255,0.12)"),
+    ("training", "🎓 Training", "#34d399", "rgba(52,211,153,0.12)"),
+    ("meeting",  "📅 Meeting",  "#a78bfa", "rgba(167,139,250,0.12)"),
+]
+
+
+def _notice_form_dialog() -> rx.Component:
+    """Add-notice dialog opened from the context menu 'Add notice' item.
+
+    Type picker: four color-coded buttons.
+    Text input: one-line description.
+    Submit → ZdsState.submit_notice(); Cancel → ZdsState.close_notice_form().
+    """
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title("Add Notice"),
+            rx.dialog.description(
+                "Choose a type and enter a short description.",
+                size="2", color="#6b7280",
+            ),
+            rx.vstack(
+                # ── Type selector ────────────────────────────────────────────
+                rx.text("Type", size="1", weight="600", color="#6b7280",
+                        text_transform="uppercase", letter_spacing="0.06em"),
+                rx.hstack(
+                    *[
+                        rx.button(
+                            label,
+                            variant=rx.cond(
+                                ZdsState.notice_form_type == t,
+                                "solid", "outline",
+                            ),
+                            size="1",
+                            on_click=ZdsState.set_notice_type(t),
+                            cursor="pointer",
+                            style={
+                                "borderColor": color,
+                                "color": rx.cond(
+                                    ZdsState.notice_form_type == t, "white", color
+                                ),
+                                "background": rx.cond(
+                                    ZdsState.notice_form_type == t, color, "transparent"
+                                ),
+                            },
+                        )
+                        for t, label, color, _ in _NOTICE_TYPE_OPTS
+                    ],
+                    gap="6px", flex_wrap="wrap",
+                ),
+                # ── Text input ───────────────────────────────────────────────
+                rx.text("Description", size="1", weight="600", color="#6b7280",
+                        text_transform="uppercase", letter_spacing="0.06em",
+                        margin_top="8px"),
+                rx.input(
+                    placeholder="e.g. TM currently in training for Z9",
+                    value=ZdsState.notice_form_text,
+                    on_change=ZdsState.set_notice_text,
+                    size="2",
+                    width="100%",
+                    auto_focus=True,
+                    on_key_down=rx.cond(
+                        rx.Var.create("event.key") == "Enter",
+                        ZdsState.submit_notice,
+                        rx.noop(),
+                    ),
+                ),
+                # ── Buttons ──────────────────────────────────────────────────
+                rx.hstack(
+                    rx.button(
+                        "Cancel",
+                        variant="soft", color_scheme="gray",
+                        size="2", cursor="pointer",
+                        on_click=ZdsState.close_notice_form,
+                    ),
+                    rx.button(
+                        rx.icon("plus", size=14),
+                        "Add Notice",
+                        size="2", cursor="pointer",
+                        on_click=ZdsState.submit_notice,
+                    ),
+                    gap="10px", justify="end", width="100%", margin_top="4px",
+                ),
+                gap="6px", width="100%",
+            ),
+        ),
+        open=ZdsState.notice_form_open,
+    )
+
+
 # ── Phase D — Night lock unlock-confirm dialog ────────────────────────────────
 
 def _night_unlock_dialog() -> rx.Component:
@@ -942,6 +1035,9 @@ def deployment() -> rx.Component:
 
         # Phase D — unlock confirm dialog (mounted globally, shown when night_lock_confirm_open)
         _night_unlock_dialog(),
+
+        # Phase E — add-notice dialog (mounted globally, opened from context menu)
+        _notice_form_dialog(),
 
         background="#f9fafb",
         min_height="100vh",

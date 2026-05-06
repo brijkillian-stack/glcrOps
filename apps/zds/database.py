@@ -361,6 +361,51 @@ def update_night_lock(night_id: str, is_locked: bool, locked_by: str = "") -> di
     return res.data[0] if res.data else {}
 
 
+# ── NOTICES (Phase E) ────────────────────────────────────────────────────────
+# Typed slot annotations shown as colored dots on zone cards.
+# Types: "alert" | "info" | "training" | "meeting"
+
+def fetch_notices(night_id: str) -> list[dict]:
+    """Return all notice rows for a night, ordered oldest-first."""
+    res = (
+        _client()
+        .table("notices")
+        .select("*")
+        .eq("night_id", night_id)
+        .order("created_at")
+        .execute()
+    )
+    return res.data or []
+
+
+def create_notice(
+    night_id: str,
+    slot_key: str,
+    notice_type: str,
+    text: str,
+    created_by: str = "",
+) -> dict:
+    """Insert a new notice. Returns the created row."""
+    res = (
+        _client()
+        .table("notices")
+        .insert({
+            "night_id":   night_id,
+            "slot_key":   slot_key,
+            "type":       notice_type,
+            "text":       text,
+            "created_by": created_by,
+        })
+        .execute()
+    )
+    return res.data[0] if res.data else {}
+
+
+def delete_notice(notice_id: str) -> None:
+    """Delete a notice by its UUID."""
+    _client().table("notices").delete().eq("id", notice_id).execute()
+
+
 # ── CALL-OFFS (Phase J) ───────────────────────────────────────────────────────
 # A call_off row marks a TM as unavailable for one specific night. Drives:
 #   - Schedule tab strikethrough on that TM's name
