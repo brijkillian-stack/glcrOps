@@ -150,7 +150,7 @@ def _notice_form_dialog() -> rx.Component:
             ),
             rx.vstack(
                 # ── Type selector ────────────────────────────────────────────
-                rx.text("Type", size="1", weight="600", color="#6b7280",
+                rx.text("Type", size="1", weight="bold", color="#6b7280",
                         text_transform="uppercase", letter_spacing="0.06em"),
                 rx.hstack(
                     *[
@@ -178,7 +178,7 @@ def _notice_form_dialog() -> rx.Component:
                     gap="6px", flex_wrap="wrap",
                 ),
                 # ── Text input ───────────────────────────────────────────────
-                rx.text("Description", size="1", weight="600", color="#6b7280",
+                rx.text("Description", size="1", weight="bold", color="#6b7280",
                         text_transform="uppercase", letter_spacing="0.06em",
                         margin_top="8px"),
                 rx.input(
@@ -388,7 +388,7 @@ def _break_col(wave: int, rows: list) -> rx.Component:
                             size="1", color="#9ca3af",
                             letter_spacing="0.08em",
                             text_transform="uppercase",
-                            font_weight="600",
+                            font_weight="bold",
                             padding_top="6px",
                             padding_bottom="2px",
                         ),
@@ -763,10 +763,12 @@ def deployment() -> rx.Component:
             class_name="night-tabs-bar",
         ),
 
-        # Night header — use subscript access, not .get(); no f-strings with Vars
+        # Night header — use subscript access, not .get(); no f-strings with Vars.
+        # Drop inline color so .zds-day-heading CSS class controls per-theme:
+        # light = ink, dark = white. Inline beats CSS even with !important.
         rx.hstack(
-            rx.heading(night["day_name"], size="6", color="#1d4ed8"),
-            rx.text(night["night_date"], size="2", color="#9ca3af",
+            rx.heading(night["day_name"], size="6", class_name="zds-day-heading"),
+            rx.text(night["night_date"], size="2", class_name="zds-day-heading-date",
                     align_self="flex-end", padding_bottom="2px"),
             rx.spacer(),
             # Phase D — lock badge (visible when night is locked)
