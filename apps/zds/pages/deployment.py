@@ -7,6 +7,7 @@ import reflex as rx
 from ..state import ZdsState
 from ..components import zone_card, rr_card, aux_card, tm_picker_drawer, night_tab_bar, save_banner
 from ..components.engine_result_dialog import engine_result_dialog
+from shared.components.section_head import section_head
 
 
 # ── Phase R — Skeleton scaffold ───────────────────────────────────────────────
@@ -114,7 +115,7 @@ def _deployment_skeleton() -> rx.Component:
         # Use the existing .skeleton CSS class (defined in styles.css) for
         # the pulse animation if present. Static otherwise — still a calm
         # placeholder.
-        class_name="zds-skeleton-overlay",
+        class_name="zds-skeleton-overlay zds-index-page",
         position="absolute",
         inset="0",
         z_index="3",
@@ -126,14 +127,9 @@ def _deployment_skeleton() -> rx.Component:
 # ── Section header ────────────────────────────────────────────────────────────
 
 def _section_header(icon: str, label: str, staffed: str = "") -> rx.Component:
-    return rx.hstack(
-        rx.icon(icon, size=13, color="#6b7280"),
-        rx.text(label, size="1", weight="bold", color="#6b7280",
-                letter_spacing="0.1em", text_transform="uppercase"),
-        rx.spacer(),
-        rx.cond(staffed != "", rx.text(staffed, size="1", color="#9ca3af"), rx.fragment()),
-        width="100%", align="center", padding="4px 0 6px",
-    )
+    """Section header — in ZDS dark mode renders as eyebrow + gold rule.
+    In light mode falls back to a simple colored hstack (same as before)."""
+    return section_head(label)
 
 
 # ── Deployment sheet (zones + RR + aux) ───────────────────────────────────────
@@ -619,6 +615,7 @@ def deployment() -> rx.Component:
             background="white",
             position="sticky", top="0", z_index="10",
             width="100%",
+            class_name="chip-header",
         ),
 
         # Night tabs (clicking a tab navigates to that day's route)
@@ -627,6 +624,7 @@ def deployment() -> rx.Component:
             padding="0 24px",
             background="white",
             border_bottom="1px solid #f3f4f6",
+            class_name="night-tabs-bar",
         ),
 
         # Night header — use subscript access, not .get(); no f-strings with Vars
@@ -652,7 +650,7 @@ def deployment() -> rx.Component:
         # Phase R — At-a-glance summary chip (sticky once you scroll past it).
         # Shows fill percent + counts of warning / locked / open. Live-updates
         # as you assign / lock / clear slots.
-        rx.box(
+        rx.box(  # night-scoreboard — dark CSS adds gradient bg + radial ring decorations
             rx.hstack(
                 # Fill bar
                 rx.vstack(
@@ -687,6 +685,7 @@ def deployment() -> rx.Component:
                         height="6px",
                         border_radius="999px",
                         width="220px",
+                        class_name="night-tab-fill-track",
                     ),
                     gap="3px", align="start",
                 ),
@@ -751,6 +750,7 @@ def deployment() -> rx.Component:
             background="#f9fafb",
             border_bottom="1px solid #e5e7eb",
             position="sticky", top="76px", z_index="9",
+            class_name="night-scoreboard",
         ),
 
         # Phase Q.5 — Scheduled-but-not-deployed banner
@@ -847,4 +847,5 @@ def deployment() -> rx.Component:
         background="#f9fafb",
         min_height="100vh",
         on_mount=ZdsState.on_day_load,
+        class_name="zds-index-page",
     )

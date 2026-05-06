@@ -126,6 +126,7 @@ def _week_card(week: dict) -> rx.Component:
                 "border_color": "#dbeafe"},
         transition="all 0.15s ease",
         width="100%",
+        class_name="week-night-card",
     )
 
 
@@ -574,6 +575,7 @@ def index() -> rx.Component:
         _reset_week_modal(),
         background="#f9fafb",
         min_height="100vh",
+        class_name="zds-index-page",
         # Page-load is wired in apps/zds/routes.py (on_load=[ZdsState.load_weeks]).
         # Don't add a duplicate on_mount here or Supabase gets hit twice.
     )

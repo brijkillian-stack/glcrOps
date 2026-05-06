@@ -68,6 +68,7 @@ def _night_card(night: dict) -> rx.Component:
                         height="6px",
                         border_radius="999px",
                         width="100%",
+                        class_name="night-tab-fill-track",
                     ),
                     # Pills row: filled / unfilled / locked / called-off
                     rx.hstack(
@@ -180,6 +181,7 @@ def _night_card(night: dict) -> rx.Component:
             "box_shadow": "0 2px 6px rgba(0,0,0,0.06)",
         },
         transition="all 0.15s",
+        class_name="week-night-card",
     )
 
 
@@ -258,6 +260,7 @@ def week_overview() -> rx.Component:
             top="0",
             z_index="10",
             width="100%",
+            class_name="chip-header",
         ),
 
         # ── Week label ────────────────────────────────────────────────────────
@@ -304,6 +307,7 @@ def week_overview() -> rx.Component:
         background="#f9fafb",
         min_height="100vh",
         on_mount=ZdsState.on_week_overview_load,
+        class_name="zds-index-page",
     )
 
 

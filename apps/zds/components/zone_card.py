@@ -229,6 +229,7 @@ def _task_section(slot_id, tasks) -> rx.Component:
             ),
         ),
         gap="1", width="100%",
+        class_name="card-task-section",
         border_top="1px solid #f3f4f6",
         padding_top="4px",
         margin_top="4px",
@@ -322,6 +323,19 @@ def zone_card(slot: dict) -> rx.Component:
                 slot["is_locked"],
                 f"1px solid {_LOCK_GOLD}",
                 "1px solid #e5e7eb",
+            ),
+            "class_name": rx.cond(
+                slot["is_locked"],
+                rx.cond(
+                    slot["is_filled"],
+                    "zone-card zone-card-filled zone-card-locked",
+                    "zone-card zone-card-empty zone-card-locked",
+                ),
+                rx.cond(
+                    slot["is_filled"],
+                    "zone-card zone-card-filled",
+                    "zone-card zone-card-empty",
+                ),
             ),
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
@@ -428,7 +442,15 @@ def rr_card(slot: dict) -> rx.Component:
         ),
         # ── Task section — uses mens_slot_id as the authoritative slot ──
         _task_section(slot["mens_slot_id"], slot["display_tasks"]),
-        **{**CARD_BASE, "cursor": "default"},
+        **{
+            **CARD_BASE,
+            "cursor": "default",
+            "class_name": rx.cond(
+                slot["mens_is_filled"] | slot["womens_is_filled"],
+                "zone-card rr-card rr-card-filled",
+                "zone-card rr-card rr-card-empty",
+            ),
+        },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
         min_height="80px",
     )
@@ -475,6 +497,19 @@ def aux_card(slot: dict) -> rx.Component:
                 slot["is_locked"],
                 f"1px solid {_LOCK_GOLD}",
                 "1px solid #e5e7eb",
+            ),
+            "class_name": rx.cond(
+                slot["is_locked"],
+                rx.cond(
+                    slot["is_filled"],
+                    "zone-card aux-card zone-card-filled zone-card-locked",
+                    "zone-card aux-card zone-card-empty zone-card-locked",
+                ),
+                rx.cond(
+                    slot["is_filled"],
+                    "zone-card aux-card zone-card-filled",
+                    "zone-card aux-card zone-card-empty",
+                ),
             ),
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),

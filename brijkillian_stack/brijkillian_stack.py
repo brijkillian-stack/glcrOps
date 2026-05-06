@@ -91,12 +91,21 @@ def _with_grok(page_fn):
 
 
 def _with_zds_chrome(page_fn):
-    """Wrap a ZDS page with the global context menu + highlight toolbar (no Grok yet)."""
+    """Wrap a ZDS page with dark-mode theme, casino-scatter bg, context menu + toolbar.
+
+    data-theme="zds-dark" on the outer box scopes all zds_dark.css overrides to
+    ZDS pages only — Memory/GLCR pages use _with_grok and are unaffected.
+    The .zds-casino-bg div is position:fixed so it renders behind all content.
+    """
     def wrapped() -> rx.Component:
-        return rx.fragment(
+        return rx.box(
+            rx.box(class_name="zds-casino-bg"),   # fixed SVG scatter behind content
             page_fn(),
             global_context_menu(),
             global_highlight_toolbar(),
+            data_theme="zds-dark",
+            min_height="100vh",
+            position="relative",
         )
     wrapped.__name__ = f"{page_fn.__name__}_zds"
     return wrapped
@@ -111,6 +120,8 @@ app = rx.App(
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
         # Design tokens + component styles
         "/styles.css",
+        # ZDS dark-mode overrides (scoped to [data-theme="zds-dark"])
+        "/zds_dark.css",
     ],
     head_components=[
         rx.el.script(_KBD_SCRIPT),

@@ -1,0 +1,488 @@
+/*
+ * zds_dark.css — Dark-mode token overrides for ZDS pages.
+ *
+ * Scoped to [data-theme="zds-dark"] so Memory/GLCR pages are unaffected.
+ * All color values come from the v3 mock's T object (zds_dark_v3.html).
+ *
+ * Token reference (matching mock):
+ *   bg0 #040a10  bg1 #080e14  bg2 #0d1520  bg3 #111d2b  bg4 #162236
+ *   border rgba(48,178,255,0.10)   borderHover rgba(48,178,255,0.28)
+ *   borderGold rgba(224,203,182,0.20)   borderSubtle rgba(255,255,255,0.05)
+ *   t1 #f0f4f8   t2 #8ba4be   t3 #4d6a82   t4 #2e4357
+ *   blue #30b2ff   gold #e0cbb6
+ *   red #f87171   amber #fbbf24   green #34d399   violet #a78bfa
+ */
+
+/* ── Base shell ──────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] {
+  background: #080e14;
+  color: #f0f4f8;
+  --surface-canvas:  #080e14;
+  --surface-card:    #0d1520;
+  --surface-raised:  #111d2b;
+  --surface-input:   #162236;
+  --fg-1:            #f0f4f8;
+  --fg-2:            #8ba4be;
+  --fg-3:            #4d6a82;
+  --fg-4:            #2e4357;
+  --border-subtle:   rgba(48,178,255,0.10);
+  --border-hover:    rgba(48,178,255,0.28);
+  --border-gold:     rgba(224,203,182,0.20);
+  --accent-blue:     #30b2ff;
+  --accent-gold:     #e0cbb6;
+  --status-red:      #f87171;
+  --status-amber:    #fbbf24;
+  --status-green:    #34d399;
+  --status-violet:   #a78bfa;
+}
+
+/* Force background on the page shell Reflex renders */
+[data-theme="zds-dark"] body,
+[data-theme="zds-dark"] .chakra-ui-light,
+[data-theme="zds-dark"] > div {
+  background: #080e14 !important;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+[data-theme="zds-dark"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="zds-dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(48,178,255,0.20);
+  border-radius: 99px;
+}
+[data-theme="zds-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(48,178,255,0.40);
+}
+
+/* ── Casino-scatter background overlay ───────────────────────────────────── */
+
+.zds-casino-bg {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60vh;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url('/casino_scatter.svg');
+  background-size: 100% auto;
+  background-position: bottom left;
+  background-repeat: no-repeat;
+  opacity: 0.30;
+  mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+}
+
+/* ── Chip-header — dotted-circle overlay on ZDS top nav ─────────────────── */
+
+[data-theme="zds-dark"] .chip-header {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
+  border-bottom: 1px solid rgba(48,178,255,0.10) !important;
+}
+[data-theme="zds-dark"] .chip-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Ccircle cx='30' cy='30' r='22' fill='none' stroke='%2330b2ff' stroke-width='1.5' stroke-dasharray='6 4'/%3E%3Ccircle cx='30' cy='30' r='14' fill='none' stroke='%2330b2ff' stroke-width='0.75'/%3E%3Ccircle cx='30' cy='30' r='6' fill='none' stroke='%2330b2ff' stroke-width='1'/%3E%3Ccircle cx='90' cy='30' r='22' fill='none' stroke='%23e0cbb6' stroke-width='1.5' stroke-dasharray='6 4'/%3E%3Ccircle cx='90' cy='30' r='14' fill='none' stroke='%23e0cbb6' stroke-width='0.75'/%3E%3Ccircle cx='90' cy='30' r='6' fill='none' stroke='%23e0cbb6' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 120px 60px;
+  background-repeat: repeat;
+}
+
+/* Header text + app-switcher pills */
+[data-theme="zds-dark"] .chip-header .zds-header-title {
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .chip-header .app-pill-active {
+  background: #30b2ff !important;
+  color: #080e14 !important;
+  border-color: #30b2ff !important;
+}
+[data-theme="zds-dark"] .chip-header .app-pill-inactive {
+  background: transparent !important;
+  color: #8ba4be !important;
+  border-color: rgba(48,178,255,0.20) !important;
+}
+[data-theme="zds-dark"] .chip-header .app-pill-inactive:hover {
+  background: rgba(48,178,255,0.08) !important;
+  color: #f0f4f8 !important;
+}
+
+/* ── Zone cards ──────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .zone-card,
+[data-theme="zds-dark"] .rr-card,
+[data-theme="zds-dark"] .aux-card {
+  background: #0d1520 !important;
+  border: 1px solid rgba(48,178,255,0.10) !important;
+  border-radius: 10px !important;
+  color: #f0f4f8 !important;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
+}
+
+[data-theme="zds-dark"] .zone-card-filled:hover,
+[data-theme="zds-dark"] .rr-card-filled:hover {
+  box-shadow: 0 0 0 1px rgba(48,178,255,0.35), 0 4px 20px rgba(48,178,255,0.12) !important;
+  border-color: rgba(48,178,255,0.28) !important;
+}
+
+[data-theme="zds-dark"] .zone-card-empty:hover,
+[data-theme="zds-dark"] .rr-card-empty:hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08) !important;
+}
+
+[data-theme="zds-dark"] .zone-card-locked,
+[data-theme="zds-dark"] .rr-card-locked {
+  box-shadow: inset 0 0 0 1px rgba(224,203,182,0.18) !important;
+  border-color: rgba(224,203,182,0.22) !important;
+  background: linear-gradient(135deg, rgba(224,203,182,0.04) 0%, #0d1520 50%) !important;
+}
+
+/* Zone card header (slot code label) */
+[data-theme="zds-dark"] .zone-card .card-slot-label {
+  color: #4d6a82 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+/* TM name in filled card */
+[data-theme="zds-dark"] .zone-card .card-tm-name {
+  color: #f0f4f8 !important;
+}
+
+/* Task bullets */
+[data-theme="zds-dark"] .zone-card .card-task-text {
+  color: #4d6a82 !important;
+}
+
+/* Empty-state text */
+[data-theme="zds-dark"] .zone-card .card-empty-label {
+  color: #2e4357 !important;
+}
+
+/* Task section separator + text colors */
+[data-theme="zds-dark"] .card-task-section {
+  border-top-color: rgba(48,178,255,0.08) !important;
+}
+[data-theme="zds-dark"] .card-task-section p,
+[data-theme="zds-dark"] .card-task-section span {
+  color: #4d6a82 !important;
+}
+/* Override the inline "× remove" button and "+ task" button specifically */
+[data-theme="zds-dark"] .card-task-section .chakra-button {
+  color: #4d6a82 !important;
+}
+
+/* ── Section gold rule + eyebrow ─────────────────────────────────────────── */
+
+.section-gold-rule {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(224,203,182,0.4) 0%, rgba(224,203,182,0.1) 60%, transparent 100%);
+  margin-bottom: 10px;
+  border: none;
+}
+
+.section-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #4d6a82;
+  margin-bottom: 4px;
+  display: block;
+}
+
+[data-theme="zds-dark"] .section-eyebrow {
+  color: #4d6a82;
+}
+
+/* ── Night tabs ──────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .night-tabs-bar {
+  background: linear-gradient(180deg, #0a1420 0%, #080e14 100%) !important;
+  border-bottom: 1px solid rgba(48,178,255,0.08) !important;
+}
+
+[data-theme="zds-dark"] .night-tab {
+  background: transparent !important;
+  color: #4d6a82 !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+}
+
+[data-theme="zds-dark"] .night-tab:hover {
+  color: #8ba4be !important;
+  background: rgba(48,178,255,0.04) !important;
+}
+
+[data-theme="zds-dark"] .night-tab-active {
+  color: #f0f4f8 !important;
+  background: rgba(48,178,255,0.05) !important;
+}
+
+/* Mini fill bar track inside each tab */
+[data-theme="zds-dark"] .night-tab-fill-track {
+  background: #162236 !important;
+  border-radius: 99px !important;
+  height: 3px !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* ── Night scoreboard strip ──────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .night-scoreboard,
+[data-theme="zds-dark"] .deployment-header-strip {
+  background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
+  border-bottom: 1px solid rgba(48,178,255,0.08) !important;
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="zds-dark"] .night-scoreboard::before {
+  content: '';
+  position: absolute;
+  right: -60px; top: -60px;
+  width: 280px; height: 280px;
+  border-radius: 50%;
+  border: 40px solid rgba(48,178,255,0.03);
+  pointer-events: none;
+}
+[data-theme="zds-dark"] .night-scoreboard::after {
+  content: '';
+  position: absolute;
+  right: 20px; top: -40px;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  border: 1px solid rgba(48,178,255,0.06);
+  pointer-events: none;
+}
+
+/* Scoreboard stat labels + values */
+[data-theme="zds-dark"] .scoreboard-label {
+  color: #4d6a82 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+[data-theme="zds-dark"] .scoreboard-value {
+  color: #f0f4f8 !important;
+  font-weight: 700 !important;
+}
+[data-theme="zds-dark"] .scoreboard-value-blue { color: #30b2ff !important; }
+[data-theme="zds-dark"] .scoreboard-value-red  { color: #f87171 !important; }
+[data-theme="zds-dark"] .scoreboard-value-amber{ color: #fbbf24 !important; }
+[data-theme="zds-dark"] .scoreboard-value-green{ color: #34d399 !important; }
+
+/* ── Week Overview night cards ───────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .week-night-card {
+  background: #0d1520 !important;
+  border: 1px solid rgba(48,178,255,0.10) !important;
+  border-radius: 10px !important;
+  color: #f0f4f8 !important;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
+}
+[data-theme="zds-dark"] .week-night-card:hover {
+  box-shadow: 0 0 0 1px rgba(48,178,255,0.28), 0 4px 16px rgba(48,178,255,0.08) !important;
+  border-color: rgba(48,178,255,0.22) !important;
+}
+[data-theme="zds-dark"] .week-night-card .card-date-label {
+  color: #8ba4be !important;
+  font-size: 11px !important;
+}
+[data-theme="zds-dark"] .week-night-card .card-weekday {
+  color: #f0f4f8 !important;
+  font-weight: 700 !important;
+}
+[data-theme="zds-dark"] .week-night-card .card-stat-label {
+  color: #4d6a82 !important;
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+}
+[data-theme="zds-dark"] .week-night-card .card-stat-value {
+  color: #30b2ff !important;
+  font-weight: 700 !important;
+}
+
+/* ── Index / landing page ────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .zds-index-page {
+  background: #080e14 !important;
+}
+
+/* ── Generic surface overrides ───────────────────────────────────────────── */
+
+/* Sidebar */
+[data-theme="zds-dark"] .sidebar,
+[data-theme="zds-dark"] [data-component="sidebar"] {
+  background: #040a10 !important;
+  border-right: 1px solid rgba(48,178,255,0.08) !important;
+}
+[data-theme="zds-dark"] .sidebar a,
+[data-theme="zds-dark"] [data-component="sidebar"] a {
+  color: #8ba4be !important;
+}
+[data-theme="zds-dark"] .sidebar a:hover,
+[data-theme="zds-dark"] [data-component="sidebar"] a:hover {
+  color: #f0f4f8 !important;
+  background: rgba(48,178,255,0.06) !important;
+}
+[data-theme="zds-dark"] .sidebar a.active,
+[data-theme="zds-dark"] [data-component="sidebar"] a.active {
+  color: #30b2ff !important;
+  background: rgba(48,178,255,0.10) !important;
+}
+
+/* Chakra text + heading fallbacks */
+[data-theme="zds-dark"] .chakra-text,
+[data-theme="zds-dark"] .chakra-heading {
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .chakra-divider {
+  border-color: rgba(48,178,255,0.10) !important;
+}
+
+/* Generic white cards that missed a specific override */
+[data-theme="zds-dark"] .chakra-card,
+[data-theme="zds-dark"] [data-component="card"],
+[data-theme="zds-dark"] .rx-el-box[style*="background: white"],
+[data-theme="zds-dark"] .rx-el-box[style*="background:white"],
+[data-theme="zds-dark"] .rx-el-box[style*="background-color: white"],
+[data-theme="zds-dark"] .rx-el-box[style*="background-color:#f9fafb"],
+[data-theme="zds-dark"] .rx-el-box[style*="background: #f9fafb"],
+[data-theme="zds-dark"] .rx-el-box[style*="background: #ffffff"],
+[data-theme="zds-dark"] .rx-el-box[style*="background:#ffffff"] {
+  background: #0d1520 !important;
+  border-color: rgba(48,178,255,0.10) !important;
+  color: #f0f4f8 !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .chakra-button[data-variant="solid"],
+[data-theme="zds-dark"] .chakra-button:not([data-variant]) {
+  background: #30b2ff !important;
+  color: #080e14 !important;
+  font-weight: 600 !important;
+}
+[data-theme="zds-dark"] .chakra-button[data-variant="solid"]:hover {
+  background: #1a9be8 !important;
+}
+[data-theme="zds-dark"] .chakra-button[data-variant="ghost"] {
+  background: transparent !important;
+  color: #8ba4be !important;
+  border: 1px solid rgba(48,178,255,0.20) !important;
+}
+[data-theme="zds-dark"] .chakra-button[data-variant="ghost"]:hover {
+  background: rgba(48,178,255,0.08) !important;
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .chakra-button[data-colorscheme="red"] {
+  background: rgba(248,113,113,0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(248,113,113,0.25) !important;
+}
+
+/* ── Badges / chips ──────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .chakra-badge {
+  background: rgba(48,178,255,0.12) !important;
+  color: #30b2ff !important;
+}
+[data-theme="zds-dark"] .chakra-badge[data-colorscheme="red"] {
+  background: rgba(248,113,113,0.12) !important;
+  color: #f87171 !important;
+}
+[data-theme="zds-dark"] .chakra-badge[data-colorscheme="yellow"],
+[data-theme="zds-dark"] .chakra-badge[data-colorscheme="orange"] {
+  background: rgba(251,191,36,0.12) !important;
+  color: #fbbf24 !important;
+}
+[data-theme="zds-dark"] .chakra-badge[data-colorscheme="green"] {
+  background: rgba(52,211,153,0.10) !important;
+  color: #34d399 !important;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .chakra-input,
+[data-theme="zds-dark"] .chakra-select,
+[data-theme="zds-dark"] input[type="text"],
+[data-theme="zds-dark"] input[type="search"] {
+  background: #162236 !important;
+  border-color: rgba(48,178,255,0.15) !important;
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .chakra-input:focus,
+[data-theme="zds-dark"] .chakra-select:focus,
+[data-theme="zds-dark"] input[type="text"]:focus,
+[data-theme="zds-dark"] input[type="search"]:focus {
+  border-color: #30b2ff !important;
+  box-shadow: 0 0 0 1px rgba(48,178,255,0.30) !important;
+}
+[data-theme="zds-dark"] .chakra-input::placeholder,
+[data-theme="zds-dark"] input::placeholder {
+  color: #2e4357 !important;
+}
+
+/* ── Drawer / modal ──────────────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .chakra-drawer__content,
+[data-theme="zds-dark"] .chakra-modal__content {
+  background: #0d1520 !important;
+  border: 1px solid rgba(48,178,255,0.12) !important;
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .chakra-drawer__overlay,
+[data-theme="zds-dark"] .chakra-modal__overlay {
+  background: rgba(4,10,16,0.75) !important;
+}
+[data-theme="zds-dark"] .chakra-drawer__header,
+[data-theme="zds-dark"] .chakra-modal__header {
+  color: #f0f4f8 !important;
+  border-bottom: 1px solid rgba(48,178,255,0.10) !important;
+}
+
+/* ── TM picker (drawer) overrides ────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .tm-picker-drawer .tm-row {
+  border-bottom: 1px solid rgba(48,178,255,0.06) !important;
+  color: #f0f4f8 !important;
+}
+[data-theme="zds-dark"] .tm-picker-drawer .tm-row:hover {
+  background: rgba(48,178,255,0.06) !important;
+}
+[data-theme="zds-dark"] .tm-picker-drawer .tasks-pane {
+  background: #111d2b !important;
+  border-left: 1px solid rgba(48,178,255,0.10) !important;
+}
+[data-theme="zds-dark"] .tm-picker-drawer .task-bullet {
+  color: #4d6a82 !important;
+}
+
+/* ── Context menu (already white-bg; let it stay light for contrast) ─────── */
+/* (context_menu.css handles its own chrome; no overrides needed here)       */
+
+/* ── Highlight toolbar (already handles its own chrome) ─────────────────── */
+/* (highlight_toolbar.css is correct; no overrides needed here)              */
+
+/* ── Skeleton loading states ─────────────────────────────────────────────── */
+
+[data-theme="zds-dark"] .chakra-skeleton {
+  background: linear-gradient(90deg, #0d1520 25%, #162236 50%, #0d1520 75%) !important;
+  background-size: 200% 100% !important;
+}

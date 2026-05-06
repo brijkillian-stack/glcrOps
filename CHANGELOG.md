@@ -4,6 +4,26 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-06 — Session zds_phase1_reskin (Sonnet)
+
+### Phase 1 — Dark-mode visual reskin of all ZDS pages (no backend changes)
+
+- **`assets/casino_scatter.svg`** — Casino-scatter SVG extracted from the v3 mock's base64 data-URI and saved as a standalone cacheable asset.
+- **`assets/zds_dark.css`** — New CSS file (~260 lines) with all dark-mode overrides scoped to `[data-theme="zds-dark"]`. Covers: bg/surface tokens (bg0–bg4), border accents, text colors (t1–t4), zone card classes (`zone-card-filled/empty/locked` glow rings), section gold rule, chip-header overlay, night scoreboard gradient + radial rings, night tabs bar, week overview night cards, skeleton pulse, drawer + input + button + badge overrides.
+- **`brijkillian_stack/brijkillian_stack.py`** — `_with_zds_chrome` wrapper changed from `rx.fragment` to `rx.box(data_theme="zds-dark")`. Casino-scatter fixed overlay (`class_name="zds-casino-bg"`) rendered behind all page content. `zds_dark.css` registered in `app.stylesheets`.
+- **`shared/components/eyebrow.py`** — New helper: `eyebrow(label)` renders an uppercase 10px eyebrow span with `.section-eyebrow` CSS class. Light- and dark-mode compatible.
+- **`shared/components/section_head.py`** — New helper: `section_head(label, count=None)` renders eyebrow + thin gold-rule rule (`linear-gradient(90deg, rgba(224,203,182,0.4)…)`). Optional count badge shown right of label.
+- **`apps/zds/components/zone_card.py`** — `zone_card`, `rr_card`, `aux_card` outer boxes gain conditional `class_name` using `rx.cond` to emit `zone-card zone-card-{filled|empty}` ± `zone-card-locked`. `_task_section` wrapper gets `class_name="card-task-section"` so dark CSS can override the separator border + task text colors.
+- **`apps/zds/components/night_tabs.py`** — Each tab button gets `class_name="night-tab"` + `class_name="night-tab-active"` (conditional). Tab bar `rx.hstack` gains `class_name="night-tabs-bar"`.
+- **`apps/zds/components/zds_header.py`** — Header `rx.hstack` gains `class_name="chip-header"` — in dark mode renders dotted-circle overlay via `::after` pseudo-element + gradient background.
+- **`apps/zds/pages/deployment.py`** — `_section_header()` refactored to delegate to `section_head()` (eyebrow + gold rule). Top nav gets `class_name="chip-header"`. Night tabs wrapper gets `class_name="night-tabs-bar"`. Scoreboard strip gets `class_name="night-scoreboard"`. Fill bar track gets `class_name="night-tab-fill-track"`. Outer page box gets `class_name="zds-index-page"`.
+- **`apps/zds/pages/week_overview.py`** — Night cards get `class_name="week-night-card"`. Sticky header gets `class_name="chip-header"`. Fill bar track gets `class_name="night-tab-fill-track"`. Outer box gets `class_name="zds-index-page"`.
+- **`apps/zds/pages/index.py`** — Outer box and week cards get dark-mode CSS classes. Page body gets `class_name="zds-index-page"`.
+
+**Strategy:** `data-theme="zds-dark"` on the `_with_zds_chrome` wrapper scopes all overrides to ZDS; Memory/GLCR pages (using `_with_grok`) are unaffected. All Python component color arguments are preserved unchanged — dark CSS wins via specificity.
+
+---
+
 ## 2026-05-06 — Session zds_picker_highlight_ux (Sonnet)
 
 ### Part 1 — Tasks side panel inside TM picker

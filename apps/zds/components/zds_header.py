@@ -52,4 +52,6 @@ def zds_header(
         position="sticky",
         top="0",
         z_index="10",
+        # chip-header: dark CSS adds dotted-circle overlay + dark gradient bg
+        class_name="chip-header",
     )

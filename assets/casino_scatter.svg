@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 816" width="1056" height="816">
+  <defs>
+    
+    <path id="heart" d="M0,-10 C0,-18 -12,-20 -12,-10 C-12,0 0,10 0,10 C0,10 12,0 12,-10 C12,-20 0,-18 0,-10z"></path>
+    
+    <path id="diamond" d="M0,-14 L10,0 L0,14 L-10,0z"></path>
+    
+    <path id="club" d="M0,12 L-5,12 L-3,6 C-8,5 -10,0 -7,-4 C-4,-8 2,-8 4,-5 C4,-9 7,-12 10,-10 C13,-8 13,-3 10,0 C13,3 13,8 10,10 C7,12 3,10 2,7 C1,10 -1,12 0,12z M-6,12 L6,12"></path>
+    
+    <path id="spade" d="M0,-12 C-8,-4 -12,4 -8,8 C-5,11 -2,10 0,8 C-1,11 -3,13 -5,13 L5,13 C3,13 1,11 0,8 C2,10 5,11 8,8 C12,4 8,-4 0,-12z"></path>
+  </defs>
+
+  
+
+  
+  <g transform="translate(58,720) rotate(-15)">
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#94a2b1" opacity="0.35"></path>
+  </g>
+
+  
+  <g transform="translate(38,810) rotate(10) scale(0.6)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.25"></path>
+  </g>
+
+  
+  <g transform="translate(168,760) rotate(-3)">
+    <rect x="-26" y="-36" width="52" height="72" rx="5" ry="5" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-20" y="-22" font-family="Barlow,sans-serif" font-size="13" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <path d="M0,-4 C-5,-4 -6,0 -3,3 C-1,5 1,5 3,3 C6,0 5,-4 0,-4z" fill="#30b2ff" opacity="0.5" transform="translate(0,16)"></path>
+  </g>
+
+  
+  <g transform="translate(298,793) rotate(5) scale(0.8)">
+    <circle cx="0" cy="-6" r="6" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="-6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <circle cx="6" cy="0" r="5" fill="#30b2ff" opacity="0.25"></circle>
+    <rect x="-2" y="4" width="4" height="8" fill="#30b2ff" opacity="0.25"></rect>
+    <rect x="-6" y="11" width="12" height="2" fill="#30b2ff" opacity="0.25"></rect>
+  </g>
+
+  
+  <g transform="translate(460,760) rotate(2)">
+    <rect x="-22" y="-32" width="44" height="64" rx="5" ry="5" fill="white" stroke="#94a2b1" stroke-width="1.5" opacity="0.40"></rect>
+    <text x="-15" y="-18" font-family="Barlow,sans-serif" font-size="12" font-weight="600" fill="#94a2b1" opacity="0.40">A</text>
+  </g>
+
+  
+
+  
+  <g transform="translate(430,700) rotate(-8) scale(2.8)">
+    <circle cx="0" cy="-8" r="8" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="-8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <circle cx="8" cy="0" r="7" fill="#e0cbb6" opacity="0.18"></circle>
+    <rect x="-3" y="7" width="6" height="10" fill="#e0cbb6" opacity="0.18"></rect>
+    <rect x="-8" y="16" width="16" height="2.5" fill="#e0cbb6" opacity="0.18"></rect>
+  </g>
+
+  
+  <g transform="translate(348,760) rotate(-20) scale(1.6)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(510,756) rotate(12) scale(1.2)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#94a2b1" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(602,640) rotate(22) scale(0.9)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#e0cbb6" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(566,712) rotate(8) scale(1.4)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#94a2b1" opacity="0.22"></path>
+  </g>
+
+  
+  <g transform="translate(584,788) rotate(-5) scale(1.3)">
+    <path d="M0,10 C0,10 -12,1 -12,-5 C-12,-10 -6,-12 0,-7 C6,-12 12,-10 12,-5 C12,1 0,10 0,10z" fill="#e0cbb6" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(512,668)">
+    <circle cx="0" cy="0" r="28" fill="none" stroke="#94a2b1" stroke-width="2" stroke-dasharray="6 5" opacity="0.18"></circle>
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#94a2b1" stroke-width="1" opacity="0.14"></circle>
+    <circle cx="0" cy="0" r="8" fill="none" stroke="#94a2b1" stroke-width="1.5" opacity="0.14"></circle>
+  </g>
+
+  
+
+  
+  <g transform="translate(756,680) rotate(18)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.45"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.45">A</text>
+    
+    <g transform="translate(8, 10)" opacity="0.4">
+      <circle cx="0" cy="-8" r="8" fill="#30b2ff"></circle>
+      <circle cx="-8" cy="0" r="7" fill="#30b2ff"></circle>
+      <circle cx="8" cy="0" r="7" fill="#30b2ff"></circle>
+      <rect x="-3" y="7" width="6" height="9" fill="#30b2ff"></rect>
+      <rect x="-7" y="15" width="14" height="2.5" fill="#30b2ff"></rect>
+    </g>
+  </g>
+
+  
+  <g transform="translate(706,690) rotate(-12)">
+    <rect x="-44" y="-60" width="88" height="120" rx="8" ry="8" fill="white" stroke="#30b2ff" stroke-width="2.5" opacity="0.55"></rect>
+    <text x="-34" y="-40" font-family="Barlow,sans-serif" font-size="18" font-weight="700" fill="#30b2ff" opacity="0.55">A</text>
+    <text x="-34" y="-22" font-family="Barlow,sans-serif" font-size="11" font-weight="600" fill="#30b2ff" opacity="0.55">♣</text>
+    
+    <path d="M0,-22 L16,0 L0,22 L-16,0z" fill="#30b2ff" opacity="0.30" transform="translate(0,14)"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(840,660) rotate(-10) scale(1.5)">
+    <path d="M0,12 C0,12 -14,2 -14,-6 C-14,-12 -8,-14 0,-8 C8,-14 14,-12 14,-6 C14,2 0,12 0,12z" fill="#30b2ff" opacity="0.30"></path>
+  </g>
+
+  
+  <g transform="translate(920,670) rotate(8) scale(1.2)">
+    <path d="M0,-18 L14,0 L0,18 L-14,0z" fill="#e0cbb6" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(920,748) rotate(-5) scale(1.1)">
+    <path d="M0,-16 L12,0 L0,16 L-12,0z" fill="#94a2b1" opacity="0.28"></path>
+  </g>
+
+  
+  <g transform="translate(1010,790) scale(2.2)">
+    <circle cx="0" cy="-9" r="9" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="-9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <circle cx="9" cy="0" r="8" fill="#30b2ff" opacity="0.28"></circle>
+    <rect x="-3.5" y="8" width="7" height="11" fill="#30b2ff" opacity="0.28"></rect>
+    <rect x="-9" y="18" width="18" height="3" fill="#30b2ff" opacity="0.28"></rect>
+  </g>
+
+  
+  <g transform="translate(1040,710) rotate(-20) scale(0.9)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.25"></path>
+  </g>
+
+  
+
+  
+  <g transform="translate(268,596) rotate(25) scale(0.9)">
+    <path d="M0,10 C0,10 -11,2 -11,-4 C-11,-9 -5,-11 0,-6 C5,-11 11,-9 11,-4 C11,2 0,10 0,10z" fill="#e0cbb6" opacity="0.20"></path>
+  </g>
+
+  
+  <g transform="translate(630,598) rotate(-30) scale(0.8)">
+    <path d="M0,-14 L10,0 L0,14 L-10,0z" fill="#94a2b1" opacity="0.18"></path>
+  </g>
+
+  
+  <g transform="translate(176,656) rotate(15) scale(1.1)">
+    <path d="M0,-14 C-9,-5 -14,4 -9,9 C-6,12 -2,11 0,9 C-1,12 -3,14 -6,14 L6,14 C3,14 1,12 0,9 C2,11 6,12 9,9 C14,4 9,-5 0,-14z" fill="#e0cbb6" opacity="0.16"></path>
+  </g>
+
+</svg>

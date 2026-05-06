@@ -9,7 +9,8 @@ def _night_tab(night: dict) -> rx.Component:
     return rx.button(
         rx.vstack(
             rx.text(night["day_name"], size="2", weight="bold"),
-            rx.text(night["night_date"], size="1", color=rx.cond(is_active, "#1d4ed8", "#9ca3af")),
+            rx.text(night["night_date"], size="1",
+                    color=rx.cond(is_active, "#1d4ed8", "#9ca3af")),
             gap="0", align="center",
         ),
         variant=rx.cond(is_active, "solid", "ghost"),
@@ -18,6 +19,7 @@ def _night_tab(night: dict) -> rx.Component:
         padding="8px 16px",
         border_radius="8px",
         height="auto",
+        class_name=rx.cond(is_active, "night-tab night-tab-active", "night-tab"),
     )
 
 
@@ -28,4 +30,5 @@ def night_tab_bar() -> rx.Component:
         padding="12px 0 4px",
         overflow_x="auto",
         width="100%",
+        class_name="night-tabs-bar",
     )
