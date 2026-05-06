@@ -19,23 +19,30 @@ from ..state import ZdsState
 def _night_card(night: dict) -> rx.Component:
     return rx.box(
         rx.vstack(
-            # Day name + date
+            # Day name + date — drop inline colors so the .card-weekday +
+            # .card-date-label CSS classes (defined per theme in
+            # assets/zds_dark.css) control color. Inline color="#111827"
+            # was beating the dark-mode rules and rendering both nearly
+            # invisible against the dark surface.
             rx.hstack(
-                rx.heading(night["day_name"], size="4", color="#111827"),
+                rx.heading(night["day_name"], size="4",
+                           class_name="card-weekday"),
                 rx.spacer(),
                 rx.text(
                     night["night_date"],
-                    size="1", color="#9ca3af",
+                    size="1",
                     align_self="center",
+                    class_name="card-date-label",
                 ),
                 align="center", width="100%",
             ),
 
-            # Staffing summary
+            # Staffing summary — same fix.
             rx.hstack(
                 rx.text(
                     night["in_rotation"], " in rotation",
-                    size="2", color="#6b7280",
+                    size="2",
+                    class_name="card-stat-label",
                 ),
                 rx.separator(orientation="vertical", height="14px"),
                 rx.text(
@@ -43,7 +50,8 @@ def _night_card(night: dict) -> rx.Component:
                     night["breaks_5"], " / ",
                     night["breaks_9"], " / ",
                     night["breaks_4"],
-                    size="2", color="#6b7280",
+                    size="2",
+                    class_name="card-stat-label",
                 ),
                 align="center", gap="8px",
             ),
@@ -75,8 +83,9 @@ def _night_card(night: dict) -> rx.Component:
                         rx.text(
                             night["stat_filled"].to_string(), " / ",
                             night["stat_total"].to_string(), " filled",
-                            size="1", color="#374151", weight="medium",
+                            size="1", weight="medium",
                             font_variant_numeric="tabular-nums",
+                            class_name="card-stat-value",
                         ),
                         rx.cond(
                             night["stat_unfilled"] > 0,
@@ -88,7 +97,8 @@ def _night_card(night: dict) -> rx.Component:
                                 ),
                                 rx.text(
                                     night["stat_unfilled"].to_string(), " open",
-                                    size="1", color="#6b7280",
+                                    size="1",
+                                    class_name="card-stat-label",
                                 ),
                                 gap="3px", align="center",
                             ),

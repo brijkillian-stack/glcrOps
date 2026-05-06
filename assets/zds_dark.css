@@ -1068,3 +1068,40 @@
   background: linear-gradient(90deg, var(--zds-bg-2) 25%, var(--zds-bg-4) 50%, var(--zds-bg-2) 75%) !important;
   background-size: 200% 100% !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THEME TOGGLE (sun/moon) — sits next to the GLCR/ZDS app pills
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.zds-theme-toggle {
+  margin-left: 6px;
+  height: 28px !important;
+  width: 28px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+[data-theme="zds-dark"] .zds-theme-toggle {
+  color: var(--zds-gold) !important;
+  border-color: rgba(224,203,182,0.20) !important;
+}
+[data-theme="zds-dark"] .zds-theme-toggle:hover {
+  background: rgba(224,203,182,0.10) !important;
+  border-color: rgba(224,203,182,0.40) !important;
+}
+
+[data-theme="light"] .zds-theme-toggle {
+  color: var(--zds-blue) !important;
+  border-color: rgba(0,101,191,0.20) !important;
+}
+[data-theme="light"] .zds-theme-toggle:hover {
+  background: rgba(0,101,191,0.08) !important;
+  border-color: rgba(0,101,191,0.40) !important;
+}

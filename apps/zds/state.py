@@ -180,10 +180,13 @@ class ZdsState(rx.State):
     error:   str = ""
 
     # ── Theme (dark/light toggle) ─────────────────────────────────────────────
-    # "zds-dark" → dark mode (default). "light" → light mode.
+    # "zds-dark" → dark mode. "light" → light mode (default).
     # Bound to data_theme on the _with_zds_chrome wrapper.
-    # Persisted via LocalStorage — survives page reload and across devices/sessions.
-    theme: str = rx.LocalStorage("zds-dark")
+    # Persisted via LocalStorage — survives page reload and across
+    # devices/sessions. Existing users who already toggled to dark
+    # keep that choice (their LocalStorage value isn't overwritten);
+    # only first-time visitors get light by default.
+    theme: str = rx.LocalStorage("light")
 
     # ── Audit strip ───────────────────────────────────────────────────────────
     # ISO timestamp of the last successful write this session; drives the
