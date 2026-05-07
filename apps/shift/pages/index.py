@@ -273,9 +273,13 @@ def _rr_slot_card(s) -> rx.Component:
 
 
 def _rr_section() -> rx.Component:
-    open_count = ShiftState.rr_slots.length() - rx.Var.create(
-        "0"  # placeholder; rx.foreach counts handled server-side
-    )
+    # NOTE: previously computed an `open_count` here via
+    # `length() - rx.Var.create("0")` — but the variable was never
+    # rendered AND Reflex 0.9 rejects Number - String Var math at
+    # compile time. The unfilled-RR count belongs on ShiftState
+    # (see ShiftState.rr_unfilled_count for a future addition);
+    # for now the section header just shows total / total which is
+    # accurate for the read-only HUD.
     return rx.el.div(
         _section_head(
             "Restrooms",
