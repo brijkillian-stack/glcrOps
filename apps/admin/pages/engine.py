@@ -71,14 +71,16 @@ def _tab_strip() -> rx.Component:
 def _weight_row(key: str) -> rx.Component:
     label = WEIGHT_LABELS.get(key, key)
     attr  = f"w_{key}"
+    # Phase 4e hotfix: slider max bumped from 1 → 3. Production weights include
+    # preference_fit=1.5 and override_* at 1.5 — max=1 was clipping visible values.
     return rx.el.div(
         rx.el.div(label, class_name="engine-weight-label"),
         rx.el.div(
             rx.el.input(
                 type="range",
                 min="0",
-                max="1",
-                step="0.01",
+                max="3",
+                step="0.05",
                 value=getattr(EngineConfiguratorState, attr),
                 on_change=lambda v: EngineConfiguratorState.set_weight(key, v),
                 class_name="engine-weight-slider",
@@ -86,8 +88,8 @@ def _weight_row(key: str) -> rx.Component:
             rx.el.input(
                 type="number",
                 min="0",
-                max="1",
-                step="0.01",
+                max="3",
+                step="0.05",
                 value=getattr(EngineConfiguratorState, attr),
                 on_change=lambda v: EngineConfiguratorState.set_weight(key, v),
                 class_name="engine-weight-number",

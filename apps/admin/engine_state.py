@@ -230,10 +230,19 @@ class EngineConfiguratorState(rx.State):
             row = await asyncio.get_event_loop().run_in_executor(
                 None, get_active_engine_config
             )
-            if row:
+            # Phase 4e hotfix: distinguish "load returned None" (DB ok, no
+            # active row) from "exception thrown" (DB error). Both used to
+            # leave sliders at zero defaults silently.
+            if row is None:
+                self.save_error = (
+                    "No active engine_config row found in DB. Sliders showing defaults. "
+                    "Save a config to create an active row."
+                )
+            else:
                 self._apply_config_row(row)
         except Exception as exc:
             self.save_error = f"Load error: {exc}"
+            print(f"[engine_state.load_config] {exc!r}")
         finally:
             self.loading = False
 
@@ -439,9 +448,14 @@ class EngineConfiguratorState(rx.State):
         def _do_sim():
             import sys
             from pathlib import Path
-            _engine_dir = Path(__file__).resolve().parent.parent / "apps" / "zds" / "engine"
-            if str(_engine_dir.parent.parent.parent) not in sys.path:
-                sys.path.insert(0, str(_engine_dir.parent.parent.parent))
+            # Phase 4e hotfix: __file__ is /app/apps/admin/engine_state.py, so
+            # .parent.parent already lands in /app/apps. Previous code re-added
+            # "apps/zds/engine" producing /app/apps/apps/zds/engine (Errno 2 on
+            # the live deploy). Correct path: /app/apps + zds/engine.
+            _engine_dir = Path(__file__).resolve().parent.parent / "zds" / "engine"
+            _repo_root  = _engine_dir.parent.parent.parent  # /app
+            if str(_repo_root) not in sys.path:
+                sys.path.insert(0, str(_repo_root))
             # Import the simulator as a library
             import importlib.util
             spec = importlib.util.spec_from_file_location(
