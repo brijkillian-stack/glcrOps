@@ -486,10 +486,15 @@ class EngineConfiguratorState(rx.State):
             if result is None:
                 self.msim_error = "Simulation returned no results."
             else:
-                self.msim_agg_proposed = result.get("agg_proposed", {})
-                self.msim_agg_baseline = result.get("agg_baseline", {})
-                self.msim_json_path    = result.get("json", "")
-                self.msim_md_path      = result.get("md", "")
+                # Phase 4e hotfix: dict.get(k, default) returns the actual value
+                # when key is present, even if that value is None. simulate_weeks
+                # main() always emits 'agg_baseline' (None when --baseline wasn't
+                # used). The fallback to {} must use `or {}` so the dict-typed
+                # Reflex Var is never assigned None.
+                self.msim_agg_proposed = result.get("agg_proposed") or {}
+                self.msim_agg_baseline = result.get("agg_baseline") or {}
+                self.msim_json_path    = result.get("json") or ""
+                self.msim_md_path      = result.get("md") or ""
                 self.msim_ran = True
         except Exception as exc:
             self.msim_error = f"Multi-week sim error: {exc}"

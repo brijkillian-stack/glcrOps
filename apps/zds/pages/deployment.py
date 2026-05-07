@@ -714,14 +714,20 @@ def deployment() -> rx.Component:
                 ),
             ),
             # Run Deployment Engine — auto-fill unlocked zone/RR/aux slots from schedule
+            # Phase 4e UX: spinner + disabled state when engine is running.
             rx.button(
-                rx.icon("cpu", size=14),
-                "Run Engine",
+                rx.cond(
+                    ZdsState.loading,
+                    rx.el.span(class_name="ops-spinner"),
+                    rx.icon("cpu", size=14),
+                ),
+                rx.cond(ZdsState.loading, "Running…", "Run Engine"),
                 variant="soft",
                 size="2",
                 color_scheme="amber",
                 on_click=ZdsState.run_zone_engine_current_night,
-                cursor="pointer",
+                cursor=rx.cond(ZdsState.loading, "wait", "pointer"),
+                disabled=ZdsState.loading,
                 title="Auto-fill unlocked slots using the deployment algorithm (respects locks)",
             ),
             # Set Break Waves — rebuild wave assignments from BG_* defaults

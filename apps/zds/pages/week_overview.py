@@ -155,13 +155,18 @@ def _night_card(night: dict) -> rx.Component:
                     cursor="pointer",
                 ),
                 rx.button(
-                    rx.icon("cpu", size=13),
-                    "Run Engine",
+                    rx.cond(
+                        ZdsState.loading,
+                        rx.el.span(class_name="ops-spinner"),
+                        rx.icon("cpu", size=13),
+                    ),
+                    rx.cond(ZdsState.loading, "Running…", "Run Engine"),
                     variant="soft",
                     size="2",
                     color_scheme="amber",
                     on_click=ZdsState.run_zone_engine_from_overview(night["id"]),
-                    cursor="pointer",
+                    cursor=rx.cond(ZdsState.loading, "wait", "pointer"),
+                    disabled=ZdsState.loading,
                     title="Auto-fill unlocked slots for this night using the deployment algorithm",
                 ),
                 rx.button(
@@ -238,13 +243,18 @@ def week_overview() -> rx.Component:
             ),
             # Run Deployment Engine for all nights
             rx.button(
-                rx.icon("cpu", size=14),
-                "Run Engine (Week)",
+                rx.cond(
+                    ZdsState.loading,
+                    rx.el.span(class_name="ops-spinner"),
+                    rx.icon("cpu", size=14),
+                ),
+                rx.cond(ZdsState.loading, "Running week…", "Run Engine (Week)"),
                 variant="soft",
                 size="2",
                 color_scheme="amber",
                 on_click=ZdsState.run_zone_engine_week,
-                cursor="pointer",
+                cursor=rx.cond(ZdsState.loading, "wait", "pointer"),
+                disabled=ZdsState.loading,
                 title="Auto-fill unlocked slots for all 7 nights using the deployment algorithm",
             ),
             # Set Break Waves for all nights in the week

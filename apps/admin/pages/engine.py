@@ -410,15 +410,37 @@ def _sim_pane() -> rx.Component:
                     style={"display": "flex", "flexDirection": "column", "gap": "8px",
                            "marginBottom": "12px"},
                 ),
-                # Run button
-                _btn(
+                # Run button — Phase 4e UX: inline spinner + disabled while running
+                rx.el.button(
                     rx.cond(
                         EngineConfiguratorState.msim_running,
-                        "Simulating…",
+                        rx.el.span(class_name="ops-spinner"),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        EngineConfiguratorState.msim_running,
+                        "Simulating… (this can take 30–90s)",
                         "Run Multi-Week Sim",
                     ),
-                    EngineConfiguratorState.run_multi_week_simulation,
-                    variant="default",
+                    on_click=EngineConfiguratorState.run_multi_week_simulation,
+                    disabled=EngineConfiguratorState.msim_running,
+                    style={
+                        "padding": "7px 18px",
+                        "fontSize": "13px",
+                        "fontWeight": "600",
+                        "borderRadius": "6px",
+                        "border": "1px solid var(--border-subtle)",
+                        "background": "var(--surface-card)",
+                        "color": "var(--ink2)",
+                        "fontFamily": "var(--font)",
+                        "transition": "opacity 0.12s",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "6px",
+                        "width": "100%",
+                    },
+                    cursor=rx.cond(EngineConfiguratorState.msim_running, "wait", "pointer"),
                 ),
                 # Error
                 rx.cond(
@@ -598,6 +620,20 @@ def admin_engine_page() -> rx.Component:
                         ),
                     ),
                     _action_bar(),
+                ),
+                # Phase 4e UX: full-screen scrim while multi-week sim runs.
+                # Sim takes 30–90s; without this, the page looks frozen.
+                rx.cond(
+                    EngineConfiguratorState.msim_running,
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.span(class_name="ops-spinner lg"),
+                            rx.el.span("Running multi-week simulation…"),
+                            class_name="ops-engine-running-card",
+                        ),
+                        class_name="ops-engine-running-scrim",
+                    ),
+                    rx.fragment(),
                 ),
             ),
             class_name="engine-config-page",
