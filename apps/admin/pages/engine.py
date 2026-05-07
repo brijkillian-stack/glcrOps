@@ -621,20 +621,22 @@ def admin_engine_page() -> rx.Component:
                     ),
                     _action_bar(),
                 ),
-                # Phase 4e UX: full-screen scrim while multi-week sim runs.
-                # Sim takes 30–90s; without this, the page looks frozen.
-                rx.cond(
-                    EngineConfiguratorState.msim_running,
+            ),
+            # Phase 4e UX: full-screen scrim while multi-week sim runs.
+            # Sim takes 30–90s; without this, the page looks frozen. Sibling
+            # of the loading rx.cond above (rx.cond takes max 3 args, so this
+            # has to live outside that call, not as a 4th argument).
+            rx.cond(
+                EngineConfiguratorState.msim_running,
+                rx.el.div(
                     rx.el.div(
-                        rx.el.div(
-                            rx.el.span(class_name="ops-spinner lg"),
-                            rx.el.span("Running multi-week simulation…"),
-                            class_name="ops-engine-running-card",
-                        ),
-                        class_name="ops-engine-running-scrim",
+                        rx.el.span(class_name="ops-spinner lg"),
+                        rx.el.span("Running multi-week simulation…"),
+                        class_name="ops-engine-running-card",
                     ),
-                    rx.fragment(),
+                    class_name="ops-engine-running-scrim",
                 ),
+                rx.fragment(),
             ),
             class_name="engine-config-page",
             style={

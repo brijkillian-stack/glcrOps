@@ -288,20 +288,24 @@ class EngineConfiguratorState(rx.State):
         self.t_override_load_threshold = float(v)
         self.dirty = True
 
+    # Phase 4e hotfix: rx.input(type="number") emits float on_change values
+    # even for integer fields. Accept v: float and cast inside to silence the
+    # "expects float but got int" warnings at compile.
     @rx.event
-    def set_fatigue_window(self, v: int):
+    def set_fatigue_window(self, v: float):
         self.t_fatigue_window_days = int(v)
         self.dirty = True
 
     @rx.event
-    def set_rotation_weeks(self, v: int):
+    def set_rotation_weeks(self, v: float):
         self.t_rotation_weeks = int(v)
         self.dirty = True
 
     # ── Headcount setters ────────────────────────────────────────────────
 
     @rx.event
-    def set_headcount(self, dow: str, v: int):
+    def set_headcount(self, dow: str, v: float):
+        # Phase 4e hotfix — same float-vs-int Reflex on_change quirk.
         attr = f"hc_{dow.lower()}"
         if hasattr(self, attr):
             setattr(self, attr, int(v))
