@@ -490,9 +490,17 @@ class EngineConfiguratorState(rx.State):
                     timeout=600,  # 10-minute hard cap
                 )
                 if proc.returncode != 0:
+                    # Phase 4e hotfix #5: simulator prints its diagnostic
+                    # output (including [error] lines) to STDOUT, not stderr.
+                    # Surface both, with the last 1500 chars truncated to fit
+                    # in the UI banner — Brian needs to see WHY the sim exited
+                    # ("No schedule files found in ...", "Bad config", etc.).
+                    out_tail = (proc.stdout or "")[-1500:].strip()
+                    err_tail = (proc.stderr or "")[-1500:].strip()
+                    detail = err_tail or out_tail or "(no output)"
                     return {
                         "error":  f"simulate_weeks.py exited {proc.returncode}",
-                        "stderr": (proc.stderr or "")[:1000],
+                        "stderr": detail,
                     }
                 # Parse the simulator's printed output paths so we can read
                 # sim_results.json + sim_report.md.

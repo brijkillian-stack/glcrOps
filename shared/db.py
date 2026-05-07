@@ -3220,6 +3220,11 @@ def save_engine_config_active(
         }).eq("is_active", True).execute()
 
         # 3 — snapshot old config to history
+        # Phase 4e hotfix: column is "saved_by" not "changed_by". Same naming
+        # mismatch pattern as get_active_engine_config (was selecting
+        # "updated_at" instead of "created_at"). Insert was throwing 42703
+        # silently, the bare except returned False, UI showed
+        # "Save failed — check server logs."
         if old:
             sb.table("engine_config_history").insert({
                 "id":              str(_uuid.uuid4()),
@@ -3228,7 +3233,7 @@ def save_engine_config_active(
                 "thresholds":      old.get("thresholds", {}),
                 "headcount":       old.get("headcount", {}),
                 "slot_priority":   old.get("slot_priority", {}),
-                "changed_by":      changed_by,
+                "saved_by":        changed_by,
             }).execute()
 
         return True

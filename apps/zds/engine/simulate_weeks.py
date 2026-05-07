@@ -144,11 +144,61 @@ def _load_active_config() -> dict:
 # ── Schedule discovery ────────────────────────────────────────────────────────
 
 def _find_schedules(n: int) -> list[Path]:
-    """Return the N most recently modified schedule xlsx files."""
+    """Return the N most recently uploaded schedule xlsx files.
+
+    Phase 4e hotfix #5: previously sorted local files by mtime, but on the
+    Render container the local Inputs/Weekly Schedules/ folder is empty
+    after every redeploy (xlsx files are gitignored — they live in Supabase
+    Storage). Now:
+      1. List the bucket to get the canonical upload-order (newest first
+         by `updated_at`).
+      2. Download the top N into the local SCHEDULE_DIR if not already
+         present, mirroring fill_engine's get_latest_schedule_path() pattern.
+      3. Fall back to local-mtime ordering if the bucket isn't reachable —
+         that lets the simulator still work in dev environments where
+         schedules are only on local disk.
+    """
+    SCHEDULE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Tier 1 — pull upload order from Supabase Storage and ensure local copies.
+    try:
+        # Late import: storage.py pulls in shared.db which the engine doesn't
+        # need on every run, and we want a clean fallback if anything's wrong.
+        from shared import storage  # type: ignore
+        remote_rows = storage.list_schedules()
+    except Exception as exc:
+        print(f"[sim] Storage list failed ({exc}) — falling back to local mtime")
+        remote_rows = []
+
+    if remote_rows:
+        # Newest first; cap at n.
+        top = remote_rows[:n]
+        ordered: list[Path] = []
+        for row in top:
+            name = row.get("name")
+            if not name:
+                continue
+            local = SCHEDULE_DIR / name
+            if not local.exists():
+                try:
+                    from shared.db import get_client
+                    sb = get_client()
+                    blob = sb.storage.from_(storage.SCHEDULES_BUCKET).download(name)
+                    local.write_bytes(blob)
+                    print(f"[sim] Synced {name} from Storage")
+                except Exception as exc:
+                    print(f"[sim][warn] Failed to sync {name}: {exc} — skipping")
+                    continue
+            ordered.append(local)
+        if ordered:
+            return ordered
+        # If sync worked but produced no usable files, fall through to local.
+
+    # Tier 2 — fallback: local files by mtime (dev environments).
     candidates = sorted(
         SCHEDULE_DIR.glob("*.xlsx"),
         key=lambda p: p.stat().st_mtime,
-        reverse=True
+        reverse=True,
     )
     return candidates[:n]
 
