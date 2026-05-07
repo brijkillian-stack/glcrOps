@@ -534,9 +534,14 @@ def _sim_pane() -> rx.Component:
                                 class_name="engine-sim-stats",
                             ),
                         ),
-                        # Baseline stats (shown only if comparison was run)
+                        # Baseline stats (shown only if comparison was actually
+                        # run AND we got real numbers back). Phase 4f hotfix:
+                        # check msim_compare_baseline AND that fill_rate_mean
+                        # is present — `dict_var != {}` evaluates True for any
+                        # dict in Reflex 0.9 even when truly empty, so baseline
+                        # was rendering with blank values when it shouldn't.
                         rx.cond(
-                            EngineConfiguratorState.msim_agg_baseline != {},
+                            EngineConfiguratorState.msim_compare_baseline,
                             rx.el.div(
                                 rx.el.div("Baseline Config",
                                           style={"fontSize": "10px", "fontWeight": "700",

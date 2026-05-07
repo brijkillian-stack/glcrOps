@@ -549,11 +549,30 @@ class EngineConfiguratorState(rx.State):
                         md_body = Path(md_path).read_text(encoding="utf-8")
                     except Exception as _md_exc:
                         print(f"[engine_state] sim report read failed: {_md_exc!r}")
+
+                # Phase 4f hotfix: when proposed_results=[] (every fill_engine
+                # subprocess died silently), the simulator still writes
+                # sim_results.json + sim_report.md but with empty aggregations.
+                # The UI then shows blank stat cards with no error explanation.
+                # Detect this and surface the simulator stdout/stderr tail —
+                # it includes the per-run "[sim][warn] Engine exit X: ..."
+                # lines that tell us WHY each run failed.
+                agg_p = data.get("agg_proposed") or {}
+                if not agg_p:
+                    out_tail = (proc.stdout or "")[-2000:].strip()
+                    err_tail = (proc.stderr or "")[-2000:].strip()
+                    diag = err_tail or out_tail or "(no captured output)"
+                    return {
+                        "error":  "Simulation completed but produced no successful runs.",
+                        "stderr": diag,
+                        "json":   json_path,
+                        "md":     md_path,
+                    }
                 return {
                     "json":         json_path,
                     "md":           md_path,
                     "md_body":      md_body,
-                    "agg_proposed": data.get("agg_proposed") or {},
+                    "agg_proposed": agg_p,
                     "agg_baseline": data.get("agg_baseline") or {},
                 }
 
