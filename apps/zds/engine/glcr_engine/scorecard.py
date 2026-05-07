@@ -55,6 +55,18 @@ _state = {
     # of override types active for that TM tonight (e.g. {"prefer_easier"}).
     # See set_soft_overrides_for_day().
     "soft_overrides": {},
+    # Phase 4c — configurable thresholds (previously hard-coded constants).
+    # init() writes these from the active engine_config row; defaults match
+    # the former constants so production behavior is unchanged at config-on.
+    "override_difficulty_threshold": 6,
+    "override_load_threshold":       6,
+    # Phase 4c — new scoring component state (partially wired; see below).
+    # sweeper_history: {dn: [iso_date, ...]} of recent sweeper nights.
+    # prior_placements: {day_name: {slot: dn}} from the previous engine run
+    #   (used by prior_run_continuity). Populated by fill_engine when
+    #   --config-override is active; empty dict otherwise (weight=0.0 default).
+    "sweeper_history":  {},    # {dn: [iso_date, ...]}
+    "prior_placements": {},    # {day_name: {slot: dn}}
 }
 
 DEFAULT_WEIGHTS = {
@@ -67,9 +79,15 @@ DEFAULT_WEIGHTS = {
     "fatigue_index":       0.8,
     "soft_prefer_set":     0.6,
     # K.4 — soft engine_overrides actually bias placement now.
-    "override_prefer_easier":   1.5,   # nudges TM toward low-difficulty slots
-    "override_avoid_high_load": 1.5,   # nudges TM away from high-load slots
-    "override_priority_placement": 1.0,# small overall bonus when this TM is a candidate
+    "override_prefer_easier":      1.5,   # nudges TM toward low-difficulty slots
+    "override_avoid_high_load":    1.5,   # nudges TM away from high-load slots
+    "override_priority_placement": 1.0,   # small overall bonus when this TM is a candidate
+    # Phase 4c — new components (default 0.0 = inactive until Brian tunes up).
+    # Full wiring documented in CHANGELOG.md Phase 4c notes.
+    "sweeper_rotation_penalty": 0.0,  # rises with consecutive sweeper nights
+    "skill_stretch_reward":     0.0,  # reward for difficulty − skill == 1 (growth zone)
+    "prior_run_continuity":     0.0,  # penalty for changing a stable prior assignment
+    "weekly_load_balance":      0.0,  # penalizes concentrating heavy slots on one TM
 }
 
 # Threshold used by override scoring components. A slot with difficulty
@@ -89,7 +107,14 @@ def init(*, roster, tm_skill, slot_difficulty,
          slot_loads, weights, fatigue_window_days,
          slot_to_area, zone_adjacency,
          week_zone_history, archive_history, tm_areas_by_date,
-         day_placements, day_dates, anchor_date):
+         day_placements, day_dates, anchor_date,
+         # Phase 4c — configurable thresholds (optional; defaults preserve
+         # existing production behavior when not supplied by fill_engine).
+         override_difficulty_threshold=None,
+         override_load_threshold=None,
+         # Phase 4c — new component state (optional; empty = component no-ops).
+         sweeper_history=None,
+         prior_placements=None):
     """Inject all config + state. Called once after the engine loads its data."""
     _state.update({
         "roster": roster,
@@ -109,6 +134,20 @@ def init(*, roster, tm_skill, slot_difficulty,
         "day_placements": day_placements,
         "day_dates": day_dates,
         "anchor_date": anchor_date,
+        # Phase 4c — thresholds (fall back to current _state defaults if None)
+        "override_difficulty_threshold": (
+            int(override_difficulty_threshold)
+            if override_difficulty_threshold is not None
+            else _state.get("override_difficulty_threshold", 6)
+        ),
+        "override_load_threshold": (
+            int(override_load_threshold)
+            if override_load_threshold is not None
+            else _state.get("override_load_threshold", 6)
+        ),
+        # Phase 4c — new component state
+        "sweeper_history":  sweeper_history  or {},
+        "prior_placements": prior_placements or {},
     })
 
 
@@ -349,15 +388,58 @@ def score_placement(rk, slot_code, *, skill_priority=False,
     # only one that *boosts* (negative penalty) — it's a "lean toward this
     # TM" signal rather than slot-specific.
     overrides_active = _state.get("soft_overrides", {}).get(dn, set())
+    diff_thresh = _state.get("override_difficulty_threshold", _OVERRIDE_DIFFICULTY_THRESHOLD)
+    load_thresh  = _state.get("override_load_threshold",       _OVERRIDE_LOAD_THRESHOLD)
     override_prefer_easier = 0
-    if "prefer_easier" in overrides_active and diff > _OVERRIDE_DIFFICULTY_THRESHOLD:
+    if "prefer_easier" in overrides_active and diff > diff_thresh:
         override_prefer_easier = 1
     override_avoid_high_load = 0
     if "avoid_high_load" in overrides_active:
         load = _state.get("slot_loads", {}).get(slot_code, 0) or 0
-        if load > _OVERRIDE_LOAD_THRESHOLD:
+        if load > load_thresh:
             override_avoid_high_load = 1
     override_priority_placement = -1 if "priority_placement" in overrides_active else 0
+
+    # ── Phase 4c new scoring components ──────────────────────────────────────
+    # sweeper_rotation_penalty — rises with consecutive sweeper nights.
+    # Partially wired: counts recent sweeper nights from sweeper_history.
+    # Full decay-with-rest logic deferred; weight defaults to 0.0.
+    sweeper_rotation_pen = 0.0
+    if slot_code in SWEEPER_TAGGED_SLOTS:
+        recent_sweeper_nights = len(_state.get("sweeper_history", {}).get(dn, []))
+        sweeper_rotation_pen = min(recent_sweeper_nights / 3.0, 1.0)
+
+    # skill_stretch_reward — small negative penalty (bonus) when the TM is
+    # exactly 1 difficulty point below the slot (growth zone). Reward only
+    # fires when weight > 0 (default 0.0); doesn't affect production scoring.
+    skill_stretch_rew = 0.0
+    skill_val = _state["tm_skill"].get(dn, 5)
+    if (diff - skill_val) == 1:
+        skill_stretch_rew = -0.5   # bonus (lower total = better candidate)
+
+    # prior_run_continuity — penalty for changing a stable prior assignment.
+    # Reads prior_placements injected by fill_engine during dry-run mode.
+    # Weight defaults to 0.0; no-op in production runs.
+    prior_continuity_pen = 0.0
+    if day_name and _state.get("prior_placements"):
+        prior_day = _state["prior_placements"].get(day_name, {})
+        prior_dn = prior_day.get(slot_code)
+        if prior_dn and prior_dn.lower() != dn.lower():
+            prior_continuity_pen = 1.0  # penalty for displacing a stable assignment
+
+    # weekly_load_balance — penalizes concentrating high-load slots on one TM.
+    # Reads slot_loads from _state to sum the TM's load across already-placed days.
+    # Weight defaults to 0.0; deferred full implementation (per-week accumulation).
+    weekly_load_pen = 0.0
+    slot_load_this = _state["slot_loads"].get(slot_code, 2)
+    if slot_load_this >= 7:   # only fire for genuinely heavy slots
+        placed_load = 0
+        for d_placements in _state.get("day_placements", {}).values():
+            for placed_slot, placed_dn in d_placements.items():
+                if placed_dn and placed_dn.lower() == dn.lower():
+                    placed_load += _state["slot_loads"].get(placed_slot, 2)
+        if placed_load >= 14:  # already carrying 2+ heavy slots
+            weekly_load_pen = (placed_load - 14) / 7.0
 
     components = {
         "skill_match":         skill_pen,
@@ -371,6 +453,11 @@ def score_placement(rk, slot_code, *, skill_priority=False,
         "override_prefer_easier":      override_prefer_easier,
         "override_avoid_high_load":    override_avoid_high_load,
         "override_priority_placement": override_priority_placement,
+        # Phase 4c new components (weight=0.0 by default, no production impact)
+        "sweeper_rotation_penalty": sweeper_rotation_pen,
+        "skill_stretch_reward":     skill_stretch_rew,
+        "prior_run_continuity":     prior_continuity_pen,
+        "weekly_load_balance":      weekly_load_pen,
     }
     w = _state["weights"]
     total = sum(w.get(k, 1.0) * v for k, v in components.items())

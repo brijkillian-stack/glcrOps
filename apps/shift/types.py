@@ -43,7 +43,7 @@ class HudAuxSlot(TypedDict):
 
 
 class HudBreakWave(TypedDict):
-    """One break wave panel in the HUD break strip."""
+    """One break wave panel in the HUD break strip. DEPRECATED — use BreakGroup/BreakSlot."""
 
     wave_num: int       # 1 | 2 | 3
     wave_label: str     # "W1" | "W2" | "W3"
@@ -52,6 +52,39 @@ class HudBreakWave(TypedDict):
     on_count: int       # how many TMs currently on break
     total_count: int    # how many TMs in this wave
     names: list[str]    # TM display names in this wave
+
+
+class BreakSlot(TypedDict):
+    """One wave cell within a break group (Phase 4d 3×3 model)."""
+
+    wave_num: int       # 1 | 2 | 3 (wave within the group)
+    start_time: str     # formatted "1:00am"
+    end_time: str       # formatted "1:30am"
+    tms: list[str]      # TM display names assigned to this wave
+    status: str         # "upcoming" | "active" | "complete"
+
+
+class BreakGroup(TypedDict):
+    """One break group, containing 3 waves (Phase 4d 3×3 model)."""
+
+    group_num: int         # 1 | 2 | 3
+    tm_count: int          # total unique TMs in this group (across all waves)
+    waves: list[BreakSlot] # always 3 entries (wave 1, 2, 3)
+
+
+class ZoneCardData(TypedDict):
+    """Rich zone card data for the Shift HUD zone grid (Phase 4d)."""
+
+    zone_id: str
+    zone_label: str        # short label: "Z1", "Z3", "Z9 SR"
+    zone_area: str         # descriptive area name: "Slot Bank A"
+    tm_name: str           # display name, or "—" when open
+    tm_id: str
+    group_num: int         # 1 | 2 | 3 — drives the break-group badge (0 = unset)
+    current_task: str      # first task in display_tasks, or ""
+    status: str            # "ok" | "lock" | "warn" | "open"
+    is_locked: bool
+    is_called_off: bool
 
 
 class HudRosterChip(TypedDict):

@@ -154,7 +154,8 @@ class RRSlot(TypedDict):
 class BreakRow(TypedDict):
     """One row from `break_assignments`, joined with the TM display name."""
     id: str
-    break_wave: int           # 1 | 2 | 3
+    group_num: int            # 1 | 2 | 3 — break group (Phase 4d)
+    break_wave: int           # 1 | 2 | 3 — wave within the group
     sort_order: int
     slot_ref: str             # canonical key stored in DB (e.g. "Z1", "RR6 M")
     slot_label: str           # same as slot_ref (alias for display)

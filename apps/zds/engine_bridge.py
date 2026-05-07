@@ -60,26 +60,35 @@ _SKIP_SLOTS = frozenset({
 })
 
 
-def run_fill_engine(schedule_file: str | None = None) -> dict:
+def run_fill_engine(
+    schedule_file: str | None = None,
+    config_override: dict | None = None,
+) -> dict:
     """
     Run fill_engine.py as a subprocess and return its results.
 
     Args:
-        schedule_file: Optional filename (not full path) of the schedule xlsx
-                       inside GLCR/Inputs/Weekly Schedules/. If None the
-                       engine auto-detects the most recent file.
+        schedule_file:   Optional filename (not full path) of the schedule xlsx
+                         inside GLCR/Inputs/Weekly Schedules/. If None the
+                         engine auto-detects the most recent file.
+        config_override: Optional dict matching the engine_config schema
+                         (keys: weights, thresholds, headcount, slot_priority).
+                         When provided, serialized to a temp JSON file and
+                         passed via --config-override for a dry-run simulation.
+                         The engine uses these values instead of the DB config.
 
     Returns a dict with keys:
         week_ending   str          ISO date string (e.g. "2026-04-30")
         placements    list[dict]   [{date, zone_slot, tm_display_name, ...}, ...]
         unresolved    list[dict]   [{date, zone_slot, priority}, ...]
+        config_used   dict | None  Parsed from audit JSON; reflects actual config
         stdout        str          Full engine stdout (for debug / error display)
         error         str | None   Set if the engine failed or output couldn't be parsed
     """
     if not FILL_ENGINE.exists():
         return {
             "week_ending": "", "placements": [], "unresolved": [],
-            "stdout": "", "stderr": "",
+            "config_used": None, "stdout": "", "stderr": "",
             "error": f"fill_engine.py not found at {FILL_ENGINE}",
         }
 
@@ -96,9 +105,31 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
         # the engine will still try the local Inputs/ directory.
         print(f"[engine_bridge] Storage sync warning: {exc}")
 
+    # ── Phase 4c: write config_override to a temp file if provided ──────
+    _tmp_cfg_path: Path | None = None
+    if config_override:
+        import tempfile
+        try:
+            _tmp = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", dir=str(GLCR_BASE),
+                prefix="engine_cfg_override_", delete=False,
+            )
+            json.dump(config_override, _tmp)
+            _tmp.flush()
+            _tmp.close()
+            _tmp_cfg_path = Path(_tmp.name)
+        except Exception as exc:
+            return {
+                "week_ending": "", "placements": [], "unresolved": [],
+                "config_used": None, "stdout": "", "stderr": "",
+                "error": f"Failed to write config override temp file: {exc}",
+            }
+
     cmd = [sys.executable, str(FILL_ENGINE)]
     if schedule_file:
         cmd.append(schedule_file)
+    if _tmp_cfg_path:
+        cmd.extend(["--config-override", str(_tmp_cfg_path)])
 
     try:
         result = subprocess.run(
@@ -109,17 +140,21 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
             timeout=180,   # 3-minute ceiling — engine normally finishes in <20s
         )
     except subprocess.TimeoutExpired:
+        _cleanup_tmp(_tmp_cfg_path)
         return {
             "week_ending": "", "placements": [], "unresolved": [],
-            "stdout": "", "stderr": "",
+            "config_used": None, "stdout": "", "stderr": "",
             "error": "Deployment engine timed out after 3 minutes.",
         }
     except Exception as exc:
+        _cleanup_tmp(_tmp_cfg_path)
         return {
             "week_ending": "", "placements": [], "unresolved": [],
-            "stdout": "", "stderr": "",
+            "config_used": None, "stdout": "", "stderr": "",
             "error": f"Failed to launch engine: {exc}",
         }
+    finally:
+        _cleanup_tmp(_tmp_cfg_path)
 
     stdout = result.stdout or ""
     stderr = result.stderr or ""
@@ -128,7 +163,7 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
         snippet = (stderr or stdout)[:600]
         return {
             "week_ending": "", "placements": [], "unresolved": [],
-            "stdout": stdout, "stderr": stderr,
+            "config_used": None, "stdout": stdout, "stderr": stderr,
             "error": f"Engine exited with code {result.returncode}:\n{snippet}",
         }
 
@@ -147,7 +182,7 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
     if not week_ending:
         return {
             "week_ending": "", "placements": [], "unresolved": [],
-            "stdout": stdout, "stderr": stderr,
+            "config_used": None, "stdout": stdout, "stderr": stderr,
             "error": "Could not determine week_ending from engine output.\n"
                      f"Stdout:\n{stdout[:400]}",
         }
@@ -160,7 +195,7 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
     if not audit_path.exists():
         return {
             "week_ending": week_ending, "placements": [], "unresolved": [],
-            "stdout": stdout, "stderr": stderr,
+            "config_used": None, "stdout": stdout, "stderr": stderr,
             "error": f"Audit JSON not found: {audit_path}",
         }
 
@@ -170,7 +205,7 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
     except Exception as exc:
         return {
             "week_ending": week_ending, "placements": [], "unresolved": [],
-            "stdout": stdout, "stderr": stderr,
+            "config_used": None, "stdout": stdout, "stderr": stderr,
             "error": f"Could not parse audit JSON: {exc}",
         }
 
@@ -178,7 +213,17 @@ def run_fill_engine(schedule_file: str | None = None) -> dict:
         "week_ending": week_ending,
         "placements":  audit.get("placements", []),
         "unresolved":  audit.get("unresolved_slots", []),
+        "config_used": audit.get("config_used"),
         "stdout": stdout,
         "stderr": stderr,
         "error": None,
     }
+
+
+def _cleanup_tmp(path: Path | None) -> None:
+    """Remove a temp file silently; used for config_override cleanup."""
+    if path and path.exists():
+        try:
+            path.unlink()
+        except Exception:
+            pass

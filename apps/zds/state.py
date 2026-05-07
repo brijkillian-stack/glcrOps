@@ -1981,7 +1981,8 @@ class ZdsState(rx.State):
             rows.append({
                 "night_id":   night_id,
                 "tm_id":      s["tm_id"],
-                "break_wave": BG_ZONE.get(n, 1),
+                "group_num":  BG_ZONE.get(n, 1),   # Phase 4d: group_num = old break_wave
+                "break_wave": 1,                    # Phase 4d: wave within group
                 "slot_ref":   label,
                 "sort_order": sort_order,
             })
@@ -2004,7 +2005,8 @@ class ZdsState(rx.State):
                 rows.append({
                     "night_id":   night_id,
                     "tm_id":      slot["tm_id"],
-                    "break_wave": tbl.get(num, 1),
+                    "group_num":  tbl.get(num, 1),  # Phase 4d: group_num = old break_wave
+                    "break_wave": 1,                # Phase 4d: wave within group
                     "slot_ref":   label,
                     "sort_order": sort_order,
                 })
@@ -2025,7 +2027,8 @@ class ZdsState(rx.State):
             rows.append({
                 "night_id":   night_id,
                 "tm_id":      s["tm_id"],
-                "break_wave": BG_AUX.get(sk, 1),
+                "group_num":  BG_AUX.get(sk, 1),   # Phase 4d: group_num = old break_wave
+                "break_wave": 1,                    # Phase 4d: wave within group
                 "slot_ref":   label,
                 "sort_order": sort_order,
             })

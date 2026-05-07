@@ -3158,3 +3158,125 @@ def lookup_entity_id_by_name(display_name: str) -> str | None:
     except Exception:
         print(f"[db] lookup_entity_id_by_name error:\n{traceback.format_exc()}")
         return None
+
+
+# ── Phase 4c: Engine Configurator helpers ─────────────────────────────────────
+
+def get_active_engine_config() -> dict | None:
+    """Return the active engine_config row, or None if not found / error.
+
+    The row has keys: id, weights (dict), thresholds (dict),
+    headcount (dict), slot_priority (dict), updated_at (str).
+    """
+    try:
+        sb = get_client()
+        res = (
+            sb.table("engine_config")
+            .select("id, weights, thresholds, headcount, slot_priority, updated_at")
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:
+        print(f"[db] get_active_engine_config error:\n{traceback.format_exc()}")
+        return None
+
+
+def save_engine_config_active(
+    weights: dict,
+    thresholds: dict,
+    headcount: dict,
+    slot_priority: dict,
+    changed_by: str = "admin-ui",
+) -> bool:
+    """Upsert the active engine_config row and snapshot history.
+
+    Writes the new values to the row where is_active=True (UPDATE only —
+    the backfill migration guarantees exactly one active row exists).
+    Also archives the old row to engine_config_history.
+
+    Returns True on success, False on error.
+    """
+    import uuid as _uuid
+    try:
+        sb = get_client()
+
+        # 1 — fetch current active row for history snapshot
+        old = get_active_engine_config()
+
+        # 2 — update active row
+        sb.table("engine_config").update({
+            "weights":       weights,
+            "thresholds":    thresholds,
+            "headcount":     headcount,
+            "slot_priority": slot_priority,
+        }).eq("is_active", True).execute()
+
+        # 3 — snapshot old config to history
+        if old:
+            sb.table("engine_config_history").insert({
+                "id":              str(_uuid.uuid4()),
+                "config_id":       old["id"],
+                "weights":         old.get("weights", {}),
+                "thresholds":      old.get("thresholds", {}),
+                "headcount":       old.get("headcount", {}),
+                "slot_priority":   old.get("slot_priority", {}),
+                "changed_by":      changed_by,
+            }).execute()
+
+        return True
+    except Exception:
+        print(f"[db] save_engine_config_active error:\n{traceback.format_exc()}")
+        return False
+
+
+def save_engine_config_draft(
+    name: str,
+    weights: dict,
+    thresholds: dict,
+    headcount: dict,
+    slot_priority: dict,
+) -> str | None:
+    """Create a named draft in engine_config_drafts.
+
+    Returns the new draft id (UUID str), or None on error.
+    """
+    import uuid as _uuid
+    try:
+        sb = get_client()
+        draft_id = str(_uuid.uuid4())
+        sb.table("engine_config_drafts").insert({
+            "id":            draft_id,
+            "name":          name,
+            "weights":       weights,
+            "thresholds":    thresholds,
+            "headcount":     headcount,
+            "slot_priority": slot_priority,
+        }).execute()
+        return draft_id
+    except Exception:
+        print(f"[db] save_engine_config_draft error:\n{traceback.format_exc()}")
+        return None
+
+
+def list_engine_config_history(limit: int = 20) -> list[dict]:
+    """Return the most recent engine_config_history rows.
+
+    Each row has: id, config_id, weights, thresholds, headcount,
+    slot_priority, changed_by, created_at.
+    """
+    try:
+        sb = get_client()
+        res = (
+            sb.table("engine_config_history")
+            .select("id, config_id, weights, thresholds, headcount, slot_priority, changed_by, created_at")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+    except Exception:
+        print(f"[db] list_engine_config_history error:\n{traceback.format_exc()}")
+        return []

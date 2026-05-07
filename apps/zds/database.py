@@ -1201,7 +1201,7 @@ def fetch_break_assignments(night_id: str) -> list[dict]:
     res = (
         _client()
         .table("break_assignments")
-        .select("id, break_wave, sort_order, slot_ref, is_wave_locked, entities(id, display_name)")
+        .select("id, group_num, break_wave, sort_order, slot_ref, is_wave_locked, entities(id, display_name)")
         .eq("night_id", night_id)
         .order("sort_order")
         .execute()
@@ -1217,6 +1217,7 @@ def fetch_break_assignments(night_id: str) -> list[dict]:
         row["slot_color"]      = _slot_ref_color(ref)
         row["section"]         = _slot_ref_section(ref)
         row["is_wave_locked"]  = bool(row.get("is_wave_locked"))
+        row["group_num"]       = int(row.get("group_num") or 1)
         # show_section_header is computed per-wave in state.py
         row["show_section_header"] = False
     return rows

@@ -44,6 +44,14 @@
   --amber:       #F2B23A;
   --amber-dim:   rgba(242,178,58,0.12);
 
+  /* ── Break group badge colors (Phase 4d) ─────────────────────────────── */
+  --group-1:     #5CC0FF;   /* blue  — same as --blue for cohesion */
+  --group-1-dim: rgba(92,192,255,0.12);
+  --group-2:     #5BD68B;   /* green — same as --green */
+  --group-2-dim: rgba(91,214,139,0.10);
+  --group-3:     #F2B23A;   /* amber — same as --amber */
+  --group-3-dim: rgba(242,178,58,0.12);
+
   /* ── --zds-* backward-compat aliases (same values as former zds_dark.css) */
 
   /* Backgrounds */
@@ -154,6 +162,14 @@
   --amber:       #b45309;
   --amber-dim:   rgba(180,83,9,0.08);
 
+  /* ── Break group badge colors (Phase 4d) ─────────────────────────────── */
+  --group-1:     #0065bf;   /* blue  */
+  --group-1-dim: rgba(0,101,191,0.10);
+  --group-2:     #059669;   /* green */
+  --group-2-dim: rgba(5,150,105,0.08);
+  --group-3:     #b45309;   /* amber */
+  --group-3-dim: rgba(180,83,9,0.08);
+
   /* ── --zds-* backward-compat aliases (same values as former zds_dark.css) */
 
   /* Backgrounds */
@@ -235,4 +251,21 @@
 a[href="https://reflex.dev"],
 a[href*="reflex.dev"][target="_blank"] {
   display: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SHIFT HUD — BREAK WAVE ACTIVE PULSE (Phase 4d)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* details/summary reset — no disclosure triangle */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
 }

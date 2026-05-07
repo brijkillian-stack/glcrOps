@@ -212,6 +212,8 @@ app = rx.App(
         rx.el.link(rel="stylesheet", href="/shift_hud.css"),
         # ── Sudo Admin hub (Phase 4b: /admin hub + sub-pages) ─────────────
         rx.el.link(rel="stylesheet", href="/admin_hub.css"),
+        # ── Engine Configurator (Phase 4c: /admin/engine) ─────────────────
+        rx.el.link(rel="stylesheet", href="/engine_config.css"),
     ],
 )
 

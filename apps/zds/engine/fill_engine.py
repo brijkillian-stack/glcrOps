@@ -88,6 +88,34 @@ OVERLAP_TASKS_PATH   = BASE / "Rules" / "Overlap Tasks.json"        # obsolete
 SLOT_LOAD_PATH       = BASE / "Rules" / "Slot Load Scores.json"     # obsolete
 SCORECARD_WEIGHTS_PATH = BASE / "Rules" / "Scorecard Weights.json"  # obsolete
 
+# ── CONFIG OVERRIDE (Phase 4c dry-run mode) ───────────────────────────
+# Usage: python fill_engine.py [schedule.xlsx] --config-override /path/to/cfg.json
+# JSON keys: weights, thresholds, headcount, slot_priority.
+# Present → engine runs against proposed config, skips DB engine_config read.
+_CONFIG_OVERRIDE: dict = {}
+if "--config-override" in sys.argv:
+    _co_idx = sys.argv.index("--config-override")
+    _co_path = Path(sys.argv[_co_idx + 1]) if _co_idx + 1 < len(sys.argv) else None
+    if _co_path and _co_path.exists():
+        try:
+            with open(_co_path) as _f:
+                _CONFIG_OVERRIDE = json.load(_f)
+            print(f"[fill_engine] Dry-run mode: config override from {_co_path.name}")
+        except Exception as _e:
+            print(f"[fill_engine] WARNING: could not load config override: {_e}")
+    # Strip flag + path from argv so schedule detection isn't confused
+    _argv_clean: list = [sys.argv[0]]
+    _skip_next = False
+    for _i, _a in enumerate(sys.argv[1:], 1):
+        if _skip_next:
+            _skip_next = False
+            continue
+        if _a == "--config-override":
+            _skip_next = True
+            continue
+        _argv_clean.append(_a)
+    sys.argv = _argv_clean
+
 # ── AUTO-DETECT SCHEDULE FILE ─────────────────────────────────────────
 # Default: most recently modified .xlsx in Weekly Schedules.
 # Override: pass the filename as a CLI arg, e.g.:
@@ -455,12 +483,27 @@ SCORECARD_WEIGHTS = {
     "fatigue_index": 0.8, "soft_prefer_set": 0.6,
 }
 FATIGUE_WINDOW_DAYS = 7
-try:
-    sw_cfg = _get_scorecard_config_db()
-    SCORECARD_WEIGHTS.update(sw_cfg.get("weights", {}) or {})
-    FATIGUE_WINDOW_DAYS = sw_cfg.get("fatigue_index_window_days", 7)
-except Exception as _e:
-    print(f"  [warn] Scorecard config unavailable ({_e}) — using defaults")
+# Phase 4c — configurable thresholds (default values match scorecard constants)
+_ENGINE_DIFFICULTY_THRESHOLD = 6
+_ENGINE_LOAD_THRESHOLD       = 6
+if _CONFIG_OVERRIDE:
+    # Dry-run: use proposed weights/thresholds instead of DB
+    SCORECARD_WEIGHTS.update(_CONFIG_OVERRIDE.get("weights", {}))
+    _thr = _CONFIG_OVERRIDE.get("thresholds", {})
+    FATIGUE_WINDOW_DAYS         = int(_thr.get("fatigue_window_days", 7))
+    _ENGINE_DIFFICULTY_THRESHOLD = int(_thr.get("override_difficulty_threshold", 6))
+    _ENGINE_LOAD_THRESHOLD       = int(_thr.get("override_load_threshold", 6))
+    # Headcount override
+    _hc = _CONFIG_OVERRIDE.get("headcount", {})
+    if _hc:
+        TARGET_GRAVE_BY_DAY.update({k: int(v) for k, v in _hc.items()})
+else:
+    try:
+        sw_cfg = _get_scorecard_config_db()
+        SCORECARD_WEIGHTS.update(sw_cfg.get("weights", {}) or {})
+        FATIGUE_WINDOW_DAYS = sw_cfg.get("fatigue_index_window_days", 7)
+    except Exception as _e:
+        print(f"  [warn] Scorecard config unavailable ({_e}) — using defaults")
 
 # Derive gender from roster (Womens-* eligibility = female). Used to track who
 # can do the sweeper TASK (a separate concern from placement). Per Brian
@@ -769,6 +812,9 @@ _sc.init(
     day_placements=day_placements,
     day_dates=DAY_DATES,
     anchor_date=ANCHOR_DATE,
+    # Phase 4c — configurable thresholds (only non-default in dry-run mode)
+    override_difficulty_threshold=_ENGINE_DIFFICULTY_THRESHOLD,
+    override_load_threshold=_ENGINE_LOAD_THRESHOLD,
 )
 
 # ── SCORECARD (5/2/26 — extracted to glcr_engine.scorecard) ──────────
@@ -1574,12 +1620,23 @@ AUDIT_JSON.write_text(json.dumps({
                "applied_overrides_count":len(_applied_override_ids)},
     # 5/3/26 #5: Capture engine config used for this run so the audit answers
     # "which weights produced this fill?" without spelunking the JSON files.
+    # Phase 4c: config_used added to top level for simulator diff display.
     "config":{
         "scorecard_weights":SCORECARD_WEIGHTS,
         "fatigue_window_days":FATIGUE_WINDOW_DAYS,
         "slot_loads_count":len(SLOT_LOADS),
         "buddy_days":sorted(BUDDY_DAYS),
         "rotation_weeks":ROTATION_WEEKS,
+    },
+    "config_used": {
+        "dry_run": bool(_CONFIG_OVERRIDE),
+        "weights": SCORECARD_WEIGHTS,
+        "thresholds": {
+            "fatigue_window_days": FATIGUE_WINDOW_DAYS,
+            "override_difficulty_threshold": _ENGINE_DIFFICULTY_THRESHOLD,
+            "override_load_threshold": _ENGINE_LOAD_THRESHOLD,
+        },
+        "headcount": TARGET_GRAVE_BY_DAY,
     },
     "training_schedule":TRAINING_SCHEDULE,
     "placements":placements,"audit_items":_deduped_audit,"unresolved_slots":unresolved,

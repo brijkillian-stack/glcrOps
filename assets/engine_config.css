@@ -1,0 +1,350 @@
+/* ── Engine Configurator Layout (/admin/engine) ──────────────────────────── */
+
+.engine-config-page {
+  padding: 24px 32px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* ── Tab strip ─────────────────────────────────────────────────────────────── */
+
+.engine-tab-strip {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 28px;
+}
+
+.engine-tab-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  margin-bottom: -1px;
+  letter-spacing: 0.01em;
+}
+
+.engine-tab-btn:hover {
+  color: var(--ink1);
+}
+
+.engine-tab-btn.active {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* ── Weight grid ───────────────────────────────────────────────────────────── */
+
+.engine-weight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 40px;
+}
+
+@media (max-width: 720px) {
+  .engine-weight-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.engine-weight-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.engine-weight-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink2);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.engine-weight-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.engine-weight-slider {
+  flex: 1;
+  accent-color: var(--accent-blue);
+  height: 4px;
+  cursor: pointer;
+}
+
+.engine-weight-number {
+  width: 62px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  text-align: right;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-card);
+  color: var(--ink1);
+}
+
+.engine-weight-number:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+/* ── Threshold grid ─────────────────────────────────────────────────────────── */
+
+.engine-threshold-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 40px;
+}
+
+@media (max-width: 720px) {
+  .engine-threshold-grid { grid-template-columns: 1fr; }
+}
+
+.engine-threshold-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.engine-threshold-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink2);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.engine-threshold-input {
+  width: 90px;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-card);
+  color: var(--ink1);
+}
+
+.engine-threshold-input:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+/* ── Headcount grid ─────────────────────────────────────────────────────────── */
+
+.engine-headcount-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 800px) {
+  .engine-headcount-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .engine-headcount-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.engine-headcount-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.engine-headcount-dow {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.engine-headcount-input {
+  width: 52px;
+  padding: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--ink1);
+}
+
+.engine-headcount-input:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+/* ── Slot difficulty table ───────────────────────────────────────────────────── */
+
+.engine-slot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.engine-slot-table th {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.engine-slot-table td {
+  padding: 8px 12px;
+  color: var(--ink2);
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.engine-slot-table tr:last-child td {
+  border-bottom: none;
+}
+
+.engine-slot-priority-high {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+.engine-slot-priority-low {
+  color: var(--ink3);
+}
+
+/* ── History list ───────────────────────────────────────────────────────────── */
+
+.engine-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.engine-history-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.engine-history-ts {
+  font-size: 12px;
+  color: var(--ink3);
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+.engine-history-by {
+  font-size: 12px;
+  color: var(--ink2);
+  font-weight: 500;
+}
+
+/* ── Simulation pane ─────────────────────────────────────────────────────────── */
+
+.engine-sim-pane {
+  margin-top: 28px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 24px;
+}
+
+.engine-sim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.engine-sim-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink1);
+}
+
+.engine-sim-error {
+  font-size: 13px;
+  color: var(--accent-red, #c62828);
+  background: color-mix(in srgb, var(--accent-red, #c62828) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-red, #c62828) 30%, transparent);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 12px;
+}
+
+.engine-sim-stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.engine-sim-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.engine-sim-stat-label {
+  font-size: 11px;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.engine-sim-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink1);
+}
+
+.engine-sim-unresolved-badge {
+  color: var(--accent-amber);
+}
+
+/* ── Action bar ─────────────────────────────────────────────────────────────── */
+
+.engine-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 28px;
+}
+
+.engine-save-success {
+  font-size: 12px;
+  color: var(--accent-green, #2e7d32);
+  font-weight: 500;
+}
+
+.engine-save-error {
+  font-size: 12px;
+  color: var(--accent-red, #c62828);
+  font-weight: 500;
+}
+
+.engine-dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-amber);
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}

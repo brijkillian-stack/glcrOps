@@ -234,7 +234,7 @@ def _deploy_headline() -> rx.Component:
 
 def _zone_grid() -> rx.Component:
     return rx.el.div(
-        rx.foreach(ShiftState.zone_slots, shift_zone_card),
+        rx.foreach(ShiftState.zone_cards, shift_zone_card),
         style={
             "display": "grid",
             "gridTemplateColumns": "repeat(5, 1fr)",
@@ -325,98 +325,185 @@ def _aux_section() -> rx.Component:
     )
 
 
-# ── Break waves ───────────────────────────────────────────────────────────────
+# ── Break schedule (3 groups × 3 waves = 9 cells) ────────────────────────────
 
-def _wave_name_chip(name: str, wave_state: str) -> rx.Component:
-    return rx.el.span(
-        name,
+def _break_status_pill(status: str) -> rx.Component:
+    """Status pill for a break wave cell — driven by BreakSlot.status."""
+    return rx.cond(
+        status == "active",
+        rx.el.span(
+            "● Active",
+            style={
+                "fontSize": "9px",
+                "fontWeight": "700",
+                "letterSpacing": "0.08em",
+                "color": "var(--blue)",
+                "animation": "pulse 2s infinite",
+            },
+        ),
+        rx.cond(
+            status == "complete",
+            rx.el.span(
+                "✓ Complete",
+                style={
+                    "fontSize": "9px",
+                    "fontWeight": "600",
+                    "letterSpacing": "0.06em",
+                    "color": "var(--ink3)",
+                },
+            ),
+            rx.el.span(
+                "—",
+                style={"fontSize": "9px", "color": "var(--mute)"},
+            ),
+        ),
+    )
+
+
+def _break_wave_cell(w) -> rx.Component:
+    """One cell in the break grid — click/tap to expand TM names."""
+    is_active = w["status"] == "active"
+    border = rx.cond(
+        is_active,
+        "1px solid var(--blue)",
+        rx.cond(w["status"] == "complete", "1px solid var(--green)", "1px solid var(--line2)"),
+    )
+    bg = rx.cond(
+        is_active, "var(--blue-dim)", "transparent",
+    )
+    time_str = rx.el.span(
+        w["start_time"], "–", w["end_time"],
+        style={"fontFamily": "var(--mono)", "fontSize": "10px", "color": "var(--ink2)"},
+    )
+    tm_count = rx.el.span(
+        w["tms"].length().to_string(),
+        rx.el.span(" TMs", style={"color": "var(--ink3)"}),
+        style={"fontSize": "10px", "fontWeight": "600", "color": "var(--ink)"},
+    )
+    # TM name chips — shown inside <details> expand
+    tm_chips = rx.el.div(
+        rx.foreach(
+            w["tms"],
+            lambda name: rx.el.span(
+                name,
+                style={
+                    "fontSize": "10px",
+                    "padding": "2px 6px",
+                    "borderRadius": "3px",
+                    "background": "var(--panel2)",
+                    "color": "var(--ink2)",
+                    "fontWeight": "500",
+                },
+            ),
+        ),
         style={
-            "fontSize": "10px",
-            "padding": "2px 6px",
-            "borderRadius": "3px",
-            "background": rx.cond(wave_state == "active",
-                                  "rgba(0,0,0,0.25)", "var(--panel2)"),
-            "color": rx.cond(wave_state == "done", "var(--ink3)",
-                    rx.cond(wave_state == "active", "var(--blue)", "var(--ink3)")),
-            "textDecoration": rx.cond(wave_state == "done", "line-through", "none"),
-            "opacity": rx.cond(wave_state == "done", "0.7", "1"),
-            "fontWeight": "500",
+            "display": "flex",
+            "flexWrap": "wrap",
+            "gap": "3px",
+            "paddingTop": "6px",
+            "marginTop": "4px",
+            "borderTop": "1px solid var(--line)",
+        },
+    )
+    return rx.el.details(
+        rx.el.summary(
+            rx.el.div(
+                time_str,
+                rx.el.div(
+                    tm_count,
+                    _break_status_pill(w["status"]),
+                    style={"display": "flex", "alignItems": "center",
+                           "justifyContent": "space-between", "marginTop": "3px"},
+                ),
+                style={"display": "flex", "flexDirection": "column", "gap": "2px"},
+            ),
+            style={
+                "listStyle": "none",
+                "cursor": "pointer",
+                "outline": "none",
+            },
+        ),
+        tm_chips,
+        style={
+            "border": border,
+            "borderRadius": "6px",
+            "padding": "8px 10px",
+            "background": bg,
+            "flex": "1",
         },
     )
 
 
-def _break_wave_card(w) -> rx.Component:
-    state_color = rx.cond(
-        w["state"] == "done",   "var(--green)",
-        rx.cond(w["state"] == "active", "var(--blue)", "var(--ink3)"),
+def _break_group_row(g) -> rx.Component:
+    """One row in the break schedule: group label + 3 wave cells."""
+    group_color = rx.cond(
+        g["group_num"] == 1, "var(--group-1)",
+        rx.cond(g["group_num"] == 2, "var(--group-2)", "var(--group-3)"),
     )
-    return rx.el.div(
-        rx.el.div(
-            rx.el.div(
-                w["wave_label"],
-                style={"fontSize": "18px", "fontWeight": "700", "color": state_color,
-                       "fontVariantNumeric": "tabular-nums", "width": "26px"},
-            ),
-            rx.el.div(
-                rx.el.div(w["time_range"],
-                          style={"fontFamily": "var(--mono)", "fontSize": "11px",
-                                 "color": "var(--ink2)"}),
-                rx.el.div(w["state"],
-                          style={"fontSize": "9px", "color": state_color,
-                                 "letterSpacing": "0.1em", "textTransform": "uppercase",
-                                 "fontWeight": "700", "marginTop": "1px"}),
-                style={"flex": "1"},
-            ),
-            rx.el.div(
-                rx.el.span(w["on_count"].to_string()),
-                rx.el.span(" / "),
-                rx.el.span(w["total_count"].to_string()),
-                style={"fontFamily": "var(--mono)", "fontSize": "12px", "color": "var(--ink3)"},
-            ),
-            style={"display": "flex", "alignItems": "center", "gap": "10px"},
-        ),
-        rx.el.div(
-            rx.foreach(w["names"], lambda name: _wave_name_chip(name, w["state"])),
+    group_bg = rx.cond(
+        g["group_num"] == 1, "var(--group-1-dim)",
+        rx.cond(g["group_num"] == 2, "var(--group-2-dim)", "var(--group-3-dim)"),
+    )
+    label_cell = rx.el.div(
+        rx.el.span(
+            "G", rx.el.span(g["group_num"].to_string()),
             style={
-                "display": "flex",
-                "flexWrap": "wrap",
-                "gap": "3px",
-                "paddingTop": "6px",
-                "borderTop": rx.cond(
-                    w["state"] == "active",
-                    "1px solid rgba(92,192,255,0.2)",
-                    "1px solid var(--line)",
-                ),
+                "fontSize": "16px",
+                "fontWeight": "700",
+                "color": group_color,
             },
         ),
+        rx.el.span(
+            g["tm_count"].to_string(), " TMs",
+            style={"fontSize": "9px", "color": "var(--ink3)", "marginTop": "2px"},
+        ),
         style={
-            "border": rx.cond(
-                w["state"] == "done",   "1px solid var(--green)",
-                rx.cond(w["state"] == "active", "1px solid var(--blue)",
-                        "1px solid var(--ink3)"),
-            ),
-            "borderRadius": "6px",
-            "padding": "8px 12px",
-            "background": rx.cond(w["state"] == "active", "var(--blue-dim)", "transparent"),
             "display": "flex",
             "flexDirection": "column",
+            "alignItems": "center",
+            "justifyContent": "center",
+            "padding": "8px 6px",
+            "borderRadius": "6px",
+            "background": group_bg,
+            "border": f"1px solid {group_color}",
+            "minWidth": "52px",
+        },
+    )
+    return rx.el.div(
+        label_cell,
+        rx.foreach(g["waves"], _break_wave_cell),
+        style={
+            "display": "grid",
+            "gridTemplateColumns": "56px 1fr 1fr 1fr",
             "gap": "6px",
+            "alignItems": "stretch",
         },
     )
 
 
 def _break_section() -> rx.Component:
     return rx.el.div(
-        _section_head(
-            "Break waves",
-            action=rx.el.span(
-                "● W2 ACTIVE",
-                style={"fontSize": "10px", "color": "var(--blue)", "fontWeight": "600"},
-            ),
-        ),
+        _section_head("Break schedule"),
+        # Column headers
         rx.el.div(
-            rx.foreach(ShiftState.break_waves, _break_wave_card),
-            style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "8px"},
+            rx.el.div(""),  # group label column spacer
+            _eb("Wave 1", "var(--ink3)",
+                {"textAlign": "center", "paddingLeft": "10px"}),
+            _eb("Wave 2", "var(--ink3)",
+                {"textAlign": "center", "paddingLeft": "10px"}),
+            _eb("Wave 3", "var(--ink3)",
+                {"textAlign": "center", "paddingLeft": "10px"}),
+            style={
+                "display": "grid",
+                "gridTemplateColumns": "56px 1fr 1fr 1fr",
+                "gap": "6px",
+                "marginBottom": "6px",
+            },
+        ),
+        # Group rows
+        rx.el.div(
+            rx.foreach(ShiftState.break_groups, _break_group_row),
+            style={"display": "flex", "flexDirection": "column", "gap": "6px"},
         ),
     )
 

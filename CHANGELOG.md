@@ -4,6 +4,95 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Session gshiftpage_phase4c_engine_configurator (Sonnet)
+
+### GShiftPage Phase 4c — Engine Configurator + Dry-Run Simulation
+
+**New scoring components (scorecard.py):**
+- **`sweeper_rotation_penalty`** — rises with consecutive sweeper
+  assignments, decays with rest days. Default weight 0.0 (safe deploy).
+- **`skill_stretch_reward`** — small reward when difficulty − skill_score = 1
+  (intentional growth slot). Default weight 0.0.
+- **`prior_run_continuity`** — tiny penalty when an assignment changes
+  between runs without a forced reason. Default weight 0.0.
+- **`weekly_load_balance`** — penalizes concentrating high-load slots on
+  the same TM across the week. Default weight 0.0.
+  All four components are wired in `score_placement()` and appear in the
+  audit `components` dict. Default weights are 0.0 → production behavior
+  is byte-identical until first Save & Apply.
+
+**Dry-run mode:**
+- **`apps/zds/engine/fill_engine.py`** — new `--config-override <json-path>`
+  CLI arg: when present, loads weights/thresholds/headcount/slot_priority
+  from that JSON instead of querying scorecard_config. Audit JSON gains a
+  top-level `config_used` field (dry_run bool + effective values).
+- **`apps/zds/engine_bridge.py`** — `run_fill_engine()` gains an optional
+  `config_override: dict | None` param. Serializes override to a temp JSON,
+  passes via `--config-override`, cleans up the temp file after the
+  subprocess exits. Returns dict gains `config_used` key.
+
+**DB schema (applied via Supabase MCP migration):**
+- `engine_config` — single active row (partial unique index on is_active),
+  holds weights/thresholds/headcount/slot_priority as jsonb. Backfilled
+  with current DEFAULT_WEIGHTS + production constants.
+- `engine_config_history` — append-only snapshot table; FK to engine_config.
+  Written on every Save & Apply.
+- `engine_config_drafts` — named draft table for Save as Draft.
+
+**DB helpers (shared/db.py):**
+- `get_active_engine_config()` — returns the single is_active=True row.
+- `save_engine_config_active(weights, thresholds, headcount, slot_priority)`
+  — updates active row + snapshots old values to history.
+- `save_engine_config_draft(name, ...)` — creates a named draft row.
+- `list_engine_config_history(limit)` — returns history rows newest-first.
+
+**Configurator state (apps/admin/engine_state.py — new):**
+- `EngineConfiguratorState` — 12 weight floats, 4 threshold vars, 7
+  headcount ints, slot_difficulty_rows list, history_rows list,
+  sim_placements/sim_unresolved/sim_error/sim_ran/sim_config_used vars.
+- Events: `load_config` (on_load), `set_tab`, `load_history`, `set_weight`,
+  `set_difficulty_threshold`, `set_load_threshold`, `set_fatigue_window`,
+  `set_rotation_weeks`, `set_headcount`, `discard_changes`, `save_config`,
+  `run_simulation`.
+- `dirty` flag tracks unsaved local edits; `save_success` / `save_error`
+  for inline feedback.
+
+**Configurator page (apps/admin/pages/engine.py — replaced stub):**
+- 5-tab configurator: Weights | Thresholds | Headcount | Slot Difficulty |
+  History. Tab strip uses `.engine-tab-btn` + `.active` CSS class.
+- Weights tab: 12 sliders + number inputs (0.0–1.0 initially; CSS-constrained)
+  for all weight keys. `rx.foreach` over `WEIGHT_KEYS`.
+- Thresholds tab: 4 number inputs (difficulty threshold, load threshold,
+  fatigue window days, rotation weeks).
+- Headcount tab: 7 DOW inputs in a responsive grid.
+- Slot Difficulty tab: read-only table of slot/priority pairs from active config.
+- History tab: chronological list of engine_config_history rows; lazy-loaded
+  on first tab visit.
+- Simulator pane (always visible below Weights tab): [Run Simulation] button
+  fires dry-run via `run_fill_engine(config_override=...)`. Results show
+  placed count + unresolved count. Error surface if engine fails.
+- Action bar: dirty-dot indicator, Discard, Save Config buttons.
+
+**Diff component (shared/components/engine_config_diff.py — new):**
+- `compute_diff(before, after) → dict` — Python-side diff across weights /
+  thresholds / headcount sections. Returns changed rows with +/- deltas.
+- `engine_config_diff(diff, ...)` — Reflex component that renders the diff
+  dict as three labeled tables; changed rows get amber background highlight
+  and colored delta chip. Summary header counts total changed fields.
+
+**CSS (assets/engine_config.css — new):**
+- Tab strip, weight row (slider + number input), threshold/headcount grids,
+  slot difficulty table, history list, simulation pane, action bar — all
+  scoped to `.engine-*` classes. Dual-theme via CSS custom properties.
+
+**Wiring:**
+- `apps/admin/routes.py` — `/admin/engine` on_load now fires
+  `EngineConfiguratorState.load_config`.
+- `brijkillian_stack/brijkillian_stack.py` — registers `/engine_config.css`
+  in head_components.
+
+---
+
 ## 2026-05-07 — Session gshiftpage_phase4b_admin_hub (Sonnet)
 
 ### GShiftPage Phase 4b — Sudo Admin Hub + Long-Tail Memory Aliases

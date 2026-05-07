@@ -19,12 +19,16 @@ from zoneinfo import ZoneInfo
 import reflex as rx
 
 from apps.zds.state import ZdsState
+from apps.zds.database import ENGINE_SLOT_LABEL as _ENGINE_SLOT_LABEL
 from shared.db import get_tonight_tasks, get_activity_feed, ensure_shift_log_event
+from .utils import fmt_time
 from .types import (
     HudZoneSlot,
     HudRRSlot,
     HudAuxSlot,
-    HudBreakWave,
+    BreakSlot,
+    BreakGroup,
+    ZoneCardData,
     HudRosterChip,
     HudCarryOverItem,
     HudTask,
@@ -33,8 +37,12 @@ from .types import (
 
 _ET = ZoneInfo("America/Detroit")
 
-_WAVE_TIMES = {1: "01:00", 2: "02:30", 3: "04:00"}
-_WAVE_RANGES = {1: "01:00 – 01:30", 2: "02:30 – 03:00", 3: "04:00 – 04:30"}
+# Break wave base times (minutes past midnight for wave 1, 2, 3)
+# Group offset = (group_num - 1) * 30 minutes; each wave window is 30 min.
+#   Group 1, Wave 1: 1:00am–1:30am   Group 1, Wave 2: 3:00am–3:30am  ...
+#   Group 2, Wave 1: 1:30am–2:00am   Group 2, Wave 2: 3:30am–4:00am  ...
+#   Group 3, Wave 1: 2:00am–2:30am   Group 3, Wave 2: 4:00am–4:30am  ...
+_WAVE_BASE_MINS = {1: 60, 2: 180, 3: 300}   # 1:00am, 3:00am, 5:00am
 
 # Category → short tag label for tonight tasks
 _CAT_TAG = {
@@ -72,23 +80,30 @@ def _slot_status(slot: dict) -> str:
     return "ok"
 
 
-def _wave_state(wave_num: int) -> str:
-    """Rough wave state based on current time (ET)."""
-    now = datetime.datetime.now(tz=_ET)
-    # Grave shift: starts 11 PM, waves at 01:00, 02:30, 04:00
-    hour  = now.hour
-    minute = now.minute
-    minutes_since_midnight = hour * 60 + minute
-    # Before 01:00 → W1 queued, W2/W3 queued
-    wave_starts = {1: 60, 2: 150, 3: 240}    # minutes past midnight
-    wave_ends   = {1: 90, 2: 180, 3: 270}
-    start = wave_starts[wave_num]
-    end   = wave_ends[wave_num]
-    if minutes_since_midnight >= end:
-        return "done"
-    if minutes_since_midnight >= start:
+def _break_slot_times(group_num: int, wave_num: int) -> tuple[str, str]:
+    """Return (start_time_str, end_time_str) for a break slot, e.g. ('1:00am', '1:30am')."""
+    base_min   = _WAVE_BASE_MINS[wave_num]
+    offset     = (group_num - 1) * 30
+    start_min  = base_min + offset
+    end_min    = start_min + 30
+    sh, sm = divmod(start_min, 60)
+    eh, em = divmod(end_min, 60)
+    return fmt_time(datetime.time(sh, sm)), fmt_time(datetime.time(eh, em))
+
+
+def _break_slot_status(group_num: int, wave_num: int) -> str:
+    """Derive break slot status from current ET time vs the slot's window."""
+    base_min  = _WAVE_BASE_MINS[wave_num]
+    offset    = (group_num - 1) * 30
+    start_min = base_min + offset
+    end_min   = start_min + 30
+    now       = datetime.datetime.now(tz=_ET)
+    now_min   = now.hour * 60 + now.minute
+    if now_min >= end_min:
+        return "complete"
+    if now_min >= start_min:
         return "active"
-    return "queue"
+    return "upcoming"
 
 
 def _format_due(due_at: str | None) -> str:
@@ -96,7 +111,7 @@ def _format_due(due_at: str | None) -> str:
         return "anytime"
     try:
         dt = datetime.datetime.fromisoformat(due_at.replace("Z", "+00:00")).astimezone(_ET)
-        return dt.strftime("%-I:%M %p").lower()
+        return fmt_time(dt)
     except Exception:
         return "anytime"
 
@@ -113,8 +128,7 @@ def _activity_color(content_type: str) -> str:
 
 def _now_approx_label() -> str:
     """Return a human-readable approx time label, e.g. '1:42am'."""
-    now = datetime.datetime.now(tz=_ET)
-    return now.strftime("%-I:%M%p").lower()
+    return fmt_time(datetime.datetime.now(tz=_ET))
 
 
 def _tonight_date_iso() -> str:
@@ -133,10 +147,11 @@ class ShiftState(rx.State):
     """State for the Shift HUD page."""
 
     # ── Zone / RR / Aux / Break (read from ZdsState on load) ─────────────────
-    zone_slots: list[HudZoneSlot] = []
+    zone_slots: list[HudZoneSlot] = []    # kept for deploy stats + roster chips
+    zone_cards: list[ZoneCardData] = []   # Phase 4d: rich zone cards for HUD grid
     rr_slots:   list[HudRRSlot]  = []
     aux_slots:  list[HudAuxSlot] = []
-    break_waves: list[HudBreakWave] = []
+    break_groups: list[BreakGroup] = []   # Phase 4d: 3 groups × 3 waves = 9 cells
 
     # ── Roster chips (derived from zone/rr/aux slots) ─────────────────────────
     roster_chips: list[HudRosterChip] = []
@@ -236,33 +251,106 @@ class ShiftState(rx.State):
         elapsed = int((now - shift_start).total_seconds() // 60)
         h, m = divmod(elapsed, 60)
         if h > 0:
-            self.live_label = f"{h:02d}:{m:02d} in"
+            self.live_label = f"{h}h {m}m in"
         else:
             self.live_label = f"{m}m in"
 
     async def _build_from_zds(self):
-        """Pull tonight's zone/rr/aux/break data from ZdsState."""
+        """Pull tonight's zone/rr/aux/break data from ZdsState.
+
+        ZdsState's slot lists (zone_slots / rr_slots / aux_slots) are only
+        populated by its own loaders, which fire on /zds/* routes that have
+        week_id + night_id URL params. /shift has neither, so we have to
+        explicitly resolve tonight's night and ask ZdsState to load it
+        before reading the slot data. Without this bootstrap step the HUD
+        renders 0/0 because zds.zone_slots is the empty default.
+        """
         zds = await self.get_state(ZdsState)
+
+        # ── Bootstrap: ensure ZdsState has tonight's data loaded ─────────────
+        # Resolve tonight's night_id by date-range query on the nights table.
+        # We pick the night whose night_date is the closest match to today —
+        # accounting for whether Brian's data convention indexes the shift
+        # by start-date or end-date (different at midnight). Two candidates:
+        # today and tomorrow; pick whichever has a row.
+        from shared.db import get_client as _get_client
+        from apps.zds import database as _zds_db
+        try:
+            sb = _get_client()
+            today = datetime.date.today().isoformat()
+            tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+            # Try in order of likelihood: today (shift-start convention),
+            # tomorrow (shift-end convention), yesterday (mid-shift before 7am).
+            night_id = ""
+            week_id = ""
+            for candidate in (today, tomorrow, yesterday):
+                row = (
+                    sb.table("nights")
+                    .select("id, week_id")
+                    .eq("night_date", candidate)
+                    .limit(1)
+                    .execute()
+                    .data
+                )
+                if row:
+                    night_id = row[0]["id"]
+                    week_id  = row[0]["week_id"]
+                    break
+
+            if night_id and week_id:
+                # If ZdsState isn't already focused on tonight, focus it
+                # and load. _load_night needs self.nights populated first.
+                if zds.current_week_id != week_id:
+                    zds.current_week_id = week_id
+                    zds.nights = _zds_db.fetch_nights(week_id)
+                if zds.current_night_id != night_id:
+                    zds._load_night(night_id)
+        except Exception:
+            print(f"[ShiftState._build_from_zds] bootstrap error:\n{traceback.format_exc()}")
+
         # Copy the name→entity_id lookup so capture modals can resolve entity ids
         self.roster_name_to_id = dict(zds.tm_name_to_id or {})
 
-        # ── Zone slots ────────────────────────────────────────────────────────
+        # ── Zone slots + Zone cards ───────────────────────────────────────────
         zones: list[HudZoneSlot] = []
+        cards: list[ZoneCardData] = []
         for s in zds.zone_slots:
-            tm = (s.get("display_name") or "").strip()
-            st = _slot_status(s)
-            wave_num = s.get("wave_num") or 1
+            tm   = (s.get("display_name") or "").strip()
+            sk   = s.get("slot_key", "")
+            st   = _slot_status(s)
+            gn   = int(s.get("group_num") or 0)
+            tasks = list(s.get("display_tasks") or [])
+            # Short zone label ("Z1") and area name ("Slot Bank A")
+            zone_label = _ENGINE_SLOT_LABEL.get(sk, sk)
+            zone_area  = s.get("label") or ""
+            is_co = s.get("warning_status") == "called_off"
+            # HudZoneSlot kept for deploy stats + roster chips
             zones.append(HudZoneSlot(
-                slot_key=s.get("slot_key", "?"),
+                slot_key=zone_label,          # use short label ("Z1") for roster chip zone
                 tm_name=tm or "—",
-                position=s.get("slot_label") or s.get("position") or "",
-                wave=wave_num,
-                wave_time=_WAVE_TIMES.get(wave_num, "—"),
+                position=zone_area,
+                wave=gn,                      # repurpose wave field as group_num
+                wave_time="",
                 status=st,
                 is_locked=bool(s.get("is_locked")),
-                is_called_off=bool(s.get("is_called_off")),
+                is_called_off=is_co,
+            ))
+            # ZoneCardData — used by the HUD zone grid
+            cards.append(ZoneCardData(
+                zone_id=s.get("id") or "",
+                zone_label=zone_label,
+                zone_area=zone_area,
+                tm_name=tm or "—",
+                tm_id=s.get("tm_id") or "",
+                group_num=gn,
+                current_task=tasks[0] if tasks else "",
+                status=st,
+                is_locked=bool(s.get("is_locked")),
+                is_called_off=is_co,
             ))
         self.zone_slots = zones
+        self.zone_cards = cards
 
         # ── RR slots ──────────────────────────────────────────────────────────
         rrs: list[HudRRSlot] = []
@@ -287,31 +375,43 @@ class ShiftState(rx.State):
             ))
         self.aux_slots = auxs
 
-        # ── Break waves ───────────────────────────────────────────────────────
-        # ZdsState.break_rows is a list of BreakRow dicts with slot_key / names per wave
-        waves: list[HudBreakWave] = []
-        wave_names: dict[int, list[str]] = {1: [], 2: [], 3: []}
+        # ── Break groups (3 groups × 3 waves = 9 slots) ──────────────────────
+        # build group_tm_map: {group_num: {wave_num: [tm_names]}}
+        group_tm_map: dict[int, dict[int, list[str]]] = {
+            1: {1: [], 2: [], 3: []},
+            2: {1: [], 2: [], 3: []},
+            3: {1: [], 2: [], 3: []},
+        }
         for row in zds.break_rows:
-            wave_num = int(row.get("wave_num") or 0)
-            if wave_num in wave_names:
-                nm = (row.get("display_name") or row.get("tm_name") or "").strip()
+            gn = int(row.get("group_num") or 1)
+            wn = int(row.get("break_wave") or 1)
+            if gn in group_tm_map and wn in group_tm_map.get(gn, {}):
+                nm = (row.get("tm_name") or "").strip()
                 if nm:
-                    wave_names[wave_num].append(nm)
+                    group_tm_map[gn][wn].append(nm)
 
-        for wn in [1, 2, 3]:
-            names = wave_names[wn]
-            st = _wave_state(wn)
-            on_cnt = len(names) if st == "active" else (len(names) if st == "done" else 0)
-            waves.append(HudBreakWave(
-                wave_num=wn,
-                wave_label=f"W{wn}",
-                time_range=_WAVE_RANGES[wn],
-                state=st,
-                on_count=on_cnt,
-                total_count=len(names),
-                names=names,
+        grps: list[BreakGroup] = []
+        for gn in [1, 2, 3]:
+            all_tms: set[str] = set()
+            wave_slots: list[BreakSlot] = []
+            for wn in [1, 2, 3]:
+                tms = group_tm_map[gn][wn]
+                all_tms.update(tms)
+                st_str, et_str = _break_slot_times(gn, wn)
+                status = _break_slot_status(gn, wn)
+                wave_slots.append(BreakSlot(
+                    wave_num=wn,
+                    start_time=st_str,
+                    end_time=et_str,
+                    tms=list(tms),
+                    status=status,
+                ))
+            grps.append(BreakGroup(
+                group_num=gn,
+                tm_count=len(all_tms),
+                waves=wave_slots,
             ))
-        self.break_waves = waves
+        self.break_groups = grps
 
         # ── Deployment summary ────────────────────────────────────────────────
         statuses = [z["status"] for z in zones]
