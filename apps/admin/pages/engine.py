@@ -440,7 +440,10 @@ def _sim_pane() -> rx.Component:
                                     EngineConfiguratorState.msim_agg_proposed["fill_rate_mean"].to(str)),
                                 _msim_stat("Critical (mean)",
                                     EngineConfiguratorState.msim_agg_proposed["critical_mean"].to(str),
-                                    warn=EngineConfiguratorState.msim_agg_proposed["critical_mean"] > 0),
+                                    # Phase 4e hotfix: dict["key"] returns an untyped
+                                    # ObjectItemOperation in Reflex 0.9 — explicit .to(float)
+                                    # is required before comparing to a Python int/float.
+                                    warn=EngineConfiguratorState.msim_agg_proposed["critical_mean"].to(float) > 0),
                                 _msim_stat("Load σ (mean)",
                                     EngineConfiguratorState.msim_agg_proposed["load_variance_mean"].to(str)),
                                 _msim_stat("Runs",
@@ -463,7 +466,9 @@ def _sim_pane() -> rx.Component:
                                         EngineConfiguratorState.msim_agg_baseline["fill_rate_mean"].to(str)),
                                     _msim_stat("Critical (mean)",
                                         EngineConfiguratorState.msim_agg_baseline["critical_mean"].to(str),
-                                        warn=EngineConfiguratorState.msim_agg_baseline["critical_mean"] > 0),
+                                        # Phase 4e hotfix — see line 446 note. Same dict-Var
+                                        # ObjectItemOperation issue applies to baseline pane.
+                                        warn=EngineConfiguratorState.msim_agg_baseline["critical_mean"].to(float) > 0),
                                     _msim_stat("Load σ (mean)",
                                         EngineConfiguratorState.msim_agg_baseline["load_variance_mean"].to(str)),
                                     class_name="engine-sim-stats",

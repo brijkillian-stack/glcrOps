@@ -383,12 +383,16 @@ class EngineConfiguratorState(rx.State):
     def set_sim_mode(self, mode: str):
         self.sim_mode = mode
 
+    # Phase 4e hotfix: Reflex's rx.input(type="number") emits float on_change
+    # values even for integer fields. Declaring the setters as `v: int` triggers
+    # a type-mismatch warning at compile that the framework "ignores intentionally"
+    # but it pollutes startup logs. Accept v: float and cast inside.
     @rx.event
-    def set_msim_weeks(self, v: int):
+    def set_msim_weeks(self, v: float):
         self.msim_weeks = max(1, int(v))
 
     @rx.event
-    def set_msim_runs(self, v: int):
+    def set_msim_runs(self, v: float):
         self.msim_runs = max(1, int(v))
 
     @rx.event
@@ -396,7 +400,7 @@ class EngineConfiguratorState(rx.State):
         self.msim_callout_rate = max(0.0, float(v))
 
     @rx.event
-    def set_msim_seed(self, v: int):
+    def set_msim_seed(self, v: float):
         self.msim_seed = int(v)
 
     @rx.event
