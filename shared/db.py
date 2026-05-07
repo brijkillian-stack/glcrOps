@@ -3166,13 +3166,18 @@ def get_active_engine_config() -> dict | None:
     """Return the active engine_config row, or None if not found / error.
 
     The row has keys: id, weights (dict), thresholds (dict),
-    headcount (dict), slot_priority (dict), updated_at (str).
+    headcount (dict), slot_priority (dict), created_at (str).
+
+    Phase 4e hotfix: previously selected ``updated_at`` which doesn't exist on
+    this table — Postgrest threw 42703 ``column does not exist``, the bare
+    ``except Exception`` swallowed it, returned None, and the configurator UI
+    showed all-zero sliders with a misleading "no active row" message.
     """
     try:
         sb = get_client()
         res = (
             sb.table("engine_config")
-            .select("id, weights, thresholds, headcount, slot_priority, updated_at")
+            .select("id, weights, thresholds, headcount, slot_priority, created_at")
             .eq("is_active", True)
             .limit(1)
             .execute()
