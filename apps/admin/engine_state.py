@@ -129,6 +129,7 @@ class EngineConfiguratorState(rx.State):
     msim_json_path: str = ""          # path to sim_results.json
     msim_md_path: str = ""            # path to sim_report.md
     msim_elapsed_s: float = 0.0
+    msim_report_md: str = ""          # Phase 4e.1: inline markdown for <details> disclosure
 
     # ── Saved baseline (for diff) ────────────────────────────────────────
     _saved_weights: dict = {}
@@ -436,6 +437,7 @@ class EngineConfiguratorState(rx.State):
         self.msim_run_rows = []
         self.msim_agg_proposed = {}
         self.msim_agg_baseline = {}
+        self.msim_report_md = ""      # Phase 4e.1: reset before each run
 
         config_override = {
             "weights":       self._weights_dict(),
@@ -449,32 +451,28 @@ class EngineConfiguratorState(rx.State):
         seed         = self.msim_seed
         compare_bl   = self.msim_compare_baseline
 
+        # Phase 4e hotfix #4: Run simulate_weeks.py as a SUBPROCESS, not via
+        # in-process importlib + run_in_executor. The previous in-process
+        # pattern caused Granian's Tokio worker to panic with:
+        #   "Cannot drop pointer into Python heap without the thread being
+        #    attached" (pyo3-0.27.2/src/internal/state.rs:322)
+        # because Python objects created by sim_mod.main() in the executor
+        # thread were getting garbage-collected on a Rust thread that hadn't
+        # acquired the GIL. Subprocess isolates Python state in a child
+        # process that exits cleanly — no shared Python heap, no panic.
+        # Matches the pattern fill_engine uses via engine_bridge.
         def _do_sim():
-            import sys
+            import sys, subprocess, tempfile, json as _json
             from pathlib import Path
-            # Phase 4e hotfix: __file__ is /app/apps/admin/engine_state.py, so
-            # .parent.parent already lands in /app/apps. Previous code re-added
-            # "apps/zds/engine" producing /app/apps/apps/zds/engine (Errno 2 on
-            # the live deploy). Correct path: /app/apps + zds/engine.
             _engine_dir = Path(__file__).resolve().parent.parent / "zds" / "engine"
-            _repo_root  = _engine_dir.parent.parent.parent  # /app
-            if str(_repo_root) not in sys.path:
-                sys.path.insert(0, str(_repo_root))
-            # Import the simulator as a library
-            import importlib.util
-            spec = importlib.util.spec_from_file_location(
-                "simulate_weeks",
-                str(_engine_dir / "simulate_weeks.py")
-            )
-            sim_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(sim_mod)
+            sim_script  = _engine_dir / "simulate_weeks.py"
 
-            import tempfile, json as _json
             with tempfile.TemporaryDirectory() as tmp:
-                from pathlib import Path as _Path
-                cfg_file = _Path(tmp) / "proposed.json"
+                tmp_path = Path(tmp)
+                cfg_file = tmp_path / "proposed.json"
                 cfg_file.write_text(_json.dumps(config_override))
-                argv = [
+                cmd = [
+                    sys.executable, str(sim_script),
                     "--weeks",        str(weeks),
                     "--runs",         str(runs),
                     "--seed",         str(seed),
@@ -482,23 +480,64 @@ class EngineConfiguratorState(rx.State):
                     "--config",       str(cfg_file),
                 ]
                 if compare_bl:
-                    argv.append("--baseline")
-                return sim_mod.main(argv)
+                    cmd.append("--baseline")
+
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(_engine_dir),
+                    timeout=600,  # 10-minute hard cap
+                )
+                if proc.returncode != 0:
+                    return {
+                        "error":  f"simulate_weeks.py exited {proc.returncode}",
+                        "stderr": (proc.stderr or "")[:1000],
+                    }
+                # Parse the simulator's printed output paths so we can read
+                # sim_results.json + sim_report.md.
+                json_path = ""
+                md_path   = ""
+                for line in (proc.stdout or "").splitlines():
+                    s = line.strip()
+                    if s.endswith("sim_results.json"):
+                        json_path = s
+                    elif s.endswith("sim_report.md"):
+                        md_path = s
+                if not json_path or not Path(json_path).exists():
+                    return {"error": "simulate_weeks.py finished but sim_results.json was not found"}
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = _json.load(f)
+                # Read markdown body up-front so the UI can render it inline.
+                md_body = ""
+                if md_path and Path(md_path).exists():
+                    try:
+                        md_body = Path(md_path).read_text(encoding="utf-8")
+                    except Exception as _md_exc:
+                        print(f"[engine_state] sim report read failed: {_md_exc!r}")
+                return {
+                    "json":         json_path,
+                    "md":           md_path,
+                    "md_body":      md_body,
+                    "agg_proposed": data.get("agg_proposed") or {},
+                    "agg_baseline": data.get("agg_baseline") or {},
+                }
 
         try:
             result = await asyncio.get_event_loop().run_in_executor(None, _do_sim)
-            if result is None:
+            if not result:
                 self.msim_error = "Simulation returned no results."
+            elif result.get("error"):
+                self.msim_error = (
+                    f"Multi-week sim error: {result['error']}\n"
+                    f"{result.get('stderr', '')}"
+                )
             else:
-                # Phase 4e hotfix: dict.get(k, default) returns the actual value
-                # when key is present, even if that value is None. simulate_weeks
-                # main() always emits 'agg_baseline' (None when --baseline wasn't
-                # used). The fallback to {} must use `or {}` so the dict-typed
-                # Reflex Var is never assigned None.
                 self.msim_agg_proposed = result.get("agg_proposed") or {}
                 self.msim_agg_baseline = result.get("agg_baseline") or {}
                 self.msim_json_path    = result.get("json") or ""
                 self.msim_md_path      = result.get("md") or ""
+                self.msim_report_md    = result.get("md_body") or ""
                 self.msim_ran = True
         except Exception as exc:
             self.msim_error = f"Multi-week sim error: {exc}"
