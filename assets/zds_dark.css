@@ -1,185 +1,21 @@
 /*
- * zds_dark.css — ZDS design token system + dark/light mode overrides
+ * zds_dark.css — ZDS component styles (scoped to [data-theme="dark"] / [data-theme="light"])
  *
- * Token namespace: --zds-*  (matches the v3 Developer Handoff spec)
- * Scoped via data-theme attribute so Memory/GLCR pages are never affected:
- *   [data-theme="zds-dark"]  — default dark mode
- *   [data-theme="light"]     — light mode override (same component classes)
+ * Token definitions (--zds-*, --bg, --panel, etc.) live in ops_tokens.css.
+ * This file contains only component-level rules: scrollbars, zone cards,
+ * deployment layout, night tabs, print styles, etc.
  *
- * ZdsState.theme toggles between "zds-dark" and "light".
- * All component Python color args are left unchanged; CSS wins via specificity.
+ * Loaded after ops_tokens.css so tokens are always resolved.
  */
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   DARK MODE TOKENS (default)
-   ══════════════════════════════════════════════════════════════════════════════ */
-
-[data-theme="zds-dark"] {
-  /* Backgrounds */
-  --zds-bg-0:      #040a10;
-  --zds-bg-1:      #080e14;
-  --zds-bg-2:      #0d1520;
-  --zds-bg-3:      #111d2b;
-  --zds-bg-4:      #162236;
-  --zds-bg-blue:   rgba(48,178,255,0.07);
-  --zds-bg-amber:  rgba(224,203,182,0.07);
-
-  /* Borders */
-  --zds-border:         rgba(48,178,255,0.10);
-  --zds-border-hover:   rgba(48,178,255,0.28);
-  --zds-border-gold:    rgba(224,203,182,0.20);
-  --zds-border-subtle:  rgba(255,255,255,0.05);
-
-  /* Text */
-  --zds-t1:  #f0f4f8;
-  --zds-t2:  #8ba4be;
-  --zds-t3:  #4d6a82;
-  --zds-t4:  #2e4357;
-
-  /* Brand */
-  --zds-blue:       #30b2ff;
-  --zds-blue-dim:   #1a9be8;
-  --zds-blue-muted: rgba(48,178,255,0.15);
-  --zds-gold:       #e0cbb6;
-  --zds-gold-dim:   #c9b094;
-
-  /* Status */
-  --zds-red:        #f87171;
-  --zds-red-bg:     rgba(248,113,113,0.12);
-  --zds-amber:      #fbbf24;
-  --zds-amber-bg:   rgba(251,191,36,0.12);
-  --zds-green:      #34d399;
-  --zds-green-bg:   rgba(52,211,153,0.10);
-  --zds-violet:     #a78bfa;
-  --zds-violet-bg:  rgba(167,139,250,0.12);
-
-  /* Typography */
-  --zds-font:      'Barlow', -apple-system, sans-serif;
-  --zds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-  /* Radii */
-  --zds-r-sm:   4px;
-  --zds-r-md:   8px;
-  --zds-r-lg:   10px;
-  --zds-r-pill: 999px;
-
-  /* Shadows */
-  --zds-shadow-card:   0 2px 8px rgba(0,0,0,0.3);
-  --zds-shadow-drawer: -20px 0 60px rgba(0,0,0,0.5);
-  --zds-shadow-menu:   0 8px 32px rgba(0,0,0,0.5);
-  --zds-glow-blue:     0 0 12px rgba(48,178,255,0.35);
-  --zds-glow-gold:     0 0 12px rgba(224,203,182,0.35);
-
-  /* Legacy aliases — keep until every component is migrated */
-  --surface-canvas:  var(--zds-bg-1);
-  --surface-card:    var(--zds-bg-2);
-  --surface-raised:  var(--zds-bg-3);
-  --surface-input:   var(--zds-bg-4);
-  --fg-1:            var(--zds-t1);
-  --fg-2:            var(--zds-t2);
-  --fg-3:            var(--zds-t3);
-  --fg-4:            var(--zds-t4);
-  --border-subtle:   var(--zds-border);
-  --border-hover:    var(--zds-border-hover);
-  --border-gold:     var(--zds-border-gold);
-  --accent-blue:     var(--zds-blue);
-  --accent-gold:     var(--zds-gold);
-  --status-red:      var(--zds-red);
-  --status-amber:    var(--zds-amber);
-  --status-green:    var(--zds-green);
-  --status-violet:   var(--zds-violet);
-  --accent-flag:     var(--zds-red);
-
-  background: var(--zds-bg-1);
-  color: var(--zds-t1);
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   LIGHT MODE TOKEN OVERRIDES
-   Toggle by setting data-theme="light" on the _with_zds_chrome wrapper.
-   ══════════════════════════════════════════════════════════════════════════════ */
-
-[data-theme="light"] {
-  /* Backgrounds */
-  --zds-bg-0:      #eef1f6;
-  --zds-bg-1:      #f4f7fb;
-  --zds-bg-2:      #ffffff;
-  --zds-bg-3:      #f0f4f9;
-  --zds-bg-4:      #e8edf3;
-  --zds-bg-blue:   rgba(37,99,235,0.06);
-  --zds-bg-amber:  rgba(180,83,9,0.05);
-
-  /* Borders */
-  --zds-border:         rgba(11,26,42,0.10);
-  --zds-border-hover:   rgba(37,99,235,0.35);
-  --zds-border-gold:    rgba(180,83,9,0.20);
-  --zds-border-subtle:  rgba(11,26,42,0.06);
-
-  /* Text */
-  --zds-t1:  #0b1a2a;
-  --zds-t2:  #2c3e54;
-  --zds-t3:  #5a6b7d;
-  --zds-t4:  #94a2b1;
-
-  /* Brand — toned down for light backgrounds */
-  --zds-blue:       #0065bf;   /* GLCR Pantone 3015 C */
-  --zds-blue-dim:   #0052a3;
-  --zds-blue-muted: rgba(0,101,191,0.10);
-  --zds-gold:       #8a6a3c;   /* darkened for legibility on white */
-  --zds-gold-dim:   #6b5030;
-
-  /* Status */
-  --zds-red:        #dc2626;
-  --zds-red-bg:     rgba(220,38,38,0.08);
-  --zds-amber:      #b45309;
-  --zds-amber-bg:   rgba(180,83,9,0.08);
-  --zds-green:      #059669;
-  --zds-green-bg:   rgba(5,150,105,0.08);
-  --zds-violet:     #7c3aed;
-  --zds-violet-bg:  rgba(124,58,237,0.08);
-
-  /* Shadows — lighter for light surfaces */
-  --zds-shadow-card:   0 1px 4px rgba(11,26,42,0.08);
-  --zds-shadow-drawer: -8px 0 32px rgba(11,26,42,0.16);
-  --zds-shadow-menu:   0 8px 24px rgba(11,26,42,0.14);
-  --zds-glow-blue:     none;
-  --zds-glow-gold:     none;
-
-  /* Legacy aliases */
-  --surface-canvas:  var(--zds-bg-1);
-  --surface-card:    var(--zds-bg-2);
-  --surface-raised:  var(--zds-bg-3);
-  --surface-input:   var(--zds-bg-4);
-  --fg-1:            var(--zds-t1);
-  --fg-2:            var(--zds-t2);
-  --fg-3:            var(--zds-t3);
-  --fg-4:            var(--zds-t4);
-  --border-subtle:   var(--zds-border);
-  --border-hover:    var(--zds-border-hover);
-  --border-gold:     var(--zds-border-gold);
-  --accent-blue:     var(--zds-blue);
-  --accent-gold:     var(--zds-gold);
-  --status-red:      var(--zds-red);
-  --status-amber:    var(--zds-amber);
-  --status-green:    var(--zds-green);
-  --status-violet:   var(--zds-violet);
-  --accent-flag:     var(--zds-red);
-
-  background: var(--zds-bg-1);
-  color: var(--zds-t1);
-}
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
    SHARED STRUCTURAL ELEMENTS (apply to both dark and light)
    ══════════════════════════════════════════════════════════════════════════════ */
 
 /* Force background on the Reflex-generated shell */
-[data-theme="zds-dark"] body,
-[data-theme="zds-dark"] .chakra-ui-light,
-[data-theme="zds-dark"] > div,
+[data-theme="dark"] body,
+[data-theme="dark"] .chakra-ui-light,
+[data-theme="dark"] > div,
 [data-theme="light"] body,
 [data-theme="light"] .chakra-ui-light,
 [data-theme="light"] > div {
@@ -187,20 +23,20 @@
 }
 
 /* Scrollbars */
-[data-theme="zds-dark"] ::-webkit-scrollbar,
+[data-theme="dark"] ::-webkit-scrollbar,
 [data-theme="light"] ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
-[data-theme="zds-dark"] ::-webkit-scrollbar-track,
+[data-theme="dark"] ::-webkit-scrollbar-track,
 [data-theme="light"] ::-webkit-scrollbar-track {
   background: transparent;
 }
-[data-theme="zds-dark"] ::-webkit-scrollbar-thumb {
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
   background: rgba(48,178,255,0.20);
   border-radius: 99px;
 }
-[data-theme="zds-dark"] ::-webkit-scrollbar-thumb:hover {
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(48,178,255,0.40);
 }
 [data-theme="light"] ::-webkit-scrollbar-thumb {
@@ -212,7 +48,7 @@
 }
 
 /* Index / landing page */
-[data-theme="zds-dark"] .zds-index-page,
+[data-theme="dark"] .zds-index-page,
 [data-theme="light"] .zds-index-page {
   background: var(--zds-bg-0) !important;
 }
@@ -249,14 +85,14 @@
    CHIP HEADER — dotted-circle poker chip overlay
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chip-header,
+[data-theme="dark"] .chip-header,
 [data-theme="light"] .chip-header {
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--zds-border) !important;
 }
 
-[data-theme="zds-dark"] .chip-header {
+[data-theme="dark"] .chip-header {
   background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
 }
 
@@ -264,7 +100,7 @@
   background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%) !important;
 }
 
-[data-theme="zds-dark"] .chip-header::after,
+[data-theme="dark"] .chip-header::after,
 [data-theme="light"] .chip-header::after {
   content: '';
   position: absolute;
@@ -277,24 +113,24 @@
 }
 
 /* App-switcher pills */
-[data-theme="zds-dark"] .chip-header .zds-header-title,
+[data-theme="dark"] .chip-header .zds-header-title,
 [data-theme="light"] .chip-header .zds-header-title {
   color: var(--zds-t1) !important;
 }
 
-[data-theme="zds-dark"] .chip-header .app-pill-active,
+[data-theme="dark"] .chip-header .app-pill-active,
 [data-theme="light"] .chip-header .app-pill-active {
   background: var(--zds-blue) !important;
   color: #000 !important;
   border-color: var(--zds-blue) !important;
 }
 
-[data-theme="zds-dark"] .chip-header .app-pill-inactive {
+[data-theme="dark"] .chip-header .app-pill-inactive {
   background: transparent !important;
   color: var(--zds-t2) !important;
   border-color: rgba(48,178,255,0.20) !important;
 }
-[data-theme="zds-dark"] .chip-header .app-pill-inactive:hover {
+[data-theme="dark"] .chip-header .app-pill-inactive:hover {
   background: rgba(48,178,255,0.08) !important;
   color: var(--zds-t1) !important;
 }
@@ -334,7 +170,7 @@
   display: block;
 }
 
-[data-theme="zds-dark"] .section-eyebrow {
+[data-theme="dark"] .section-eyebrow {
   color: var(--zds-t2);  /* bumped one tier brighter for dark surface legibility */
 }
 
@@ -343,9 +179,9 @@
    ZONE CARDS
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .zone-card,
-[data-theme="zds-dark"] .rr-card,
-[data-theme="zds-dark"] .aux-card,
+[data-theme="dark"] .zone-card,
+[data-theme="dark"] .rr-card,
+[data-theme="dark"] .aux-card,
 [data-theme="light"] .zone-card,
 [data-theme="light"] .rr-card,
 [data-theme="light"] .aux-card {
@@ -358,8 +194,8 @@
 }
 
 /* Filled card hover */
-[data-theme="zds-dark"] .zone-card-filled:hover,
-[data-theme="zds-dark"] .rr-card-filled:hover {
+[data-theme="dark"] .zone-card-filled:hover,
+[data-theme="dark"] .rr-card-filled:hover {
   box-shadow: 0 0 0 1px rgba(48,178,255,0.35), 0 4px 20px rgba(48,178,255,0.12) !important;
   border-color: var(--zds-border-hover) !important;
   background: var(--zds-bg-3) !important;
@@ -372,8 +208,8 @@
 }
 
 /* Empty card hover */
-[data-theme="zds-dark"] .zone-card-empty:hover,
-[data-theme="zds-dark"] .rr-card-empty:hover {
+[data-theme="dark"] .zone-card-empty:hover,
+[data-theme="dark"] .rr-card-empty:hover {
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08) !important;
   background: var(--zds-bg-3) !important;
 }
@@ -384,8 +220,8 @@
 }
 
 /* Locked card */
-[data-theme="zds-dark"] .zone-card-locked,
-[data-theme="zds-dark"] .rr-card-locked {
+[data-theme="dark"] .zone-card-locked,
+[data-theme="dark"] .rr-card-locked {
   box-shadow: inset 0 0 0 1px rgba(224,203,182,0.18) !important;
   border-color: rgba(224,203,182,0.22) !important;
   background: linear-gradient(135deg, rgba(224,203,182,0.04) 0%, #0d1520 50%) !important;
@@ -397,9 +233,9 @@
 }
 
 /* ── Zone label (slot code) ─────────────────────── */
-[data-theme="zds-dark"] .zone-card .card-slot-label,
+[data-theme="dark"] .zone-card .card-slot-label,
 [data-theme="light"] .zone-card .card-slot-label,
-[data-theme="zds-dark"] .rr-card .card-slot-label,
+[data-theme="dark"] .rr-card .card-slot-label,
 [data-theme="light"] .rr-card .card-slot-label {
   font-size: 9px !important;
   font-weight: 700 !important;
@@ -409,9 +245,9 @@
 }
 
 /* ── TM name — filled state ──────────────────────── */
-[data-theme="zds-dark"] .zone-card .card-tm-name,
+[data-theme="dark"] .zone-card .card-tm-name,
 [data-theme="light"] .zone-card .card-tm-name,
-[data-theme="zds-dark"] .rr-card .card-tm-name,
+[data-theme="dark"] .rr-card .card-tm-name,
 [data-theme="light"] .rr-card .card-tm-name {
   font-size: 23px !important;
   font-weight: 700 !important;
@@ -424,14 +260,14 @@
 /* TM name hover glow — zone color applied via inline style on the element.
    We can't reference the exact zone color from CSS without a custom property,
    so we apply a generic blue glow in dark mode and none in light. */
-[data-theme="zds-dark"] .zone-card .card-tm-name:hover {
+[data-theme="dark"] .zone-card .card-tm-name:hover {
   text-shadow: 0 0 20px rgba(48,178,255,0.35) !important;
 }
 
 /* ── TM name — unfilled state ────────────────────── */
-[data-theme="zds-dark"] .zone-card .card-empty-label,
+[data-theme="dark"] .zone-card .card-empty-label,
 [data-theme="light"] .zone-card .card-empty-label,
-[data-theme="zds-dark"] .rr-card .card-empty-label,
+[data-theme="dark"] .rr-card .card-empty-label,
 [data-theme="light"] .rr-card .card-empty-label {
   font-size: 16px !important;
   font-weight: 400 !important;
@@ -440,14 +276,14 @@
   opacity: 0.8;
 }
 
-[data-theme="zds-dark"] .zone-card .card-empty-label {
+[data-theme="dark"] .zone-card .card-empty-label {
   color: #6b85a0 !important;  /* bumped from t4 so "Unfilled" reads on dark bg */
 }
 
 /* ── TM name — called-off state ──────────────────── */
-[data-theme="zds-dark"] .zone-card .card-tm-name-calledoff,
+[data-theme="dark"] .zone-card .card-tm-name-calledoff,
 [data-theme="light"] .zone-card .card-tm-name-calledoff,
-[data-theme="zds-dark"] .rr-card .card-tm-name-calledoff,
+[data-theme="dark"] .rr-card .card-tm-name-calledoff,
 [data-theme="light"] .rr-card .card-tm-name-calledoff {
   font-size: 23px !important;
   font-weight: 700 !important;
@@ -480,17 +316,17 @@
 }
 
 /* ── Task list bullets ───────────────────────────── */
-[data-theme="zds-dark"] .card-task-section,
+[data-theme="dark"] .card-task-section,
 [data-theme="light"] .card-task-section {
   border-top: 1px solid var(--zds-border-subtle) !important;
 }
 
-[data-theme="zds-dark"] .card-task-section {
+[data-theme="dark"] .card-task-section {
   border-top-color: rgba(48,178,255,0.08) !important;
 }
 
-[data-theme="zds-dark"] .zone-card .card-task-text,
-[data-theme="zds-dark"] .rr-card .card-task-text {
+[data-theme="dark"] .zone-card .card-task-text,
+[data-theme="dark"] .rr-card .card-task-text {
   font-size: 9.5px !important;
   color: var(--zds-t2) !important;
 }
@@ -500,18 +336,18 @@
   color: var(--zds-t3) !important;
 }
 
-[data-theme="zds-dark"] .card-task-section p,
-[data-theme="zds-dark"] .card-task-section span,
+[data-theme="dark"] .card-task-section p,
+[data-theme="dark"] .card-task-section span,
 [data-theme="light"] .card-task-section p,
 [data-theme="light"] .card-task-section span {
   color: var(--zds-t2) !important;
 }
 
-[data-theme="zds-dark"] .card-task-section .chakra-button,
+[data-theme="dark"] .card-task-section .chakra-button,
 [data-theme="light"] .card-task-section .chakra-button {
   color: var(--zds-t3) !important;
 }
-[data-theme="zds-dark"] .card-task-section .chakra-button:hover,
+[data-theme="dark"] .card-task-section .chakra-button:hover,
 [data-theme="light"] .card-task-section .chakra-button:hover {
   color: var(--zds-t1) !important;
 }
@@ -521,7 +357,7 @@
    NIGHT TABS BAR
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .night-tabs-bar {
+[data-theme="dark"] .night-tabs-bar {
   background: linear-gradient(180deg, #0a1420 0%, #080e14 100%) !important;
   border-bottom: 1px solid var(--zds-border) !important;
 }
@@ -530,7 +366,7 @@
   border-bottom: 1px solid var(--zds-border) !important;
 }
 
-[data-theme="zds-dark"] .night-tab,
+[data-theme="dark"] .night-tab,
 [data-theme="light"] .night-tab {
   background: transparent !important;
   border: none !important;
@@ -540,13 +376,13 @@
   padding-bottom: 0 !important;
 }
 
-[data-theme="zds-dark"] .night-tab {
+[data-theme="dark"] .night-tab {
   color: var(--zds-t2) !important;
 }
 [data-theme="light"] .night-tab {
   color: var(--zds-t3) !important;
 }
-[data-theme="zds-dark"] .night-tab:hover {
+[data-theme="dark"] .night-tab:hover {
   color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.04) !important;
 }
@@ -554,7 +390,7 @@
   color: var(--zds-t1) !important;
   background: var(--zds-bg-3) !important;
 }
-[data-theme="zds-dark"] .night-tab-active {
+[data-theme="dark"] .night-tab-active {
   color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.05) !important;
 }
@@ -567,12 +403,12 @@
    text-color via its color_scheme prop, which beats the .night-tab class
    color. Target the inner spans directly so the day name + date follow
    the theme. Brian: "day titles should be white on dark." */
-[data-theme="zds-dark"] .night-tab .night-tab-day,
-[data-theme="zds-dark"] .night-tab-active .night-tab-day {
+[data-theme="dark"] .night-tab .night-tab-day,
+[data-theme="dark"] .night-tab-active .night-tab-day {
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .night-tab .night-tab-date,
-[data-theme="zds-dark"] .night-tab-active .night-tab-date {
+[data-theme="dark"] .night-tab .night-tab-date,
+[data-theme="dark"] .night-tab-active .night-tab-date {
   color: var(--zds-t2) !important;
 }
 [data-theme="light"] .night-tab .night-tab-day,
@@ -587,10 +423,10 @@
 /* Big day heading above the deployment grid (rx.heading in
    deployment.py). Was hardcoded color="#1d4ed8" — replaced with class
    so the theme controls per-mode. White on dark, ink on light. */
-[data-theme="zds-dark"] .zds-day-heading {
+[data-theme="dark"] .zds-day-heading {
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .zds-day-heading-date {
+[data-theme="dark"] .zds-day-heading-date {
   color: var(--zds-t2) !important;
 }
 [data-theme="light"] .zds-day-heading {
@@ -601,7 +437,7 @@
 }
 
 /* Fill mini-bar track: exactly 28px wide × 3px tall per spec */
-[data-theme="zds-dark"] .night-tab-fill-track,
+[data-theme="dark"] .night-tab-fill-track,
 [data-theme="light"] .night-tab-fill-track {
   height: 3px !important;
   width: 28px !important;
@@ -609,7 +445,7 @@
   overflow: hidden !important;
   margin-top: 4px;
 }
-[data-theme="zds-dark"] .night-tab-fill-track {
+[data-theme="dark"] .night-tab-fill-track {
   background: var(--zds-bg-4) !important;
 }
 [data-theme="light"] .night-tab-fill-track {
@@ -617,7 +453,7 @@
 }
 
 /* Locked tab: fill bar replaced by gold lock icon via ::after — CSS only */
-[data-theme="zds-dark"] .night-tab-locked .night-tab-fill-track,
+[data-theme="dark"] .night-tab-locked .night-tab-fill-track,
 [data-theme="light"] .night-tab-locked .night-tab-fill-track {
   display: none !important;
 }
@@ -627,8 +463,8 @@
    NIGHT SCOREBOARD HEADER
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .night-scoreboard,
-[data-theme="zds-dark"] .deployment-header-strip {
+[data-theme="dark"] .night-scoreboard,
+[data-theme="dark"] .deployment-header-strip {
   background: linear-gradient(180deg, #0d1824 0%, #080e14 100%) !important;
   border-bottom: 1px solid var(--zds-border) !important;
   position: relative;
@@ -643,7 +479,7 @@
 }
 
 /* Decorative rings — dark mode only */
-[data-theme="zds-dark"] .night-scoreboard::before {
+[data-theme="dark"] .night-scoreboard::before {
   content: '';
   position: absolute;
   right: -60px; top: -60px;
@@ -652,7 +488,7 @@
   border: 40px solid rgba(48,178,255,0.03);
   pointer-events: none;
 }
-[data-theme="zds-dark"] .night-scoreboard::after {
+[data-theme="dark"] .night-scoreboard::after {
   content: '';
   position: absolute;
   right: 20px; top: -40px;
@@ -663,7 +499,7 @@
 }
 
 /* Day name — big glowing display text */
-[data-theme="zds-dark"] .scoreboard-day-name,
+[data-theme="dark"] .scoreboard-day-name,
 [data-theme="light"] .scoreboard-day-name {
   font-size: 36px !important;
   font-weight: 800 !important;
@@ -673,7 +509,7 @@
 /* Glow is applied inline via Python style dict — zone color varies per night */
 
 /* Rotation count */
-[data-theme="zds-dark"] .scoreboard-rotation-count,
+[data-theme="dark"] .scoreboard-rotation-count,
 [data-theme="light"] .scoreboard-rotation-count {
   font-size: 28px !important;
   font-weight: 800 !important;
@@ -681,7 +517,7 @@
 }
 
 /* Stat labels + values */
-[data-theme="zds-dark"] .scoreboard-label {
+[data-theme="dark"] .scoreboard-label {
   color: var(--zds-t2) !important;
   font-size: 10px !important;
   letter-spacing: 0.08em !important;
@@ -693,21 +529,21 @@
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
 }
-[data-theme="zds-dark"] .scoreboard-value,
+[data-theme="dark"] .scoreboard-value,
 [data-theme="light"] .scoreboard-value {
   color: var(--zds-t1) !important;
   font-weight: 700 !important;
 }
-[data-theme="zds-dark"] .scoreboard-pct,
+[data-theme="dark"] .scoreboard-pct,
 [data-theme="light"] .scoreboard-pct { color: var(--zds-t2) !important; }
 
-[data-theme="zds-dark"] .scoreboard-value-blue,
+[data-theme="dark"] .scoreboard-value-blue,
 [data-theme="light"] .scoreboard-value-blue  { color: var(--zds-blue) !important; }
-[data-theme="zds-dark"] .scoreboard-value-red,
+[data-theme="dark"] .scoreboard-value-red,
 [data-theme="light"] .scoreboard-value-red   { color: var(--zds-red) !important; }
-[data-theme="zds-dark"] .scoreboard-value-amber,
+[data-theme="dark"] .scoreboard-value-amber,
 [data-theme="light"] .scoreboard-value-amber { color: var(--zds-amber) !important; }
-[data-theme="zds-dark"] .scoreboard-value-green,
+[data-theme="dark"] .scoreboard-value-green,
 [data-theme="light"] .scoreboard-value-green { color: var(--zds-green) !important; }
 
 /* Break wave badges — 26×26px square with wave color */
@@ -731,7 +567,7 @@
    WEEK OVERVIEW NIGHT CARDS
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .week-night-card,
+[data-theme="dark"] .week-night-card,
 [data-theme="light"] .week-night-card {
   background: var(--zds-bg-2) !important;
   border: 1px solid var(--zds-border) !important;
@@ -739,7 +575,7 @@
   color: var(--zds-t1) !important;
   transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
 }
-[data-theme="zds-dark"] .week-night-card:hover {
+[data-theme="dark"] .week-night-card:hover {
   box-shadow: 0 0 0 1px rgba(48,178,255,0.28), 0 4px 16px rgba(48,178,255,0.08) !important;
   border-color: rgba(48,178,255,0.22) !important;
 }
@@ -747,24 +583,24 @@
   box-shadow: 0 0 0 1px rgba(37,99,235,0.25), 0 2px 8px rgba(37,99,235,0.06) !important;
   border-color: var(--zds-border-hover) !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-date-label,
+[data-theme="dark"] .week-night-card .card-date-label,
 [data-theme="light"] .week-night-card .card-date-label {
   color: var(--zds-t2) !important;
   font-size: 11px !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-weekday,
+[data-theme="dark"] .week-night-card .card-weekday,
 [data-theme="light"] .week-night-card .card-weekday {
   color: var(--zds-t1) !important;
   font-weight: 700 !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-stat-label,
+[data-theme="dark"] .week-night-card .card-stat-label,
 [data-theme="light"] .week-night-card .card-stat-label {
   color: var(--zds-t2) !important;
   font-size: 9px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.08em !important;
 }
-[data-theme="zds-dark"] .week-night-card .card-stat-value {
+[data-theme="dark"] .week-night-card .card-stat-value {
   color: var(--zds-blue) !important;
   font-weight: 700 !important;
 }
@@ -911,36 +747,36 @@
    ══════════════════════════════════════════════════════════════════════════════ */
 
 /* Sidebar */
-[data-theme="zds-dark"] .sidebar,
-[data-theme="zds-dark"] [data-component="sidebar"] {
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] [data-component="sidebar"] {
   background: var(--zds-bg-0) !important;
   border-right: 1px solid var(--zds-border) !important;
 }
-[data-theme="zds-dark"] .sidebar a,
-[data-theme="zds-dark"] [data-component="sidebar"] a {
+[data-theme="dark"] .sidebar a,
+[data-theme="dark"] [data-component="sidebar"] a {
   color: var(--zds-t2) !important;
 }
-[data-theme="zds-dark"] .sidebar a:hover,
-[data-theme="zds-dark"] [data-component="sidebar"] a:hover {
+[data-theme="dark"] .sidebar a:hover,
+[data-theme="dark"] [data-component="sidebar"] a:hover {
   color: var(--zds-t1) !important;
   background: rgba(48,178,255,0.06) !important;
 }
-[data-theme="zds-dark"] .sidebar a.active,
-[data-theme="zds-dark"] [data-component="sidebar"] a.active {
+[data-theme="dark"] .sidebar a.active,
+[data-theme="dark"] [data-component="sidebar"] a.active {
   color: var(--zds-blue) !important;
   background: rgba(48,178,255,0.10) !important;
 }
 
 /* Chakra text + heading fallbacks */
-[data-theme="zds-dark"] .chakra-text,
-[data-theme="zds-dark"] .chakra-heading {
+[data-theme="dark"] .chakra-text,
+[data-theme="dark"] .chakra-heading {
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chakra-divider { border-color: var(--zds-border) !important; }
+[data-theme="dark"] .chakra-divider { border-color: var(--zds-border) !important; }
 
 /* White cards that missed a component-level override */
-[data-theme="zds-dark"] .chakra-card,
-[data-theme="zds-dark"] [data-component="card"] {
+[data-theme="dark"] .chakra-card,
+[data-theme="dark"] [data-component="card"] {
   background: var(--zds-bg-2) !important;
   border-color: var(--zds-border) !important;
   color: var(--zds-t1) !important;
@@ -951,25 +787,25 @@
    BUTTONS
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chakra-button[data-variant="solid"],
-[data-theme="zds-dark"] .chakra-button:not([data-variant]) {
+[data-theme="dark"] .chakra-button[data-variant="solid"],
+[data-theme="dark"] .chakra-button:not([data-variant]) {
   background: var(--zds-blue) !important;
   color: var(--zds-bg-1) !important;
   font-weight: 600 !important;
 }
-[data-theme="zds-dark"] .chakra-button[data-variant="solid"]:hover {
+[data-theme="dark"] .chakra-button[data-variant="solid"]:hover {
   background: var(--zds-blue-dim) !important;
 }
-[data-theme="zds-dark"] .chakra-button[data-variant="ghost"] {
+[data-theme="dark"] .chakra-button[data-variant="ghost"] {
   background: transparent !important;
   color: var(--zds-t2) !important;
   border: 1px solid rgba(48,178,255,0.20) !important;
 }
-[data-theme="zds-dark"] .chakra-button[data-variant="ghost"]:hover {
+[data-theme="dark"] .chakra-button[data-variant="ghost"]:hover {
   background: rgba(48,178,255,0.08) !important;
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chakra-button[data-colorscheme="red"] {
+[data-theme="dark"] .chakra-button[data-colorscheme="red"] {
   background: var(--zds-red-bg) !important;
   color: var(--zds-red) !important;
   border: 1px solid rgba(248,113,113,0.25) !important;
@@ -980,20 +816,20 @@
    BADGES + CHIPS
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chakra-badge {
+[data-theme="dark"] .chakra-badge {
   background: var(--zds-blue-muted) !important;
   color: var(--zds-blue) !important;
 }
-[data-theme="zds-dark"] .chakra-badge[data-colorscheme="red"] {
+[data-theme="dark"] .chakra-badge[data-colorscheme="red"] {
   background: var(--zds-red-bg) !important;
   color: var(--zds-red) !important;
 }
-[data-theme="zds-dark"] .chakra-badge[data-colorscheme="yellow"],
-[data-theme="zds-dark"] .chakra-badge[data-colorscheme="orange"] {
+[data-theme="dark"] .chakra-badge[data-colorscheme="yellow"],
+[data-theme="dark"] .chakra-badge[data-colorscheme="orange"] {
   background: var(--zds-amber-bg) !important;
   color: var(--zds-amber) !important;
 }
-[data-theme="zds-dark"] .chakra-badge[data-colorscheme="green"] {
+[data-theme="dark"] .chakra-badge[data-colorscheme="green"] {
   background: var(--zds-green-bg) !important;
   color: var(--zds-green) !important;
 }
@@ -1003,22 +839,22 @@
    INPUTS
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chakra-input,
-[data-theme="zds-dark"] .chakra-select,
-[data-theme="zds-dark"] input[type="text"],
-[data-theme="zds-dark"] input[type="search"] {
+[data-theme="dark"] .chakra-input,
+[data-theme="dark"] .chakra-select,
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="search"] {
   background: var(--zds-bg-4) !important;
   border-color: var(--zds-border) !important;
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chakra-input:focus,
-[data-theme="zds-dark"] input[type="text"]:focus,
-[data-theme="zds-dark"] input[type="search"]:focus {
+[data-theme="dark"] .chakra-input:focus,
+[data-theme="dark"] input[type="text"]:focus,
+[data-theme="dark"] input[type="search"]:focus {
   border-color: var(--zds-blue) !important;
   box-shadow: 0 0 0 1px rgba(48,178,255,0.30) !important;
 }
-[data-theme="zds-dark"] .chakra-input::placeholder,
-[data-theme="zds-dark"] input::placeholder {
+[data-theme="dark"] .chakra-input::placeholder,
+[data-theme="dark"] input::placeholder {
   color: var(--zds-t4) !important;
 }
 
@@ -1027,35 +863,35 @@
    DRAWER / MODAL
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chakra-drawer__content,
-[data-theme="zds-dark"] .chakra-modal__content {
+[data-theme="dark"] .chakra-drawer__content,
+[data-theme="dark"] .chakra-modal__content {
   background: var(--zds-bg-2) !important;
   border: 1px solid var(--zds-border) !important;
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .chakra-drawer__overlay,
-[data-theme="zds-dark"] .chakra-modal__overlay {
+[data-theme="dark"] .chakra-drawer__overlay,
+[data-theme="dark"] .chakra-modal__overlay {
   background: rgba(4,10,16,0.75) !important;
 }
-[data-theme="zds-dark"] .chakra-drawer__header,
-[data-theme="zds-dark"] .chakra-modal__header {
+[data-theme="dark"] .chakra-drawer__header,
+[data-theme="dark"] .chakra-modal__header {
   color: var(--zds-t1) !important;
   border-bottom: 1px solid var(--zds-border) !important;
 }
 
 /* TM Picker drawer */
-[data-theme="zds-dark"] .tm-picker-drawer .tm-row {
+[data-theme="dark"] .tm-picker-drawer .tm-row {
   border-bottom: 1px solid rgba(48,178,255,0.06) !important;
   color: var(--zds-t1) !important;
 }
-[data-theme="zds-dark"] .tm-picker-drawer .tm-row:hover {
+[data-theme="dark"] .tm-picker-drawer .tm-row:hover {
   background: rgba(48,178,255,0.06) !important;
 }
-[data-theme="zds-dark"] .tm-picker-drawer .tasks-pane {
+[data-theme="dark"] .tm-picker-drawer .tasks-pane {
   background: var(--zds-bg-3) !important;
   border-left: 1px solid var(--zds-border) !important;
 }
-[data-theme="zds-dark"] .tm-picker-drawer .task-bullet {
+[data-theme="dark"] .tm-picker-drawer .task-bullet {
   color: var(--zds-t3) !important;
 }
 
@@ -1064,7 +900,7 @@
    SKELETON LOADING
    ══════════════════════════════════════════════════════════════════════════════ */
 
-[data-theme="zds-dark"] .chakra-skeleton {
+[data-theme="dark"] .chakra-skeleton {
   background: linear-gradient(90deg, var(--zds-bg-2) 25%, var(--zds-bg-4) 50%, var(--zds-bg-2) 75%) !important;
   background-size: 200% 100% !important;
 }
@@ -1088,11 +924,11 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-[data-theme="zds-dark"] .zds-theme-toggle {
+[data-theme="dark"] .zds-theme-toggle {
   color: var(--zds-gold) !important;
   border-color: rgba(224,203,182,0.20) !important;
 }
-[data-theme="zds-dark"] .zds-theme-toggle:hover {
+[data-theme="dark"] .zds-theme-toggle:hover {
   background: rgba(224,203,182,0.10) !important;
   border-color: rgba(224,203,182,0.40) !important;
 }

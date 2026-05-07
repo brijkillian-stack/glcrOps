@@ -31,7 +31,7 @@ def _pill(label: str, route: str, is_active) -> rx.Component:
 
 
 def _theme_toggle() -> rx.Component:
-    """Sun/moon button — flips ZdsState.theme between zds-dark and light.
+    """Sun/moon button — flips ZdsState.theme between dark and light.
     Visible only when on a ZDS route (Memory pages don't use this state).
     """
     # Local import to avoid a hard top-level dep on apps/zds when this
@@ -42,7 +42,7 @@ def _theme_toggle() -> rx.Component:
         is_zds,
         rx.button(
             rx.cond(
-                ZdsState.theme == "zds-dark",
+                ZdsState.theme == "dark",
                 rx.icon("sun",  size=16),
                 rx.icon("moon", size=16),
             ),

@@ -180,13 +180,11 @@ class ZdsState(rx.State):
     error:   str = ""
 
     # ── Theme (dark/light toggle) ─────────────────────────────────────────────
-    # "zds-dark" → dark mode. "light" → light mode (default).
-    # Bound to data_theme on the _with_zds_chrome wrapper.
-    # Persisted via LocalStorage — survives page reload and across
-    # devices/sessions. Existing users who already toggled to dark
-    # keep that choice (their LocalStorage value isn't overwritten);
-    # only first-time visitors get light by default.
-    theme: str = rx.LocalStorage("light")
+    # "dark" → dark mode. "light" → light mode (default).
+    # data-theme is set on <html> by _THEME_INIT_SCRIPT and kept in sync by
+    # toggle_theme via rx.call_script — no Reflex DOM binding needed on the
+    # page wrapper. LocalStorage key: "glcr-theme" (migrated from "theme").
+    theme: str = rx.LocalStorage("light", name="glcr-theme")
 
     # ── Audit strip ───────────────────────────────────────────────────────────
     # ISO timestamp of the last successful write this session; drives the
@@ -213,8 +211,17 @@ class ZdsState(rx.State):
         self.error = msg
 
     def toggle_theme(self):
-        """Toggle between dark and light mode."""
-        self.theme = "light" if self.theme == "zds-dark" else "zds-dark"
+        """Toggle between dark and light mode.
+
+        Updates the Python state (which Reflex persists via LocalStorage
+        key "glcr-theme") and emits a script to stamp data-theme on <html>
+        immediately so CSS token selectors re-resolve without a page reload.
+        """
+        new_theme = "light" if self.theme == "dark" else "dark"
+        self.theme = new_theme
+        return rx.call_script(
+            f"document.documentElement.setAttribute('data-theme', '{new_theme}');"
+        )
 
     # ── Night-level lock handlers (Phase D) ───────────────────────────────────
 

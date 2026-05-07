@@ -1,0 +1,226 @@
+/*
+ * ops_tokens.css — GLCR GShift HUD design token system
+ *
+ * Dual-theme (dark / light) CSS custom properties scoped to [data-theme]
+ * on <html>, set by the _THEME_INIT_SCRIPT in brijkillian_stack.py.
+ *
+ * Two layers of tokens are defined here:
+ *   1.  T2 un-prefixed tokens  (--bg, --panel, --ink, etc.)
+ *       Used by the GShiftPage family. Canonical values from shift-hud-hifi.jsx.
+ *   2.  --zds-* backward-compat aliases
+ *       Identical values to what zds_dark.css previously defined directly.
+ *       ZDS components continue to use --zds-* names without changes.
+ *
+ * Load order (brijkillian_stack.py):
+ *   Google Fonts → ops_tokens.css → styles.css → zds_dark.css
+ */
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DARK THEME  [data-theme="dark"]
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] {
+  /* ── T2 un-prefixed tokens (GShiftPage) ───────────────────────────────── */
+  --bg:          #0B0C0E;
+  --panel:       #131518;
+  --panel2:      #191B1F;
+  --panel3:      #202327;
+  --line:        #26292E;
+  --line2:       #33373D;
+  --ink:         #F5F2E9;
+  --ink2:        #BFBBAE;
+  --ink3:        #82807A;
+  --mute:        #4A4944;
+  --blue:        #5CC0FF;
+  --blue-dim:    rgba(92,192,255,0.12);
+  --blue-dk:     rgba(92,192,255,0.04);
+  --gold:        #E0CBB6;
+  --gold-dim:    rgba(224,203,182,0.10);
+  --green:       #5BD68B;
+  --green-dim:   rgba(91,214,139,0.10);
+  --red:         #F47373;
+  --red-dim:     rgba(244,115,115,0.12);
+  --amber:       #F2B23A;
+  --amber-dim:   rgba(242,178,58,0.12);
+
+  /* ── --zds-* backward-compat aliases (same values as former zds_dark.css) */
+
+  /* Backgrounds */
+  --zds-bg-0:      #040a10;
+  --zds-bg-1:      #080e14;
+  --zds-bg-2:      #0d1520;
+  --zds-bg-3:      #111d2b;
+  --zds-bg-4:      #162236;
+  --zds-bg-blue:   rgba(48,178,255,0.07);
+  --zds-bg-amber:  rgba(224,203,182,0.07);
+
+  /* Borders */
+  --zds-border:         rgba(48,178,255,0.10);
+  --zds-border-hover:   rgba(48,178,255,0.28);
+  --zds-border-gold:    rgba(224,203,182,0.20);
+  --zds-border-subtle:  rgba(255,255,255,0.05);
+
+  /* Text */
+  --zds-t1:  #f0f4f8;
+  --zds-t2:  #8ba4be;
+  --zds-t3:  #4d6a82;
+  --zds-t4:  #2e4357;
+
+  /* Brand */
+  --zds-blue:       #30b2ff;
+  --zds-blue-dim:   #1a9be8;
+  --zds-blue-muted: rgba(48,178,255,0.15);
+  --zds-gold:       #e0cbb6;
+  --zds-gold-dim:   #c9b094;
+
+  /* Status */
+  --zds-red:        #f87171;
+  --zds-red-bg:     rgba(248,113,113,0.12);
+  --zds-amber:      #fbbf24;
+  --zds-amber-bg:   rgba(251,191,36,0.12);
+  --zds-green:      #34d399;
+  --zds-green-bg:   rgba(52,211,153,0.10);
+  --zds-violet:     #a78bfa;
+  --zds-violet-bg:  rgba(167,139,250,0.12);
+
+  /* Typography */
+  --zds-font:      'Barlow', -apple-system, sans-serif;
+  --zds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Radii */
+  --zds-r-sm:   4px;
+  --zds-r-md:   8px;
+  --zds-r-lg:   10px;
+  --zds-r-pill: 999px;
+
+  /* Shadows */
+  --zds-shadow-card:   0 2px 8px rgba(0,0,0,0.3);
+  --zds-shadow-drawer: -20px 0 60px rgba(0,0,0,0.5);
+  --zds-shadow-menu:   0 8px 32px rgba(0,0,0,0.5);
+  --zds-glow-blue:     0 0 12px rgba(48,178,255,0.35);
+  --zds-glow-gold:     0 0 12px rgba(224,203,182,0.35);
+
+  /* Legacy surface/fg/border/accent aliases */
+  --surface-canvas:  var(--zds-bg-1);
+  --surface-card:    var(--zds-bg-2);
+  --surface-raised:  var(--zds-bg-3);
+  --surface-input:   var(--zds-bg-4);
+  --fg-1:            var(--zds-t1);
+  --fg-2:            var(--zds-t2);
+  --fg-3:            var(--zds-t3);
+  --fg-4:            var(--zds-t4);
+  --border-subtle:   var(--zds-border);
+  --border-hover:    var(--zds-border-hover);
+  --border-gold:     var(--zds-border-gold);
+  --accent-blue:     var(--zds-blue);
+  --accent-gold:     var(--zds-gold);
+  --status-red:      var(--zds-red);
+  --status-amber:    var(--zds-amber);
+  --status-green:    var(--zds-green);
+  --status-violet:   var(--zds-violet);
+  --accent-flag:     var(--zds-red);
+
+  background: var(--zds-bg-1);
+  color: var(--zds-t1);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LIGHT THEME  [data-theme="light"]
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+  /* ── T2 un-prefixed tokens (GShiftPage — light equivalents) ───────────── */
+  --bg:          #eef1f6;
+  --panel:       #f4f7fb;
+  --panel2:      #ffffff;
+  --panel3:      #f0f4f9;
+  --line:        rgba(11,26,42,0.10);
+  --line2:       rgba(11,26,42,0.15);
+  --ink:         #0b1a2a;
+  --ink2:        #2c3e54;
+  --ink3:        #5a6b7d;
+  --mute:        #94a2b1;
+  --blue:        #0065bf;
+  --blue-dim:    rgba(0,101,191,0.10);
+  --blue-dk:     rgba(0,101,191,0.04);
+  --gold:        #8a6a3c;
+  --gold-dim:    rgba(138,106,60,0.10);
+  --green:       #059669;
+  --green-dim:   rgba(5,150,105,0.08);
+  --red:         #dc2626;
+  --red-dim:     rgba(220,38,38,0.08);
+  --amber:       #b45309;
+  --amber-dim:   rgba(180,83,9,0.08);
+
+  /* ── --zds-* backward-compat aliases (same values as former zds_dark.css) */
+
+  /* Backgrounds */
+  --zds-bg-0:      #eef1f6;
+  --zds-bg-1:      #f4f7fb;
+  --zds-bg-2:      #ffffff;
+  --zds-bg-3:      #f0f4f9;
+  --zds-bg-4:      #e8edf3;
+  --zds-bg-blue:   rgba(37,99,235,0.06);
+  --zds-bg-amber:  rgba(180,83,9,0.05);
+
+  /* Borders */
+  --zds-border:         rgba(11,26,42,0.10);
+  --zds-border-hover:   rgba(37,99,235,0.35);
+  --zds-border-gold:    rgba(180,83,9,0.20);
+  --zds-border-subtle:  rgba(11,26,42,0.06);
+
+  /* Text */
+  --zds-t1:  #0b1a2a;
+  --zds-t2:  #2c3e54;
+  --zds-t3:  #5a6b7d;
+  --zds-t4:  #94a2b1;
+
+  /* Brand — toned down for light backgrounds */
+  --zds-blue:       #0065bf;
+  --zds-blue-dim:   #0052a3;
+  --zds-blue-muted: rgba(0,101,191,0.10);
+  --zds-gold:       #8a6a3c;
+  --zds-gold-dim:   #6b5030;
+
+  /* Status */
+  --zds-red:        #dc2626;
+  --zds-red-bg:     rgba(220,38,38,0.08);
+  --zds-amber:      #b45309;
+  --zds-amber-bg:   rgba(180,83,9,0.08);
+  --zds-green:      #059669;
+  --zds-green-bg:   rgba(5,150,105,0.08);
+  --zds-violet:     #7c3aed;
+  --zds-violet-bg:  rgba(124,58,237,0.08);
+
+  /* Shadows — lighter for light surfaces */
+  --zds-shadow-card:   0 1px 4px rgba(11,26,42,0.08);
+  --zds-shadow-drawer: -8px 0 32px rgba(11,26,42,0.16);
+  --zds-shadow-menu:   0 8px 24px rgba(11,26,42,0.14);
+  --zds-glow-blue:     none;
+  --zds-glow-gold:     none;
+
+  /* Legacy surface/fg/border/accent aliases */
+  --surface-canvas:  var(--zds-bg-1);
+  --surface-card:    var(--zds-bg-2);
+  --surface-raised:  var(--zds-bg-3);
+  --surface-input:   var(--zds-bg-4);
+  --fg-1:            var(--zds-t1);
+  --fg-2:            var(--zds-t2);
+  --fg-3:            var(--zds-t3);
+  --fg-4:            var(--zds-t4);
+  --border-subtle:   var(--zds-border);
+  --border-hover:    var(--zds-border-hover);
+  --border-gold:     var(--zds-border-gold);
+  --accent-blue:     var(--zds-blue);
+  --accent-gold:     var(--zds-gold);
+  --status-red:      var(--zds-red);
+  --status-amber:    var(--zds-amber);
+  --status-green:    var(--zds-green);
+  --status-violet:   var(--zds-violet);
+  --accent-flag:     var(--zds-red);
+
+  background: var(--zds-bg-1);
+  color: var(--zds-t1);
+}

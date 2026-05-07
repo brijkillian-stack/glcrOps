@@ -67,6 +67,23 @@ if ('serviceWorker' in navigator) {
 }
 """
 
+# ── Theme initializer (GShiftPage Phase 1) ───────────────────────────────────
+# Runs synchronously in <head> before first paint to prevent FOUC.
+# Reads localStorage["glcr-theme"] and stamps data-theme on <html>.
+# Also migrates users who still have the old Reflex-default key "theme"
+# (values: "zds-dark" → "dark").
+_THEME_INIT_SCRIPT = """
+(function() {
+  var old = localStorage.getItem('theme');
+  if (old !== null) {
+    localStorage.setItem('glcr-theme', old === 'zds-dark' ? 'dark' : 'light');
+    localStorage.removeItem('theme');
+  }
+  var t = localStorage.getItem('glcr-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+"""
+
 # ── Page wrapper: inject Grok panel + FAB ────────────────────────────────────
 # (for GLCR protected pages; ZDS pages don't need Grok yet)
 
@@ -96,11 +113,11 @@ def _with_grok(page_fn):
 def _with_zds_chrome(page_fn):
     """Wrap a ZDS page with the theme system, casino-scatter bg, context menu + toolbar.
 
-    data_theme is bound to ZdsState.theme ("zds-dark" | "light") so the
-    theme toggle takes effect without a page reload.
+    data-theme on <html> is set by _THEME_INIT_SCRIPT (runs in <head>) and
+    synced via rx.call_script in ZdsState.toggle_theme.  No Reflex binding
+    needed on this wrapper — ops_tokens.css scopes all tokens to html[data-theme].
     The .zds-casino-bg div is position:fixed so it renders behind all content.
     """
-    from apps.zds.state import ZdsState
 
     def wrapped() -> rx.Component:
         return rx.box(
@@ -110,7 +127,6 @@ def _with_zds_chrome(page_fn):
             global_highlight_toolbar(),
             global_undo_toast(),
             audit_strip(),
-            data_theme=ZdsState.theme,
             min_height="100vh",
             position="relative",
         )
@@ -125,12 +141,17 @@ app = rx.App(
         # Google Fonts
         "https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap",
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        # Design tokens (T2 un-prefixed + --zds-* backward-compat aliases, dual-theme)
+        "/ops_tokens.css",
         # Design tokens + component styles
         "/styles.css",
-        # ZDS dark-mode overrides (scoped to [data-theme="zds-dark"])
+        # ZDS component overrides (scoped to [data-theme="dark"] / [data-theme="light"])
         "/zds_dark.css",
     ],
     head_components=[
+        # Theme init: stamp data-theme on <html> before first paint (anti-FOUC).
+        # Must be first so CSS token selectors resolve on initial render.
+        rx.el.script(_THEME_INIT_SCRIPT),
         rx.el.script(_KBD_SCRIPT),
         rx.el.link(rel="manifest", href="/manifest.json"),
         rx.el.meta(name="theme-color", content="#0065BF"),

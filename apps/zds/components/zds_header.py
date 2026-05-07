@@ -38,7 +38,7 @@ def zds_header(
     # moon icon in light mode (click to go dark)
     theme_toggle = rx.button(
         rx.cond(
-            ZdsState.theme == "zds-dark",
+            ZdsState.theme == "dark",
             rx.icon("sun", size=16),
             rx.icon("moon", size=16),
         ),
