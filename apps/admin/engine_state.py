@@ -87,6 +87,11 @@ class EngineConfiguratorState(rx.State):
     t_fatigue_window_days: int = 7
     t_rotation_weeks: int = 8
 
+    # ── Placement method (Phase 4f) ──────────────────────────────────────
+    # "greedy" = default sequential fill (byte-identical to original)
+    # "lap"    = Hungarian/LAP solver for constrained 22-slot block
+    placement_method: str = "greedy"
+
     # ── Headcount vars (grave target by DOW) ────────────────────────────
     hc_friday: int = 0
     hc_saturday: int = 0
@@ -165,6 +170,10 @@ class EngineConfiguratorState(rx.State):
             "rotation_weeks":                self.t_rotation_weeks,
         }
 
+    def _placement_method_str(self) -> str:
+        """Return the current placement method as a safe lowercase string."""
+        return str(self.placement_method).lower() if self.placement_method else "greedy"
+
     def _headcount_dict(self) -> dict:
         return {
             "Friday":    self.hc_friday,
@@ -211,6 +220,9 @@ class EngineConfiguratorState(rx.State):
         self.slot_difficulty_rows = [
             {"slot": k, "priority": v} for k, v in sorted(sp.items())
         ]
+
+        # Phase 4f: placement_method
+        self.placement_method = str(row.get("placement_method", "greedy")).lower()
 
         self._config_id = row.get("id", "")
         self._saved_weights    = self._weights_dict()
@@ -302,6 +314,16 @@ class EngineConfiguratorState(rx.State):
         self.t_rotation_weeks = int(v)
         self.dirty = True
 
+    # ── Placement method setter (Phase 4f) ───────────────────────────────
+
+    @rx.event
+    def set_placement_method(self, v: str):
+        """Toggle between 'greedy' and 'lap' placement algorithms."""
+        v = str(v).lower()
+        if v in ("greedy", "lap"):
+            self.placement_method = v
+            self.dirty = True
+
     # ── Headcount setters ────────────────────────────────────────────────
 
     @rx.event
@@ -333,10 +355,12 @@ class EngineConfiguratorState(rx.State):
             thresholds = self._thresholds_dict()
             headcount  = self._headcount_dict()
             slot_prio  = {row["slot"]: row["priority"] for row in self.slot_difficulty_rows}
+            pm         = self._placement_method_str()
 
             ok = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: save_engine_config_active(weights, thresholds, headcount, slot_prio)
+                lambda: save_engine_config_active(weights, thresholds, headcount, slot_prio,
+                                                  placement_method=pm)
             )
             if ok:
                 self._saved_weights    = weights
@@ -367,10 +391,11 @@ class EngineConfiguratorState(rx.State):
         self.sim_config_used = {}
 
         config_override = {
-            "weights":       self._weights_dict(),
-            "thresholds":    self._thresholds_dict(),
-            "headcount":     self._headcount_dict(),
-            "slot_priority": {row["slot"]: row["priority"] for row in self.slot_difficulty_rows},
+            "weights":          self._weights_dict(),
+            "thresholds":       self._thresholds_dict(),
+            "headcount":        self._headcount_dict(),
+            "slot_priority":    {row["slot"]: row["priority"] for row in self.slot_difficulty_rows},
+            "placement_method": self._placement_method_str(),
         }
 
         try:
@@ -440,10 +465,11 @@ class EngineConfiguratorState(rx.State):
         self.msim_report_md = ""      # Phase 4e.1: reset before each run
 
         config_override = {
-            "weights":       self._weights_dict(),
-            "thresholds":    self._thresholds_dict(),
-            "headcount":     self._headcount_dict(),
-            "slot_priority": {row["slot"]: row["priority"] for row in self.slot_difficulty_rows},
+            "weights":          self._weights_dict(),
+            "thresholds":       self._thresholds_dict(),
+            "headcount":        self._headcount_dict(),
+            "slot_priority":    {row["slot"]: row["priority"] for row in self.slot_difficulty_rows},
+            "placement_method": self._placement_method_str(),
         }
         weeks        = self.msim_weeks
         runs         = self.msim_runs

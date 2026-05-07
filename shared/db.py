@@ -3166,18 +3166,20 @@ def get_active_engine_config() -> dict | None:
     """Return the active engine_config row, or None if not found / error.
 
     The row has keys: id, weights (dict), thresholds (dict),
-    headcount (dict), slot_priority (dict), created_at (str).
+    headcount (dict), slot_priority (dict), placement_method (str),
+    created_at (str).
 
     Phase 4e hotfix: previously selected ``updated_at`` which doesn't exist on
     this table — Postgrest threw 42703 ``column does not exist``, the bare
     ``except Exception`` swallowed it, returned None, and the configurator UI
     showed all-zero sliders with a misleading "no active row" message.
+    Phase 4f: added placement_method to select.
     """
     try:
         sb = get_client()
         res = (
             sb.table("engine_config")
-            .select("id, weights, thresholds, headcount, slot_priority, created_at")
+            .select("id, weights, thresholds, headcount, slot_priority, placement_method, created_at")
             .eq("is_active", True)
             .limit(1)
             .execute()
@@ -3195,12 +3197,15 @@ def save_engine_config_active(
     headcount: dict,
     slot_priority: dict,
     changed_by: str = "admin-ui",
+    placement_method: str = "greedy",
 ) -> bool:
     """Upsert the active engine_config row and snapshot history.
 
     Writes the new values to the row where is_active=True (UPDATE only —
     the backfill migration guarantees exactly one active row exists).
     Also archives the old row to engine_config_history.
+
+    Phase 4f: added placement_method parameter ("greedy" | "lap").
 
     Returns True on success, False on error.
     """
@@ -3213,10 +3218,11 @@ def save_engine_config_active(
 
         # 2 — update active row
         sb.table("engine_config").update({
-            "weights":       weights,
-            "thresholds":    thresholds,
-            "headcount":     headcount,
-            "slot_priority": slot_priority,
+            "weights":          weights,
+            "thresholds":       thresholds,
+            "headcount":        headcount,
+            "slot_priority":    slot_priority,
+            "placement_method": placement_method,
         }).eq("is_active", True).execute()
 
         # 3 — snapshot old config to history
@@ -3227,13 +3233,14 @@ def save_engine_config_active(
         # "Save failed — check server logs."
         if old:
             sb.table("engine_config_history").insert({
-                "id":              str(_uuid.uuid4()),
-                "config_id":       old["id"],
-                "weights":         old.get("weights", {}),
-                "thresholds":      old.get("thresholds", {}),
-                "headcount":       old.get("headcount", {}),
-                "slot_priority":   old.get("slot_priority", {}),
-                "saved_by":        changed_by,
+                "id":               str(_uuid.uuid4()),
+                "config_id":        old["id"],
+                "weights":          old.get("weights", {}),
+                "thresholds":       old.get("thresholds", {}),
+                "headcount":        old.get("headcount", {}),
+                "slot_priority":    old.get("slot_priority", {}),
+                "placement_method": old.get("placement_method", "greedy"),
+                "saved_by":         changed_by,
             }).execute()
 
         return True

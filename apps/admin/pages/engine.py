@@ -125,6 +125,54 @@ def _threshold_field(label: str, value_var, on_change, type_: str = "number") ->
     )
 
 
+def _placement_method_toggle() -> rx.Component:
+    """Phase 4f: radio toggle for greedy vs LAP placement algorithm."""
+    return rx.el.div(
+        rx.el.div("Placement Algorithm", class_name="engine-threshold-label",
+                  style={"margin_bottom": "8px", "font_weight": "600"}),
+        rx.el.div(
+            # Greedy radio
+            rx.el.label(
+                rx.el.input(
+                    type="radio",
+                    name="placement_method",
+                    value="greedy",
+                    checked=EngineConfiguratorState.placement_method == "greedy",
+                    on_change=lambda _: EngineConfiguratorState.set_placement_method("greedy"),
+                    style={"margin_right": "6px"},
+                ),
+                rx.el.span("Greedy", style={"margin_right": "4px"}),
+                rx.el.span("(default — sequential fill)",
+                           style={"color": "var(--ops-text-muted)", "font_size": "0.78rem"}),
+                style={"display": "flex", "align_items": "center",
+                       "gap": "2px", "cursor": "pointer", "margin_bottom": "6px"},
+            ),
+            # LAP radio
+            rx.el.label(
+                rx.el.input(
+                    type="radio",
+                    name="placement_method",
+                    value="lap",
+                    checked=EngineConfiguratorState.placement_method == "lap",
+                    on_change=lambda _: EngineConfiguratorState.set_placement_method("lap"),
+                    style={"margin_right": "6px"},
+                ),
+                rx.el.span("LAP / Hungarian solver", style={"margin_right": "4px"}),
+                rx.el.span("(global 22-slot optimize — improves Z8 fill)",
+                           style={"color": "var(--ops-text-muted)", "font_size": "0.78rem"}),
+                style={"display": "flex", "align_items": "center",
+                       "gap": "2px", "cursor": "pointer"},
+            ),
+            style={"padding": "10px 14px",
+                   "border": "1px solid var(--ops-border)",
+                   "border_radius": "6px",
+                   "background": "var(--ops-surface-raised)"},
+        ),
+        class_name="engine-threshold-row",
+        style={"flex_direction": "column", "align_items": "flex-start"},
+    )
+
+
 def _thresholds_tab() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -148,6 +196,7 @@ def _thresholds_tab() -> rx.Component:
                 EngineConfiguratorState.t_rotation_weeks,
                 EngineConfiguratorState.set_rotation_weeks,
             ),
+            _placement_method_toggle(),
             class_name="engine-threshold-grid",
         ),
     )

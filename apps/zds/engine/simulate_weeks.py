@@ -125,16 +125,17 @@ def _load_active_config() -> dict:
         sb = _get_db_client()
         row = (
             sb.table("engine_config")
-            .select("weights, thresholds, headcount")
+            .select("weights, thresholds, headcount, placement_method")
             .eq("is_active", True)
             .maybe_single()
             .execute()
         )
         data = (row.data or {}) if row else {}
         return {
-            "weights":    data.get("weights")    or {},
-            "thresholds": data.get("thresholds") or {},
-            "headcount":  data.get("headcount")  or {},
+            "weights":          data.get("weights")           or {},
+            "thresholds":       data.get("thresholds")        or {},
+            "headcount":        data.get("headcount")         or {},
+            "placement_method": data.get("placement_method")  or "greedy",
         }
     except Exception as e:
         print(f"  [sim][warn] Active config load failed ({e}) — using empty dict")

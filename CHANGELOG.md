@@ -4,6 +4,58 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Phase 4f: Hungarian/LAP solver for constrained block (Sonnet)
+
+### F.1 — scipy dependency
+- Added `scipy>=1.11.0` to `requirements.txt`.
+
+### F.2 — `apps/zds/engine/glcr_engine/lap_solver.py` (new file)
+- `SlotSpec` dataclass — descriptor for one slot in the constrained block
+  (`slot_code`, `elig_col`, `priority`, `skill_priority`, `soft_prefer_set`,
+  `prefer_elig`, `prefer_names`, `avoid_names`, `skip_trainees`, `pool_type`).
+- `solve_constrained_block()` — accepts pool, specs, and all fill_engine state as
+  parameters; builds an `n_pool × n_slots` cost matrix; runs
+  `scipy.optimize.linear_sum_assignment`; returns `{slot_code: dn|None}` +
+  `fallback_detail` list.
+- `HARD_BLOCK_COST = 1e9` (ineligible / physically restricted / unoverridable).
+- `SOFT_BLOCK_COST = 1e6` (BTB or hard-preference override — last resort).
+- Graceful degradation: if scipy not installed, returns all-None so caller falls
+  back to greedy for every slot individually.
+- Prefer-names post-solve correction: if LAP picks a non-specialist for Z9SR on
+  Fri/Sat but a specialist is available, swap applied before writing.
+
+### F.3 — `apps/zds/engine/fill_engine.py`
+- Added `PLACEMENT_METHOD: str` constant sourced from `_CONFIG_OVERRIDE.get("placement_method", "greedy")`.
+- Added `_lap_fill_constrained_block(day, d, gpool, placed)` helper: builds 16
+  `SlotSpec` objects (10 RRs + Admin + Z9SR + Z1/Z4/Z5/Z8), calls `_lap_solve()`,
+  writes each assignment via `write_cell()` + `placed.add()` + `_record_placement()`,
+  falls back to greedy `place()` for any `None` slot; logs LAP_SOFT_OVERRIDE and
+  LAP_UNRESOLVED audit items.
+- Main fill loop now branches: `if PLACEMENT_METHOD == "lap"` → LAP constrained
+  block + greedy skip-priority zones; `else` → original sequential greedy
+  (byte-identical, just wrapped in `else:`).
+
+### F.4 — Supabase migration `add_placement_method_to_engine_config`
+- `engine_config.placement_method TEXT NOT NULL DEFAULT 'greedy'`
+- `engine_config_history.placement_method TEXT` (nullable; back-filled to 'greedy')
+- `engine_config_drafts.placement_method TEXT NOT NULL DEFAULT 'greedy'`
+
+### F.5 — `apps/admin/engine_state.py` + `apps/admin/pages/engine.py`
+- `placement_method: str = "greedy"` added to `EngineConfiguratorState`.
+- `_placement_method_str()` helper; `set_placement_method(v: str)` event.
+- `_apply_config_row()` unpacks `placement_method` from DB row.
+- `save_config()`, `run_simulation()`, and `run_multi_week_simulation()` all pass
+  `placement_method` through `config_override`.
+- `_placement_method_toggle()` radio component added to Thresholds tab.
+
+### F.6 — `shared/db.py` + `apps/zds/engine/simulate_weeks.py`
+- `get_active_engine_config()` now selects `placement_method`.
+- `save_engine_config_active()` accepts `placement_method` kwarg; writes to
+  active row and includes in history snapshot.
+- `simulate_weeks._load_active_config()` includes `placement_method` in returned dict.
+
+---
+
 ## 2026-05-07 — Phase 4e.1 + 4e.2: Enriched sim report + inline disclosure (Sonnet)
 
 ### Phase 4e.1 — Inline report disclosure in engine pane

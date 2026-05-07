@@ -50,6 +50,8 @@ from glcr_engine.config import (
     SLOT_CATEGORY as _SLOT_CATEGORY_SHARED,
     ZONE_ADJACENCY as _ZONE_ADJACENCY_SHARED,
 )
+# Phase 4f: LAP solver (optional — only used when placement_method="lap")
+from glcr_engine.lap_solver import SlotSpec as _SlotSpec, solve_constrained_block as _lap_solve
 
 # 5/5/26: DB helpers — replace Rules/*.json + Eligibility Roster.xlsx reads.
 # shared/ lives at repo root (4 parents above this file).
@@ -115,6 +117,13 @@ if "--config-override" in sys.argv:
             continue
         _argv_clean.append(_a)
     sys.argv = _argv_clean
+
+# ── PLACEMENT METHOD (Phase 4f) ───────────────────────────────────────
+# "greedy" (default) — existing sequential fill, byte-identical behavior.
+# "lap"              — Hungarian/LAP solver for constrained block (22 slots).
+# Override via config_override JSON key "placement_method" or engine_config DB.
+PLACEMENT_METHOD: str = str(_CONFIG_OVERRIDE.get("placement_method", "greedy")).lower()
+print(f"  Placement method: {PLACEMENT_METHOD}")
 
 # ── SIMULATED UNAVAILABLE (Phase 4e — stochastic simulator) ──────────
 # When simulate_weeks.py runs fill_engine in a simulated call-off scenario
@@ -1043,6 +1052,104 @@ def _record_placement(day, slot, dn, pool_type, priority):
     # instead of iterating all day_placements — same result, much faster.
     _sc.record_placement_load(dn, slot)
 
+# ── LAP CONSTRAINED-BLOCK FILL (Phase 4f) ────────────────────────────
+# Called from the main fill loop when PLACEMENT_METHOD == "lap".
+# Fills the 22-slot constrained block (10 restrooms + Admin + Zone9SR +
+# Z1 + Z4 + Z5 + Z8) in one globally-optimal Hungarian solve, then writes
+# each assignment using the same write_cell / placed.add / _record_placement
+# path as the greedy engine.  Falls back slot-by-slot via place() for any
+# slot the solver couldn't resolve.
+def _lap_fill_constrained_block(day, d, gpool, placed):
+    """Fill constrained block with LAP solver and write results."""
+    rr_pref     = RESTROOM_PREFERRED if RESTROOM_PREFERRED else set()
+    z9sr_pref   = ZONE9_WEEKEND_PREFERRED if day in ZONE9_PREF_DAYS else set()
+    day_name_str = day   # e.g. "Friday"
+    day_iso_str  = str(d)
+
+    specs = [
+        # ── 10 Restrooms ──────────────────────────────────────────
+        _SlotSpec("MRR1",  "Mens 1 + 2",   "Restroom",  skill_priority=("MRR1"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("MRR6",  "Mens 6",        "Restroom",  skill_priority=("MRR6"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("MRR7",  "Mens 7",        "Restroom",  skill_priority=("MRR7"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("MRR8",  "Mens 8",        "Restroom",  skill_priority=("MRR8"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("MRR10", "Mens 10",       "Restroom",  skill_priority=("MRR10" in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("WRR1",  "Womens 1 + 2",  "Restroom",  skill_priority=("WRR1"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("WRR6",  "Womens 6",      "Restroom",  skill_priority=("WRR6"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("WRR7",  "Womens 7",      "Restroom",  skill_priority=("WRR7"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("WRR8",  "Womens 8",      "Restroom",  skill_priority=("WRR8"  in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        _SlotSpec("WRR10", "Womens 10",     "Restroom",  skill_priority=("WRR10" in DOUBLE_COVERAGE_SLOTS), prefer_names=rr_pref),
+        # ── Admin ─────────────────────────────────────────────────
+        _SlotSpec("Admin", "Admin", "Admin", soft_prefer_set=ADMIN_PREFERRED),
+        # ── Zone 9 SR (specialist preference Fri/Sat) ─────────────
+        _SlotSpec("Zone9SR", "Zone 9 SR", "Zone-SR",
+                  prefer_names=z9sr_pref, avoid_names=AVOID_PHYSICAL),
+        # ── Must-fill zones ────────────────────────────────────────
+        _SlotSpec("Zone1",  "Zone 1", "Zone",
+                  skill_priority=("Zone1" in DOUBLE_COVERAGE_SLOTS),
+                  prefer_elig="Womens 1 + 2"),
+        _SlotSpec("Zone4",  "Zone 4", "Zone"),
+        _SlotSpec("Zone5",  "Zone 5", "Zone"),
+        _SlotSpec("Zone8",  "Zone 8", "Zone",
+                  skill_priority=("Zone8" in DOUBLE_COVERAGE_SLOTS)),
+    ]
+
+    assignment, fallbacks = _lap_solve(
+        specs       = specs,
+        pool_list   = gpool,
+        placed_today= placed,
+        day_iso     = day_iso_str,
+        roster      = roster,
+        elig_fn     = elig,
+        has_hard_block_fn = has_hard_block,
+        score_fn    = score_placement,
+        tm_slots_by_date  = tm_slots_by_date,
+        backtoback_slots  = BACKTOBACK_SLOTS,
+        slot_avoid_by_tm  = SLOT_AVOID_BY_TM,
+        trainee_display   = TRAINEE_DISPLAY,
+        cell_map_day      = cell_map.get(day, {}),
+        day_name    = day_name_str,
+    )
+
+    # Log SOFT override and HARD fallback audit items
+    for fb in fallbacks:
+        if "SOFT_BLOCK" in fb["reason"]:
+            audit_items.append({"severity":"info","type":"LAP_SOFT_OVERRIDE",
+                "tm_name":None,"zone_slot":fb["slot_code"],
+                "detail":fb["reason"]})
+        elif assignment.get(fb["slot_code"]) is None:
+            audit_items.append({"severity":"warning","type":"LAP_UNRESOLVED",
+                "tm_name":None,"zone_slot":fb["slot_code"],
+                "detail":fb["reason"]})
+
+    # Write LAP assignments — then fall back via greedy place() for any None
+    for spec in specs:
+        slot = spec.slot_code
+        if slot not in cell_map.get(day, {}): continue
+        if slot in filled_slots: continue   # training pre-pass claimed it
+        dn = assignment.get(slot)
+        if dn and dn not in placed:
+            write_cell(day, slot, dn)
+            placed.add(dn)
+            filled_slots.add(slot)
+            _record_placement(day, slot, dn, spec.pool_type, spec.priority)
+        else:
+            # LAP couldn't resolve — greedy fallback for this slot only
+            place(day, slot, spec.elig_col, gpool, placed,
+                  pool_type=spec.pool_type, priority=spec.priority,
+                  prefer_elig=spec.prefer_elig,
+                  prefer_names=spec.prefer_names or None,
+                  avoid_names=spec.avoid_names or None,
+                  skill_priority=spec.skill_priority,
+                  soft_prefer_names=spec.soft_prefer_set or None)
+
+    # Audit both Z9 slots uncovered (same check as greedy path)
+    z9_filled   = "Zone9"   in filled_slots
+    z9sr_filled = "Zone9SR" in filled_slots
+    if not z9_filled and not z9sr_filled and "Zone9" in cell_map.get(day, {}):
+        audit_items.append({"severity":"critical","type":"Z9_AREA_UNCOVERED",
+            "tm_name":None,"detail":f"{day} {d}: Zone 9 AND Z9 SR both unstaffed (LAP) — smoke room area uncovered"})
+
+
 def pick(pool_list, placed_today, elig_col, zone_slot, prefer_elig=None, prefer_names=None,
          avoid_names=None, skip_trainees=True, skill_priority=False, soft_prefer_names=None,
          day=None):
@@ -1405,76 +1512,102 @@ for day in DAYS:
     training_prepass(day, placed)
 
     # ─────────────────────────────────────────────────────────────────
-    # NEW UNIFORM FILL ORDER (no weekday/weekend split)
-    # Brian's spec (4/28/2026):
-    #   1. Restrooms (most-constrained pool — gender-locked)
-    #   2. Admin    (specialty role — soft-prefer rockstars; rotation lets others in)
-    #   3. Z9 SR    (specialist Fri/Sat only)
-    #   4. Zones    (skip-priority order — Z9 last so it's first to skip when short)
-    #   5. Trash    (overflow)
-    #   6. MP       (more overflow / trainees)
+    # CONSTRAINED BLOCK FILL — Phase 4f: LAP or greedy
+    # LAP ("lap"): globally solves 10 RRs + Admin + Z9SR + Z1/Z4/Z5/Z8
+    #              in one Hungarian solve, then writes results.
+    # Greedy (default): sequential place() calls, byte-identical to
+    #              the original algorithm below.
     # ─────────────────────────────────────────────────────────────────
 
-    # ── 1. RESTROOMS — all 5 pairs, every day ─────────────────────────
-    # All RR slots are double-coverage candidates — skill_priority=True so
-    # the strongest available TM gets the slot (handles potential zone cover).
-    # RESTROOM_PREFERRED still hard-picks TMs with physical accommodation.
-    rr_pref = RESTROOM_PREFERRED if RESTROOM_PREFERRED else None
-    elig_mrr = {"MRR1":"Mens 1 + 2","MRR6":"Mens 6","MRR7":"Mens 7","MRR8":"Mens 8","MRR10":"Mens 10"}
-    elig_wrr = {"WRR1":"Womens 1 + 2","WRR6":"Womens 6","WRR7":"Womens 7","WRR8":"Womens 8","WRR10":"Womens 10"}
-    for s in ("MRR1","MRR6","MRR7","MRR8","MRR10"):
-        place(day, s, elig_mrr[s], gpool, placed, priority="Restroom",
-              prefer_names=rr_pref, skill_priority=(s in DOUBLE_COVERAGE_SLOTS))
-    for s in ("WRR1","WRR6","WRR7","WRR8","WRR10"):
-        place(day, s, elig_wrr[s], gpool, placed, priority="Restroom",
-              prefer_names=rr_pref, skill_priority=(s in DOUBLE_COVERAGE_SLOTS))
+    if PLACEMENT_METHOD == "lap":
+        # ── LAP solver: fills RRs + Admin + Z9SR + must-fill zones ───
+        _lap_fill_constrained_block(day, d, gpool, placed)
+        # Skip-priority (non-must-fill) zones are always greedy — LAP
+        # only covers the constrained block; remaining zones follow below.
+        zone_order_skip = [
+            ("Zone10", "Zone 10", None),            # skip 6th (most protected)
+            ("Zone3",  "Zone 3",  None),            # skip 5th
+            ("Zone2",  "Zone 2",  "Mens 1 + 2"),    # skip 4th
+            ("Zone7",  "Zone 7",  None),            # skip 3rd
+            ("Zone6",  "Zone 6",  None),            # skip 2nd
+            ("Zone9",  "Zone 9",  None),            # skip 1st (no specialist pref)
+        ]
+        for slot, ec, pref in zone_order_skip:
+            avoid = AVOID_PHYSICAL if slot == "Zone9" else None
+            place(day, slot, ec, gpool, placed, priority="Zone",
+                  prefer_elig=pref, avoid_names=avoid,
+                  skill_priority=(slot in DOUBLE_COVERAGE_SLOTS))
+    else:
+        # ── GREEDY (default) — original sequential fill ────────────────
+        # NEW UNIFORM FILL ORDER (no weekday/weekend split)
+        # Brian's spec (4/28/2026):
+        #   1. Restrooms (most-constrained pool — gender-locked)
+        #   2. Admin    (specialty role — soft-prefer rockstars; rotation lets others in)
+        #   3. Z9 SR    (specialist Fri/Sat only)
+        #   4. Zones    (skip-priority order — Z9 last so it's first to skip when short)
+        #   5. Trash    (overflow)
+        #   6. MP       (more overflow / trainees)
 
-    # ── 2. ADMIN — soft preference for Sheri O / Sherry B / Jamie / Tawnya ──
-    # Rockstars favored at the tiebreaker level; Gary / Sam / Kaylee / Cookie
-    # naturally rotate in once rockstars have done Admin earlier in the week.
-    place(day, "Admin", "Admin", gpool, placed, priority="Admin",
-          soft_prefer_names=ADMIN_PREFERRED)
+        # ── 1. RESTROOMS — all 5 pairs, every day ─────────────────────────
+        # All RR slots are double-coverage candidates — skill_priority=True so
+        # the strongest available TM gets the slot (handles potential zone cover).
+        # RESTROOM_PREFERRED still hard-picks TMs with physical accommodation.
+        rr_pref = RESTROOM_PREFERRED if RESTROOM_PREFERRED else None
+        elig_mrr = {"MRR1":"Mens 1 + 2","MRR6":"Mens 6","MRR7":"Mens 7","MRR8":"Mens 8","MRR10":"Mens 10"}
+        elig_wrr = {"WRR1":"Womens 1 + 2","WRR6":"Womens 6","WRR7":"Womens 7","WRR8":"Womens 8","WRR10":"Womens 10"}
+        for s in ("MRR1","MRR6","MRR7","MRR8","MRR10"):
+            place(day, s, elig_mrr[s], gpool, placed, priority="Restroom",
+                  prefer_names=rr_pref, skill_priority=(s in DOUBLE_COVERAGE_SLOTS))
+        for s in ("WRR1","WRR6","WRR7","WRR8","WRR10"):
+            place(day, s, elig_wrr[s], gpool, placed, priority="Restroom",
+                  prefer_names=rr_pref, skill_priority=(s in DOUBLE_COVERAGE_SLOTS))
 
-    # ── 3. Z9 SMOKING ROOM — specialist preference Fri/Sat only ──────
-    # Joy, Melissa, Mike S, Silvia get hard preference Fri/Sat; other days
-    # everyone eligible should rotate through.
-    z9sr_pref = ZONE9_WEEKEND_PREFERRED if day in ZONE9_PREF_DAYS else None
-    place(day, "Zone9SR", "Zone 9 SR", gpool, placed, priority="Zone-SR",
-          prefer_names=z9sr_pref, avoid_names=AVOID_PHYSICAL)
+        # ── 2. ADMIN — soft preference for Sheri O / Sherry B / Jamie / Tawnya ──
+        # Rockstars favored at the tiebreaker level; Gary / Sam / Kaylee / Cookie
+        # naturally rotate in once rockstars have done Admin earlier in the week.
+        place(day, "Admin", "Admin", gpool, placed, priority="Admin",
+              soft_prefer_names=ADMIN_PREFERRED)
 
-    # ── 4. ZONES — skip-priority order ───────────────────────────────
-    # Order produces Brian's intended skip priority on short-staffed nights:
-    #   Skip 1st: Z9    Skip 4th: Z2
-    #   Skip 2nd: Z6    Skip 5th: Z3
-    #   Skip 3rd: Z7    Skip 6th: Z10  (most-protected skippable)
-    # Must-fill: Z1, Z4, Z5, Z8 (positions 1-4)
-    # Updated 4/29/26 per Brian: Z10 protected last; Z3 drops before Z10
-    # since Z5 covers Z3 directly. New full order: Z9 → Z6 → Z7 → Z2 → Z3 → Z10.
-    zone_order = [
-        ("Zone1",  "Zone 1",  "Womens 1 + 2"),  # must-fill
-        ("Zone4",  "Zone 4",  None),            # must-fill
-        ("Zone5",  "Zone 5",  None),            # must-fill
-        ("Zone8",  "Zone 8",  None),            # must-fill
-        ("Zone10", "Zone 10", None),            # skip 6th (most protected)
-        ("Zone3",  "Zone 3",  None),            # skip 5th
-        ("Zone2",  "Zone 2",  "Mens 1 + 2"),    # skip 4th
-        ("Zone7",  "Zone 7",  None),            # skip 3rd
-        ("Zone6",  "Zone 6",  None),            # skip 2nd
-        ("Zone9",  "Zone 9",  None),            # skip 1st (no specialist pref)
-    ]
-    for slot, ec, pref in zone_order:
-        avoid = AVOID_PHYSICAL if slot == "Zone9" else None
-        place(day, slot, ec, gpool, placed, priority="Zone",
-              prefer_elig=pref, avoid_names=avoid,
-              skill_priority=(slot in DOUBLE_COVERAGE_SLOTS))
+        # ── 3. Z9 SMOKING ROOM — specialist preference Fri/Sat only ──────
+        # Joy, Melissa, Mike S, Silvia get hard preference Fri/Sat; other days
+        # everyone eligible should rotate through.
+        z9sr_pref = ZONE9_WEEKEND_PREFERRED if day in ZONE9_PREF_DAYS else None
+        place(day, "Zone9SR", "Zone 9 SR", gpool, placed, priority="Zone-SR",
+              prefer_names=z9sr_pref, avoid_names=AVOID_PHYSICAL)
 
-    # Audit: warn if BOTH Zone 9 and Z9 SR are unstaffed (smoke room
-    # area is then operationally uncovered — manual escalation needed).
-    z9_filled    = "Zone9"   in filled_slots
-    z9sr_filled  = "Zone9SR" in filled_slots
-    if not z9_filled and not z9sr_filled and "Zone9" in cell_map.get(day, {}):
-        audit_items.append({"severity":"critical","type":"Z9_AREA_UNCOVERED",
-            "tm_name":None,"detail":f"{day} {d}: Zone 9 AND Z9 SR both unstaffed — smoke room area uncovered"})
+        # ── 4. ZONES — skip-priority order ───────────────────────────────
+        # Order produces Brian's intended skip priority on short-staffed nights:
+        #   Skip 1st: Z9    Skip 4th: Z2
+        #   Skip 2nd: Z6    Skip 5th: Z3
+        #   Skip 3rd: Z7    Skip 6th: Z10  (most-protected skippable)
+        # Must-fill: Z1, Z4, Z5, Z8 (positions 1-4)
+        # Updated 4/29/26 per Brian: Z10 protected last; Z3 drops before Z10
+        # since Z5 covers Z3 directly. New full order: Z9 → Z6 → Z7 → Z2 → Z3 → Z10.
+        zone_order = [
+            ("Zone1",  "Zone 1",  "Womens 1 + 2"),  # must-fill
+            ("Zone4",  "Zone 4",  None),            # must-fill
+            ("Zone5",  "Zone 5",  None),            # must-fill
+            ("Zone8",  "Zone 8",  None),            # must-fill
+            ("Zone10", "Zone 10", None),            # skip 6th (most protected)
+            ("Zone3",  "Zone 3",  None),            # skip 5th
+            ("Zone2",  "Zone 2",  "Mens 1 + 2"),    # skip 4th
+            ("Zone7",  "Zone 7",  None),            # skip 3rd
+            ("Zone6",  "Zone 6",  None),            # skip 2nd
+            ("Zone9",  "Zone 9",  None),            # skip 1st (no specialist pref)
+        ]
+        for slot, ec, pref in zone_order:
+            avoid = AVOID_PHYSICAL if slot == "Zone9" else None
+            place(day, slot, ec, gpool, placed, priority="Zone",
+                  prefer_elig=pref, avoid_names=avoid,
+                  skill_priority=(slot in DOUBLE_COVERAGE_SLOTS))
+
+        # Audit: warn if BOTH Zone 9 and Z9 SR are unstaffed (smoke room
+        # area is then operationally uncovered — manual escalation needed).
+        z9_filled    = "Zone9"   in filled_slots
+        z9sr_filled  = "Zone9SR" in filled_slots
+        if not z9_filled and not z9sr_filled and "Zone9" in cell_map.get(day, {}):
+            audit_items.append({"severity":"critical","type":"Z9_AREA_UNCOVERED",
+                "tm_name":None,"detail":f"{day} {d}: Zone 9 AND Z9 SR both unstaffed — smoke room area uncovered"})
 
     # ── TRASH (both day types, before MP) ────────────────────────────
     place(day, "Trash1", "Trash 1", gpool, placed, priority="Trash", avoid_names=AVOID_PHYSICAL)
