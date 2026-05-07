@@ -1,14 +1,15 @@
 """
 brijkillian_stack.py — Unified app entry point
 
-Registers routes from GLCR Memory and ZDS into a single Reflex application
-with shared state, authentication, and infrastructure.
+Registers routes from GLCR Memory, ZDS, Shift HUD, and Admin into a single
+Reflex application with shared state, authentication, and infrastructure.
 
 The app serves:
   - /login, /auth/callback (public, GLCR auth)
   - / (GLCR Today dashboard, protected)
+  - /shift (Shift HUD, viewer-OK)
   - /search, /logs, /people, /threads, /tasks, /patterns, /health, /recap, /floor, /areas, /writeups, /deployment (protected)
-  - /zds/* (Zone Deployment System, currently public)
+  - /zds/* (Zone Deployment System, viewer-OK)
 """
 
 import reflex as rx
@@ -28,6 +29,7 @@ from apps.glcr.routes import (
     VIEWER_OK_ROUTES as GLCR_VIEWER_OK,
 )
 from apps.zds.routes import ROUTES as ZDS_ROUTES, PUBLIC_ROUTES as ZDS_PUBLIC
+from apps.shift.routes import ROUTES as SHIFT_ROUTES
 from apps.admin.routes import ROUTES as ADMIN_ROUTES
 
 # ── Keyboard shortcut script ──────────────────────────────────────────────────
@@ -196,6 +198,8 @@ app = rx.App(
         # ── Nav rail (Phase 2: 60px unified left rail) ────────────────────
         rx.el.link(rel="stylesheet", href="/nav_rail.css"),
         rx.el.script(src="/avatar_menu.js"),
+        # ── Shift HUD (Phase 3: /shift page) ──────────────────────────────
+        rx.el.link(rel="stylesheet", href="/shift_hud.css"),
     ],
 )
 
@@ -237,6 +241,16 @@ for entry in GLCR_ROUTES:
     else:
         kwargs: dict = {"route": route, "title": title, "on_load": computed_on_load}
         app.add_page(_with_grok(page_fn), **kwargs)
+
+# Register Shift HUD routes (TIER 2 — viewer-OK)
+for entry in SHIFT_ROUTES:
+    page_fn, route, title, on_load = entry
+    kwargs = {
+        "route":   route,
+        "title":   title,
+        "on_load": [AuthState.require_unlock] + (on_load or []),
+    }
+    app.add_page(_with_zds_chrome(page_fn), **kwargs)
 
 # Register ZDS routes (all TIER 2 — viewer-OK)
 for entry in ZDS_ROUTES:

@@ -1,0 +1,88 @@
+"""
+apps/shift/types.py — TypedDicts for the Shift HUD state vars.
+
+These mirror the dict shapes produced by ShiftState.on_load (which reads
+ZdsState zone/rr/aux/break_rows for tonight's deployment, plus shared/db.py
+for tasks and activity).  All fields are str / int / bool so Reflex can
+infer them inside rx.foreach bodies without manual .to() casts.
+"""
+
+from __future__ import annotations
+
+from typing import TypedDict
+
+
+class HudZoneSlot(TypedDict):
+    """Read-only snapshot of one zone slot for the HUD zone grid."""
+
+    slot_key: str       # "Z1" … "Z10"
+    tm_name: str        # Display name, or "—" when open
+    position: str       # Slot descriptor, e.g. "Outdoor Smoking · Elevators"
+    wave: int           # 1 | 2 | 3
+    wave_time: str      # "01:00" | "02:30" | "04:00"
+    status: str         # "ok" | "lock" | "warn" | "open"
+    is_locked: bool
+    is_called_off: bool
+
+
+class HudRRSlot(TypedDict):
+    """Read-only restroom slot for the HUD RR section."""
+
+    slot_key: str       # "RR 1+2", "RR 6", …
+    mens_name: str      # "—" when open
+    womens_name: str
+    status: str         # "ok" | "open"
+
+
+class HudAuxSlot(TypedDict):
+    """Read-only aux slot for the HUD Auxiliary section."""
+
+    slot_key: str       # "Z9 SR", "Admin", "Trash 1", …
+    tm_name: str        # "—" when open
+    status: str         # "ok" | "open"
+
+
+class HudBreakWave(TypedDict):
+    """One break wave panel in the HUD break strip."""
+
+    wave_num: int       # 1 | 2 | 3
+    wave_label: str     # "W1" | "W2" | "W3"
+    time_range: str     # "01:00 – 01:30"
+    state: str          # "done" | "active" | "queue"
+    on_count: int       # how many TMs currently on break
+    total_count: int    # how many TMs in this wave
+    names: list[str]    # TM display names in this wave
+
+
+class HudRosterChip(TypedDict):
+    """One chip in the roster strip on the right panel."""
+
+    name: str
+    kind: str           # "g" grave | "p" pm_ol | "a" am_ol | "x" off
+    zone: str           # assigned zone label, or "—"
+
+
+class HudCarryOverItem(TypedDict):
+    """One line in the ⚑ Carried-over panel."""
+
+    text: str
+    from_label: str     # "Lopez · 6:42A"
+
+
+class HudTask(TypedDict):
+    """One tonight-task row."""
+
+    id: str
+    title: str
+    due_label: str      # "by 03:00" | "anytime" | "06:45"
+    tag: str            # "BEO" | "TASK" | "WALK" | "MEET" etc.
+    is_overdue: bool
+
+
+class HudActivityEntry(TypedDict):
+    """One row in the activity feed."""
+
+    ts_display: str     # "01:42"
+    who: str            # "Joy" | "Brian" | "System"
+    what: str           # one-line description
+    color_key: str      # "gold" | "ink2" | "green" | "red" | "ink3"

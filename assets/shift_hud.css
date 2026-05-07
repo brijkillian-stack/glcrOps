@@ -1,0 +1,156 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   assets/shift_hud.css — Shift HUD layout + component styles (Phase 3)
+
+   All color values reference CSS custom properties from ops_tokens.css.
+   The .shift-hud div wraps the entire page content (inside the nav-rail
+   right column produced by _with_zds_chrome).
+
+   Layout sketch:
+     .shift-hud  { display: flex; flex-direction: column; height: 100vh }
+       .hud-header   { sticky header with timeline }
+       .hud-body     { display: grid; grid-template-columns: 1.55fr 1fr }
+         .hud-left   { overflowY: auto }
+         .hud-right  { overflowY: auto }
+     .hud-thumb-cluster { position: fixed; bottom: 24px; right: 24px }
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page shell ─────────────────────────────────────────────────────────── */
+
+.shift-hud {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.hud-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+}
+
+.hud-header-top-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+
+.hud-timeline {
+  /* --hud-now-pct is set by the inline JS tick */
+  --hud-now-pct: 0%;
+  padding-top: 16px;
+  padding-bottom: 14px;
+}
+
+/* ── Body grid ───────────────────────────────────────────────────────────── */
+
+.hud-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 1px;
+  background: var(--line);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.hud-left,
+.hud-right {
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.hud-left {
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hud-right {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Thumb cluster ───────────────────────────────────────────────────────── */
+
+.hud-thumb-cluster {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 100;
+}
+
+.hud-thumb-cluster button {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.hud-thumb-cluster button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.hud-thumb-cluster button:active {
+  transform: translateY(0);
+}
+
+/* ── Zone card status borders (referenced from shift_zone_card.py inline styles) */
+/* These are used as token shorthands — actual values from ops_tokens.css      */
+
+.hud-zone-ok    { border-color: var(--line2); background: var(--panel2); }
+.hud-zone-lock  { border-color: var(--gold);  background: var(--gold-dim); }
+.hud-zone-warn  { border-color: var(--amber); background: var(--amber-dim); }
+.hud-zone-open  { border-color: var(--red);   background: var(--red-dim); }
+
+/* ── NOW chip ────────────────────────────────────────────────────────────── */
+
+.hud-now-chip {
+  /* Positioned by inline JS + inline style. This class ensures it's always
+     findable via querySelector. */
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Scrollbar cosmetics (dark mode) ─────────────────────────────────────── */
+
+[data-theme="dark"] .hud-left::-webkit-scrollbar,
+[data-theme="dark"] .hud-right::-webkit-scrollbar {
+  width: 4px;
+}
+
+[data-theme="dark"] .hud-left::-webkit-scrollbar-track,
+[data-theme="dark"] .hud-right::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-theme="dark"] .hud-left::-webkit-scrollbar-thumb,
+[data-theme="dark"] .hud-right::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 999px;
+}
+
+/* ── Responsive safety: prevent overflow on narrow viewports ─────────────── */
+
+@media (max-width: 900px) {
+  .hud-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+}

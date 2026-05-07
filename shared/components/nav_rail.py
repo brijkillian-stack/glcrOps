@@ -85,7 +85,7 @@ def nav_rail() -> rx.Component:
         rx.el.div(class_name="nav-rail-divider"),
 
         # ── Nav items ─────────────────────────────────────────────────────
-        _nav_item("⊙", "Shift",    "/today",    active == "/today"),
+        _nav_item("⊙", "Shift",    "/shift",    active == "/shift"),
         _nav_item("▦", "ZDS",      "/zds",      active.contains("/zds")),
         _nav_item("⌕", "Search",   "/search",   active == "/search"),
         _nav_item("◍", "People",   "/people",   active == "/people"),

@@ -4,6 +4,55 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Session gshiftpage_phase3_shifthud (Sonnet)
+
+### GShiftPage Phase 3 — Shift HUD at /shift
+
+- **`apps/shift/`** (new sub-app) — Sibling to `apps/glcr/` and `apps/zds/`.
+  Contains `types.py`, `state.py`, `routes.py`, `pages/__init__.py`, `pages/index.py`.
+- **`apps/shift/types.py`** — TypedDicts for HUD state vars: `HudZoneSlot`,
+  `HudRRSlot`, `HudAuxSlot`, `HudBreakWave`, `HudRosterChip`, `HudCarryOverItem`,
+  `HudTask`, `HudActivityEntry`. All fields str/int/bool so Reflex infers them
+  inside `rx.foreach` without manual `.to()` casts.
+- **`apps/shift/state.py`** — `ShiftState` with `on_load` that:
+  reads tonight's zone/rr/aux/break data from `ZdsState` (via `get_state()`),
+  builds deployment summary bar counts (filled / locked / warn / open / ok),
+  builds roster chips with kind classification (grave / pm_ol / am_ol / off),
+  reads tasks from `shared/db.get_tonight_tasks()`, marks overdue tasks as
+  ⚑ carry-over items, reads activity feed from `shared/db.get_activity_feed()`.
+  Header derives shift date label, greeting (Good morning/afternoon/evening),
+  and elapsed-time live label.
+- **`apps/shift/pages/index.py`** — Full HUD page composition matching
+  `design/gshiftpage/shift-hud-hifi.jsx` layout exactly:
+  sticky gradient header (eyebrow · serif greeting · pills · timeline),
+  body `1.55fr | 1fr` grid. Left: deployment headline + 5×2 zone grid + RR+Aux
+  2-col + break wave strip. Right: roster chips + ⚑ carried-over amber panel +
+  tonight tasks + activity feed. `position:fixed` thumb cluster bottom-right.
+- **`apps/shift/routes.py`** — `ROUTES = [(shift_page, "/shift", "Shift HUD · GLCR", [ShiftState.on_load])]`.
+- **`shared/components/shift_zone_card.py`** (new) — Read-only `shift_zone_card(slot)`
+  rendered via `rx.foreach`. Status palette: ok → line2/panel2, lock → gold/gold-dim,
+  warn → amber/amber-dim, open → red/red-dim. Footer shows wave number + wave time.
+- **`shared/components/shift_timeline.py`** (new) — `shift_timeline()` with 7 phase
+  segments (Open/Wave1/Mid/Wave2/Late/Wave3/Close by percentage of 8-hr window),
+  wave tint fills, NOW marker gold line + chip, progress fill driven by
+  `--hud-now-pct` CSS custom property. Inline JS ticks every 60s, no page reload.
+  Bottom row: 9 time ticks 11P → 7A.
+- **`shared/components/thumb_cluster.py`** (new) — `thumb_cluster()` fixed
+  bottom-right: ⚑ Call-out (red) · ★ Kudos (gold) · ⊟ BEO (blue) + 64×64 blue
+  gradient FAB. Phase 3 ships read-only; capture wiring follows in Phase 4.
+- **`assets/shift_hud.css`** (new) — HUD layout: `.shift-hud` flex column,
+  `.hud-header` gradient, `.hud-body` 1.55fr|1fr grid, `.hud-left/.hud-right`
+  overflow-y:auto, `.hud-thumb-cluster` fixed, `.hud-now-chip` pointer-events:none,
+  scrollbar cosmetics, responsive fallback to single column at <900px.
+- **`brijkillian_stack/brijkillian_stack.py`** — Imports `SHIFT_ROUTES`;
+  registers shift routes as TIER-2 (viewer-OK, `require_unlock` guard) via
+  `_with_zds_chrome` wrapper; adds `/shift_hud.css` to `head_components`.
+  Docstring updated to list `/shift`.
+- **`shared/components/nav_rail.py`** — ⊙ Shift nav chip now links to `/shift`
+  (was `/today`) with `active == "/shift"` match.
+
+---
+
 ## 2026-05-07 — Session gshiftpage_phase2_navrail (Sonnet)
 
 ### GShiftPage Phase 2 — Unified 60px nav rail + avatar dropdown + Sudo Admin stub
