@@ -25,6 +25,8 @@ OV_PTO        = "PTO Hourly"
 OV_MDL        = "MDL"
 OV_OFF        = "OFF"
 OV_CALLED_OFF = "called_off"
+OV_PDL        = "PDL"
+OV_OTHER      = "Other"
 
 
 class ScheduleEditorState(rx.State):
@@ -294,6 +296,16 @@ class ScheduleEditorState(rx.State):
     @rx.event
     def mark_cell_off(self):
         self._write_override(OV_OFF)
+
+    @rx.event
+    def mark_cell_pdl(self):
+        """Mark as Paid Duty Leave (PDL). Renders as blue 'other' in the grid."""
+        self._write_override(OV_PDL)
+
+    @rx.event
+    def mark_cell_other(self):
+        """Mark as Other (generic non-standard absence). Renders as blue 'other'."""
+        self._write_override(OV_OTHER)
 
     @rx.event
     def mark_cell_called_off(self):

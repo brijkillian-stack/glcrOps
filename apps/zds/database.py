@@ -132,6 +132,93 @@ def unlink_schedule_from_week(week_id: str) -> bool:
     return update_week_schedule_path(week_id, "")
 
 
+# ── Canonical slot template (27 rows per night) ───────────────────────────────
+# Matches the sort_order / slot_type / rr_side schema verified against existing
+# zone_assignment rows. Used by ensure_zone_slots_for_night().
+_SLOT_TEMPLATE: list[tuple[str, str, Optional[str], int]] = [
+    # (slot_type, slot_key,    rr_side,   sort_order)
+    ("zone", "zone_1",    None,      1),
+    ("zone", "zone_2",    None,      2),
+    ("zone", "zone_3",    None,      3),
+    ("zone", "zone_4",    None,      4),
+    ("zone", "zone_5",    None,      5),
+    ("zone", "zone_6",    None,      6),
+    ("zone", "zone_7",    None,      7),
+    ("zone", "zone_8",    None,      8),
+    ("zone", "zone_9",    None,      9),
+    ("zone", "zone_10",   None,     10),
+    ("rr",   "rr_1_2",   "mens",   11),
+    ("rr",   "rr_1_2",   "womens", 12),
+    ("rr",   "rr_6",     "mens",   13),
+    ("rr",   "rr_6",     "womens", 14),
+    ("rr",   "rr_7",     "mens",   15),
+    ("rr",   "rr_7",     "womens", 16),
+    ("rr",   "rr_8",     "mens",   17),
+    ("rr",   "rr_8",     "womens", 18),
+    ("rr",   "rr_10",    "mens",   19),
+    ("rr",   "rr_10",    "womens", 20),
+    ("aux",  "z9_sr",    None,     21),
+    ("aux",  "admin",    None,     22),
+    ("aux",  "trash_1",  None,     23),
+    ("aux",  "trash_2",  None,     24),
+    ("aux",  "support_1",None,     25),
+    ("aux",  "support_2",None,     26),
+    ("aux",  "support_3",None,     27),
+]
+
+
+def ensure_zone_slots_for_night(night_id: str) -> int:
+    """Idempotently create all 27 zone_assignment slot rows for a night.
+
+    This is a no-op if rows already exist (skips existing slot_key/rr_side
+    combinations). Returns the number of rows actually inserted (0 if already
+    fully seeded).
+
+    Called by sync_engine_to_week before building the slot_lookup so new
+    weeks have rows to update rather than silently dropping placements as
+    'unmapped'.
+    """
+    if not night_id:
+        return 0
+    try:
+        sb = _client()
+        # 1. Fetch existing (slot_key, rr_side) pairs for this night
+        res = (
+            sb.table("zone_assignments")
+            .select("slot_key, rr_side")
+            .eq("night_id", night_id)
+            .execute()
+        )
+        existing: set[tuple] = set()
+        for row in (res.data or []):
+            existing.add((row["slot_key"], row.get("rr_side")))
+
+        # 2. Insert missing slots
+        to_insert = []
+        for slot_type, slot_key, rr_side, sort_order in _SLOT_TEMPLATE:
+            if (slot_key, rr_side) in existing:
+                continue
+            payload: dict = {
+                "night_id":   night_id,
+                "slot_type":  slot_type,
+                "slot_key":   slot_key,
+                "sort_order": sort_order,
+                "is_filled":  False,
+                "is_empty":   True,
+                "is_locked":  False,
+            }
+            if rr_side:
+                payload["rr_side"] = rr_side
+            to_insert.append(payload)
+
+        if to_insert:
+            sb.table("zone_assignments").insert(to_insert).execute()
+        return len(to_insert)
+    except Exception as exc:
+        print(f"[ensure_zone_slots_for_night] {exc}")
+        return 0
+
+
 def reset_week_placements(week_id: str) -> int:
     """Phase P — clear every TM assignment on the week's nights so the user
     can re-run the engine fresh. Locked slots are also cleared (the user
@@ -1431,7 +1518,13 @@ def sync_engine_to_week(
         return {"updated": 0, "skipped_locked": 0, "unmapped": 0,
                 "unresolved_cleared": 0, "error": "No nights found for this week."}
 
-    # 2. Fetch all zone_assignments for the week: build lookup
+    # 2a. Ensure every night in this week has its 27 slot rows seeded.
+    #     No-op if rows already exist; creates them on first engine run for a
+    #     new week so sync_engine_to_week doesn't silently drop placements.
+    for nid in night_ids:
+        ensure_zone_slots_for_night(nid)
+
+    # 2b. Fetch all zone_assignments for the week: build lookup
     #    Key: (night_id, slot_key, rr_side)  →  {id, is_locked}
     slot_lookup: dict[tuple, dict] = {}
     for nid in night_ids:

@@ -545,6 +545,20 @@ def _cell_popover() -> rx.Component:
                             variant="soft", color_scheme="gray",
                             cursor="pointer",
                         ),
+                        rx.button(
+                            rx.icon("shield-check", size=14),
+                            "Mark PDL",
+                            on_click=ScheduleEditorState.mark_cell_pdl,
+                            variant="soft", color_scheme="blue",
+                            cursor="pointer",
+                        ),
+                        rx.button(
+                            rx.icon("circle-ellipsis", size=14),
+                            "Mark Other",
+                            on_click=ScheduleEditorState.mark_cell_other,
+                            variant="soft", color_scheme="cyan",
+                            cursor="pointer",
+                        ),
                         columns="2", gap="6px", width="100%",
                     ),
                     rx.button(
