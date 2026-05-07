@@ -2,7 +2,13 @@
 
 from shared.components.homepage import home_page
 
-from .pages.today import today_page
+# Phase 3 (GShiftPage): /today now renders the new Shift HUD instead of
+# the legacy Memory dashboard. The old today_page + TodayState are kept
+# in the codebase for /admin/today (legacy view) and any deep-link
+# bookmarks that haven't been audited yet.
+from apps.shift.pages.index import shift_page
+from apps.shift.state import ShiftState
+from .pages.today import today_page  # legacy — still used by /admin/today
 from .pages.search import search_page
 from .pages.tasks import tasks_page
 from .pages.people import people_page
@@ -58,9 +64,11 @@ ROUTES = [
     (auth_callback_page, "/auth/callback", "Signing in…",           []),
 
     # Protected routes — gated by AuthState.require_unlock (PIN site session)
-    # / is the three-card launchpad; Today moves to /today.
-    (home_page, "/", "Graves Ops", []),
-    (today_page, "/today", "Today · GLCR Memory", [TodayState.load_today, TodayState.start_live_updates]),
+    # / is the three-card launchpad; /today + /shift both render the new
+    # Shift HUD (Phase 3). The legacy Memory dashboard moved to
+    # /admin/today behind the Sudo Admin hub.
+    (home_page,  "/",      "Graves Ops",                 []),
+    (shift_page, "/today", "Today · GLCR",               [ShiftState.on_load]),
     (search_page, "/search", "Search · GLCR Memory", [SearchState.clear_search]),
     (logs_page, "/logs", "Logs · GLCR Memory", [LogsState.load_logs]),
     (people_page, "/people", "People · GLCR Memory", [PeopleState.load_people]),
