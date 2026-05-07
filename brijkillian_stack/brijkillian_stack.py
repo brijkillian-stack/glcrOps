@@ -159,9 +159,8 @@ def _with_zds_chrome(page_fn):
 # ── App initialization ────────────────────────────────────────────────────────
 
 app = rx.App(
-    # Hide the "Built with Reflex" badge in the corner — internal ops tool,
-    # not a public-facing site that needs framework attribution.
-    show_built_with_reflex=False,
+    # Note: show_built_with_reflex was removed in Reflex 0.9.2.
+    # Badge suppression is no longer a constructor arg.
     stylesheets=[
         # Google Fonts
         "https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap",
