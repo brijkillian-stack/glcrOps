@@ -673,11 +673,25 @@ def main(argv=None):
         print("[sim] No --config specified — will run with DB active config for both legs")
         proposed_base = _load_active_config()
 
-    # Load baseline config (DB active) when --baseline
+    # Load baseline config when --baseline.
+    # Phase 4f: this is the A/B harness for placement_method. If the proposed
+    # config opts into LAP, force the baseline to greedy (and vice versa) so
+    # the sim actually compares the two algorithms — otherwise both legs run
+    # the same method and every Δfill is +0.000, which is what just bit us.
+    # If the proposed config doesn't specify placement_method, we fall back to
+    # DB active which is fine.
     baseline_cfg: dict | None = None
     if args.baseline:
         baseline_cfg = _load_active_config()
-        print(f"[sim] Baseline config: DB active weights")
+        prop_method = str(proposed_base.get("placement_method", "greedy")).lower()
+        if prop_method == "lap":
+            baseline_cfg["placement_method"] = "greedy"
+            print("[sim] Baseline config: DB active weights, placement_method=greedy (forced for A/B vs proposed lap)")
+        elif prop_method == "greedy":
+            baseline_cfg["placement_method"] = "lap"
+            print("[sim] Baseline config: DB active weights, placement_method=lap (forced for A/B vs proposed greedy)")
+        else:
+            print(f"[sim] Baseline config: DB active weights (placement_method={baseline_cfg.get('placement_method', 'greedy')})")
 
     # Discover schedule files
     schedules = _find_schedules(args.weeks)
