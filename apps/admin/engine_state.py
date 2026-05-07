@@ -103,12 +103,32 @@ class EngineConfiguratorState(rx.State):
     history_rows: list[dict] = []
     history_loading: bool = False
 
-    # ── Simulation results ───────────────────────────────────────────────
+    # ── Single-shot simulation results ──────────────────────────────────
     sim_placements: list[dict] = []
     sim_unresolved: list[dict] = []
     sim_error: str = ""
     sim_config_used: dict = {}
     sim_ran: bool = False
+
+    # ── Multi-week stochastic simulation (Phase 4e Part B) ───────────────
+    # Toggle between single-shot dry run and multi-week stochastic sim
+    sim_mode: str = "single"          # "single" | "multi"
+    # Multi-week sim config
+    msim_weeks: int = 2               # number of historical schedules to iterate
+    msim_runs: int = 5                # simulation runs per schedule
+    msim_callout_rate: float = 2.0   # Poisson λ: avg grave call-offs per night
+    msim_seed: int = 42               # RNG seed for reproducibility
+    msim_compare_baseline: bool = False  # also run DB active config for comparison
+    # Multi-week sim results
+    msim_running: bool = False
+    msim_error: str = ""
+    msim_ran: bool = False
+    msim_agg_proposed: dict = {}      # aggregated metrics for proposed config
+    msim_agg_baseline: dict = {}      # aggregated metrics for baseline (if --baseline)
+    msim_run_rows: list[dict] = []    # per-run flat rows for table display
+    msim_json_path: str = ""          # path to sim_results.json
+    msim_md_path: str = ""            # path to sim_report.md
+    msim_elapsed_s: float = 0.0
 
     # ── Saved baseline (for diff) ────────────────────────────────────────
     _saved_weights: dict = {}
@@ -356,3 +376,104 @@ class EngineConfiguratorState(rx.State):
             self.sim_error = f"Simulation error: {exc}"
         finally:
             self.simulating = False
+
+    # ── Multi-week sim setters ───────────────────────────────────────────
+
+    @rx.event
+    def set_sim_mode(self, mode: str):
+        self.sim_mode = mode
+
+    @rx.event
+    def set_msim_weeks(self, v: int):
+        self.msim_weeks = max(1, int(v))
+
+    @rx.event
+    def set_msim_runs(self, v: int):
+        self.msim_runs = max(1, int(v))
+
+    @rx.event
+    def set_msim_callout_rate(self, v: float):
+        self.msim_callout_rate = max(0.0, float(v))
+
+    @rx.event
+    def set_msim_seed(self, v: int):
+        self.msim_seed = int(v)
+
+    @rx.event
+    def set_msim_compare_baseline(self, v: bool):
+        self.msim_compare_baseline = bool(v)
+
+    # ── Multi-week stochastic simulation ─────────────────────────────────
+
+    @rx.event
+    async def run_multi_week_simulation(self):
+        """Run the Phase 4e multi-week stochastic simulator.
+
+        Invokes simulate_weeks.py as a library call (not subprocess) so we
+        stay in-process and can return structured results to the UI.
+        Runs on the executor to keep the event loop free.
+        """
+        self.msim_running = True
+        self.msim_error   = ""
+        self.msim_ran     = False
+        self.msim_run_rows = []
+        self.msim_agg_proposed = {}
+        self.msim_agg_baseline = {}
+
+        config_override = {
+            "weights":       self._weights_dict(),
+            "thresholds":    self._thresholds_dict(),
+            "headcount":     self._headcount_dict(),
+            "slot_priority": {row["slot"]: row["priority"] for row in self.slot_difficulty_rows},
+        }
+        weeks        = self.msim_weeks
+        runs         = self.msim_runs
+        callout_rate = self.msim_callout_rate
+        seed         = self.msim_seed
+        compare_bl   = self.msim_compare_baseline
+
+        def _do_sim():
+            import sys
+            from pathlib import Path
+            _engine_dir = Path(__file__).resolve().parent.parent / "apps" / "zds" / "engine"
+            if str(_engine_dir.parent.parent.parent) not in sys.path:
+                sys.path.insert(0, str(_engine_dir.parent.parent.parent))
+            # Import the simulator as a library
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "simulate_weeks",
+                str(_engine_dir / "simulate_weeks.py")
+            )
+            sim_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sim_mod)
+
+            import tempfile, json as _json
+            with tempfile.TemporaryDirectory() as tmp:
+                from pathlib import Path as _Path
+                cfg_file = _Path(tmp) / "proposed.json"
+                cfg_file.write_text(_json.dumps(config_override))
+                argv = [
+                    "--weeks",        str(weeks),
+                    "--runs",         str(runs),
+                    "--seed",         str(seed),
+                    "--callout-rate", str(callout_rate),
+                    "--config",       str(cfg_file),
+                ]
+                if compare_bl:
+                    argv.append("--baseline")
+                return sim_mod.main(argv)
+
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(None, _do_sim)
+            if result is None:
+                self.msim_error = "Simulation returned no results."
+            else:
+                self.msim_agg_proposed = result.get("agg_proposed", {})
+                self.msim_agg_baseline = result.get("agg_baseline", {})
+                self.msim_json_path    = result.get("json", "")
+                self.msim_md_path      = result.get("md", "")
+                self.msim_ran = True
+        except Exception as exc:
+            self.msim_error = f"Multi-week sim error: {exc}"
+        finally:
+            self.msim_running = False

@@ -116,6 +116,20 @@ if "--config-override" in sys.argv:
         _argv_clean.append(_a)
     sys.argv = _argv_clean
 
+# ── SIMULATED UNAVAILABLE (Phase 4e — stochastic simulator) ──────────
+# When simulate_weeks.py runs fill_engine in a simulated call-off scenario
+# it injects a "simulated_unavailable" list into the config_override JSON.
+# fill_engine strips those TMs from all daily pools after parsing the schedule
+# so the board fills as-if those people called off. No-op in production runs.
+_SIMULATED_UNAVAILABLE: set[str] = set()
+if _CONFIG_OVERRIDE.get("simulated_unavailable"):
+    for _sa in _CONFIG_OVERRIDE["simulated_unavailable"]:
+        _dn_sim = str(_sa).strip().lower()
+        if _dn_sim:
+            _SIMULATED_UNAVAILABLE.add(_dn_sim)
+    if _SIMULATED_UNAVAILABLE:
+        print(f"  [sim] {len(_SIMULATED_UNAVAILABLE)} TM(s) simulated as unavailable")
+
 # ── AUTO-DETECT SCHEDULE FILE ─────────────────────────────────────────
 # Default: most recently modified .xlsx in Weekly Schedules.
 # Override: pass the filename as a CLI arg, e.g.:
@@ -195,7 +209,89 @@ if _WEEK_ID:
 else:
     print(f"  Week ID: not found — engine_overrides skipped for this run.")
 
-# Sort days by the order they appear in the schedule (Fri first → Thu last)
+# ── Phase 4e helpers ─────────────────────────────────────────────────────────
+
+def _slot_key_to_engine_code(slot_key: str, rr_side: str = "") -> str:
+    """Map DB zone_assignments.slot_key + rr_side → fill_engine slot code.
+    E.g. "zone_7" → "Zone7", "rr_1_2"/"mens" → "MRR1".
+    Returns empty string for unknown/unmapped keys."""
+    if not slot_key:
+        return ""
+    sk = slot_key.lower()
+    if sk.startswith("zone_"):
+        return f"Zone{sk[5:]}"          # "zone_10" → "Zone10"
+    if sk == "z9_sr":
+        return "Zone9SR"
+    if sk.startswith("rr_"):
+        num_part = sk[3:]               # "1_2", "6", "7", "8", "10"
+        num = "1" if num_part == "1_2" else num_part
+        prefix = "M" if (rr_side or "").lower() == "mens" else "W"
+        return f"{prefix}RR{num}"
+    _aux_map = {
+        "admin": "Admin", "trash_1": "Trash1", "trash_2": "Trash2",
+        "support_1": "MP1", "support_2": "MP2", "support_3": "Support3",
+    }
+    return _aux_map.get(sk, "")
+
+
+def _load_prior_placements() -> dict:
+    """Load current-week DB zone assignments → {day_name: {slot_code: display_name}}.
+
+    Used by scorecard.prior_run_continuity to penalize displacing stable picks
+    when comparing a proposed config against what was placed last run.
+    Returns {} if WEEK_ID is unknown or DB query fails — component stays inactive.
+    """
+    if not _WEEK_ID:
+        return {}
+    try:
+        sb = _get_db_client()
+        # 1. Night_id → day_name map for this week
+        nights_res = (
+            sb.table("nights")
+            .select("id, day_name")
+            .eq("week_id", _WEEK_ID)
+            .execute()
+        ).data or []
+        night_to_day = {n["id"]: n["day_name"] for n in nights_res if n.get("id")}
+        if not night_to_day:
+            return {}
+        # 2. Filled zone_assignments for those nights
+        za_res = (
+            sb.table("zone_assignments")
+            .select("night_id, slot_key, rr_side, tm_id")
+            .in_("night_id", list(night_to_day.keys()))
+            .eq("is_filled", True)
+            .execute()
+        ).data or []
+        if not za_res:
+            return {}
+        # 3. tm_id → display_name
+        tm_ids = list({r["tm_id"] for r in za_res if r.get("tm_id")})
+        prof_res = (
+            sb.table("tm_profiles")
+            .select("tm_id, display_name")
+            .in_("tm_id", tm_ids)
+            .execute()
+        ).data or []
+        tmid_to_dn = {p["tm_id"]: p["display_name"] for p in prof_res}
+        # 4. Build result
+        result: dict[str, dict[str, str]] = {}
+        for row in za_res:
+            day_name = night_to_day.get(row.get("night_id", ""), "")
+            dn = tmid_to_dn.get(row.get("tm_id", ""), "")
+            if not (day_name and dn):
+                continue
+            code = _slot_key_to_engine_code(row.get("slot_key", ""), row.get("rr_side") or "")
+            if code:
+                result.setdefault(day_name, {})[code] = dn
+        total = sum(len(v) for v in result.values())
+        print(f"  Prior placements: {total} assignments across {len(result)} day(s)")
+        return result
+    except Exception as _pp_err:
+        print(f"  [warn] prior_placements load failed ({_pp_err}) — continuity inactive")
+        return {}
+
+# ── Sort days by the order they appear in the schedule (Fri first → Thu last)
 DAYS = sorted(DAY_ORDER, key=lambda d: _all_dates.index(
     next((dt for dt in _all_dates if dt.strftime("%A") == d), _all_dates[0]))
     if d in [dt.strftime("%A") for dt in _all_dates] else 99)
@@ -605,6 +701,31 @@ if ARCHIVE_PATH.exists():
 else:
     print("  No archive — rotation starts fresh")
 
+# ── A.1: Build sweeper_history from archive (Phase 4e) ───────────────
+# sweeper_history: {display_name: [iso_date, ...]} counting recent nights
+# in SWEEPER_TAGGED_SLOTS within the last 14 days. Each entry in the list
+# is the last-seen date for one sweeper slot so len() gives a conservative
+# count of recent sweeper exposure. Passed to scorecard.init() so the
+# sweeper_rotation_penalty component has live data.
+from glcr_engine.config import SWEEPER_TAGGED_SLOTS as _SWEEPER_TAGGED_SLOTS
+_SWEEPER_WINDOW = timedelta(days=14)
+sweeper_history: dict[str, list] = {}
+for _dn_sw, _slot_dates_sw in archive_history.items():
+    _recent: list[str] = []
+    for _slot_sw, _last_d_sw in _slot_dates_sw.items():
+        if _slot_sw in _SWEEPER_TAGGED_SLOTS and _last_d_sw:
+            if (ANCHOR_DATE - _last_d_sw) <= _SWEEPER_WINDOW:
+                _recent.append(_last_d_sw.isoformat())
+    if _recent:
+        sweeper_history[_dn_sw] = _recent
+print(f"  Sweeper history: {len(sweeper_history)} TM(s) with recent sweeper nights (14-day window)")
+
+# ── A.2: Load prior placements from DB (Phase 4e) ────────────────────
+# prior_placements: {day_name: {slot_code: display_name}} from the most
+# recent engine run stored in zone_assignments. Used by scorecard's
+# prior_run_continuity component to penalize displacing stable picks.
+prior_placements: dict = _load_prior_placements()
+
 # ── 3. SCHEDULE ──────────────────────────────────────────────────────
 print("[3/7] Parsing TM Schedule...")
 swb = openpyxl.load_workbook(SCHEDULE_PATH, data_only=True)
@@ -715,6 +836,19 @@ for d in daily_pools:
     for pk in ["grave","pm_ol","am_ol"]:
         daily_pools[d][pk].sort(key=lambda k: roster.get(k,{}).get("rank",999))
 
+# Phase 4e — strip simulated unavailables from all pools
+if _SIMULATED_UNAVAILABLE:
+    for _d_si in list(daily_pools.keys()):
+        for _pk_si in ["grave", "pm_ol", "am_ol"]:
+            daily_pools[_d_si][_pk_si] = [
+                rk for rk in daily_pools[_d_si][_pk_si]
+                if roster[rk]["display_name"].lower() not in _SIMULATED_UNAVAILABLE
+            ]
+    _removed = sum(1 for v in daily_pools.values()
+                   for pk_r in ("grave","pm_ol","am_ol")
+                   for _ in [None])   # count already done above — log from set size
+    print(f"  [sim] Filtered {len(_SIMULATED_UNAVAILABLE)} simulated unavailable TM(s) from pools")
+
 # ── 4. CELL MAP ──────────────────────────────────────────────────────
 print("[4/7] Building cell map...")
 twb = openpyxl.load_workbook(TEMPLATE_PATH)
@@ -815,6 +949,9 @@ _sc.init(
     # Phase 4c — configurable thresholds (only non-default in dry-run mode)
     override_difficulty_threshold=_ENGINE_DIFFICULTY_THRESHOLD,
     override_load_threshold=_ENGINE_LOAD_THRESHOLD,
+    # Phase 4e — new component state (A.1, A.2)
+    sweeper_history=sweeper_history,
+    prior_placements=prior_placements,
 )
 
 # ── SCORECARD (5/2/26 — extracted to glcr_engine.scorecard) ──────────
@@ -900,6 +1037,11 @@ def _record_placement(day, slot, dn, pool_type, priority):
     # rotation guard in pick() so the same TM doesn't land in the same slot
     # two consecutive days.
     tm_slots_by_date.setdefault(str(placed_ref), {}).setdefault(dn, set()).add(slot)
+
+    # Phase 4e A.3 — update cumulative weekly load accumulator (O(1)).
+    # scorecard.weekly_load_balance reads week_load_so_far[dn] at score time
+    # instead of iterating all day_placements — same result, much faster.
+    _sc.record_placement_load(dn, slot)
 
 def pick(pool_list, placed_today, elig_col, zone_slot, prefer_elig=None, prefer_names=None,
          avoid_names=None, skip_trainees=True, skill_priority=False, soft_prefer_names=None,

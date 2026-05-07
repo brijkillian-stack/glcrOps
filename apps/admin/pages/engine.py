@@ -240,53 +240,253 @@ def _history_tab() -> rx.Component:
 
 # ── Simulation pane ───────────────────────────────────────────────────────────
 
+def _sim_mode_toggle() -> rx.Component:
+    """Single-shot vs Multi-week toggle pills."""
+    def _pill(label: str, mode: str) -> rx.Component:
+        return rx.el.button(
+            label,
+            on_click=EngineConfiguratorState.set_sim_mode(mode),
+            style={
+                "padding": "4px 12px",
+                "fontSize": "11px",
+                "fontWeight": "600",
+                "borderRadius": "999px",
+                "border": "1px solid var(--border-subtle)",
+                "cursor": "pointer",
+                "background": rx.cond(
+                    EngineConfiguratorState.sim_mode == mode,
+                    "var(--accent-amber)",
+                    "transparent",
+                ),
+                "color": rx.cond(
+                    EngineConfiguratorState.sim_mode == mode,
+                    "#000",
+                    "var(--ink2)",
+                ),
+                "transition": "background 0.15s",
+            },
+        )
+    return rx.el.div(
+        _pill("Single-shot", "single"),
+        _pill("Multi-week", "multi"),
+        style={
+            "display": "flex",
+            "gap": "6px",
+            "background": "var(--surface2)",
+            "borderRadius": "999px",
+            "padding": "3px",
+            "border": "1px solid var(--border-subtle)",
+        },
+    )
+
+
+def _msim_config_row(label: str, control: rx.Component) -> rx.Component:
+    """Compact label + control row for multi-week sim settings."""
+    return rx.el.div(
+        rx.el.span(label, style={
+            "fontSize": "11px",
+            "color": "var(--ink2)",
+            "minWidth": "120px",
+        }),
+        control,
+        style={"display": "flex", "alignItems": "center", "gap": "10px"},
+    )
+
+
+def _msim_stat(label: str, value: rx.Component, warn: bool = False) -> rx.Component:
+    return rx.el.div(
+        rx.el.div(label, class_name="engine-sim-stat-label"),
+        rx.el.div(
+            value,
+            class_name=rx.cond(
+                warn,
+                "engine-sim-stat-value engine-sim-unresolved-badge",
+                "engine-sim-stat-value",
+            ),
+        ),
+        class_name="engine-sim-stat",
+    )
+
+
 def _sim_pane() -> rx.Component:
     return rx.el.div(
+        # ── Header row: title + mode toggle ─────────────────────────────
         rx.el.div(
             rx.el.span("Simulation", class_name="engine-sim-title"),
-            _btn(
-                rx.cond(EngineConfiguratorState.simulating, "Running…", "Run Simulation"),
-                EngineConfiguratorState.run_simulation,
-                variant="default",
-            ),
-            class_name="engine-sim-header",
+            _sim_mode_toggle(),
+            style={"display": "flex", "alignItems": "center",
+                   "justifyContent": "space-between", "marginBottom": "12px"},
         ),
+
+        # ── SINGLE-SHOT mode ─────────────────────────────────────────────
         rx.cond(
-            EngineConfiguratorState.sim_error != "",
+            EngineConfiguratorState.sim_mode == "single",
             rx.el.div(
-                EngineConfiguratorState.sim_error,
-                class_name="engine-sim-error",
-            ),
-            rx.fragment(),
-        ),
-        rx.cond(
-            EngineConfiguratorState.sim_ran,
-            rx.el.div(
-                rx.el.div(
+                _btn(
+                    rx.cond(EngineConfiguratorState.simulating, "Running…", "Run Simulation"),
+                    EngineConfiguratorState.run_simulation,
+                    variant="default",
+                ),
+                rx.cond(
+                    EngineConfiguratorState.sim_error != "",
+                    rx.el.div(EngineConfiguratorState.sim_error, class_name="engine-sim-error"),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    EngineConfiguratorState.sim_ran,
                     rx.el.div(
-                        rx.el.div("Placed", class_name="engine-sim-stat-label"),
                         rx.el.div(
-                            EngineConfiguratorState.sim_placements.length().to(str),
-                            class_name="engine-sim-stat-value",
+                            _msim_stat("Placed",
+                                       EngineConfiguratorState.sim_placements.length().to(str)),
+                            _msim_stat("Unresolved",
+                                       EngineConfiguratorState.sim_unresolved.length().to(str),
+                                       warn=EngineConfiguratorState.sim_unresolved.length() > 0),
+                            class_name="engine-sim-stats",
                         ),
-                        class_name="engine-sim-stat",
                     ),
+                    rx.fragment(),
+                ),
+                style={"display": "flex", "flexDirection": "column", "gap": "10px"},
+            ),
+
+            # ── MULTI-WEEK mode ──────────────────────────────────────────
+            rx.el.div(
+                # Config controls
+                rx.el.div(
+                    _msim_config_row("Schedules (weeks)",
+                        rx.el.input(
+                            type="number", min="1", max="8",
+                            value=EngineConfiguratorState.msim_weeks.to(str),
+                            on_change=EngineConfiguratorState.set_msim_weeks,
+                            style={"width": "60px", "fontSize": "12px",
+                                   "padding": "2px 6px", "borderRadius": "4px",
+                                   "border": "1px solid var(--border-subtle)",
+                                   "background": "var(--surface2)", "color": "var(--ink1)"},
+                        ),
+                    ),
+                    _msim_config_row("Runs / schedule",
+                        rx.el.input(
+                            type="number", min="1", max="20",
+                            value=EngineConfiguratorState.msim_runs.to(str),
+                            on_change=EngineConfiguratorState.set_msim_runs,
+                            style={"width": "60px", "fontSize": "12px",
+                                   "padding": "2px 6px", "borderRadius": "4px",
+                                   "border": "1px solid var(--border-subtle)",
+                                   "background": "var(--surface2)", "color": "var(--ink1)"},
+                        ),
+                    ),
+                    _msim_config_row("Call-off rate (λ)",
+                        rx.el.input(
+                            type="number", min="0", max="10", step="0.5",
+                            value=EngineConfiguratorState.msim_callout_rate.to(str),
+                            on_change=EngineConfiguratorState.set_msim_callout_rate,
+                            style={"width": "70px", "fontSize": "12px",
+                                   "padding": "2px 6px", "borderRadius": "4px",
+                                   "border": "1px solid var(--border-subtle)",
+                                   "background": "var(--surface2)", "color": "var(--ink1)"},
+                        ),
+                    ),
+                    _msim_config_row("RNG seed",
+                        rx.el.input(
+                            type="number",
+                            value=EngineConfiguratorState.msim_seed.to(str),
+                            on_change=EngineConfiguratorState.set_msim_seed,
+                            style={"width": "80px", "fontSize": "12px",
+                                   "padding": "2px 6px", "borderRadius": "4px",
+                                   "border": "1px solid var(--border-subtle)",
+                                   "background": "var(--surface2)", "color": "var(--ink1)"},
+                        ),
+                    ),
+                    _msim_config_row("Compare baseline",
+                        rx.el.input(
+                            type="checkbox",
+                            checked=EngineConfiguratorState.msim_compare_baseline,
+                            on_change=EngineConfiguratorState.set_msim_compare_baseline,
+                            style={"accentColor": "var(--accent-amber)"},
+                        ),
+                    ),
+                    style={"display": "flex", "flexDirection": "column", "gap": "8px",
+                           "marginBottom": "12px"},
+                ),
+                # Run button
+                _btn(
+                    rx.cond(
+                        EngineConfiguratorState.msim_running,
+                        "Simulating…",
+                        "Run Multi-Week Sim",
+                    ),
+                    EngineConfiguratorState.run_multi_week_simulation,
+                    variant="default",
+                ),
+                # Error
+                rx.cond(
+                    EngineConfiguratorState.msim_error != "",
+                    rx.el.div(EngineConfiguratorState.msim_error, class_name="engine-sim-error"),
+                    rx.fragment(),
+                ),
+                # Results
+                rx.cond(
+                    EngineConfiguratorState.msim_ran,
                     rx.el.div(
-                        rx.el.div("Unresolved", class_name="engine-sim-stat-label"),
+                        # Proposed aggregate stats
                         rx.el.div(
-                            EngineConfiguratorState.sim_unresolved.length().to(str),
-                            class_name=rx.cond(
-                                EngineConfiguratorState.sim_unresolved.length() > 0,
-                                "engine-sim-stat-value engine-sim-unresolved-badge",
-                                "engine-sim-stat-value",
+                            rx.el.div("Proposed Config",
+                                      style={"fontSize": "10px", "fontWeight": "700",
+                                             "color": "var(--accent-amber)",
+                                             "textTransform": "uppercase",
+                                             "letterSpacing": "0.1em", "marginBottom": "8px"}),
+                            rx.el.div(
+                                _msim_stat("Fill rate (mean)",
+                                    EngineConfiguratorState.msim_agg_proposed["fill_rate_mean"].to(str)),
+                                _msim_stat("Critical (mean)",
+                                    EngineConfiguratorState.msim_agg_proposed["critical_mean"].to(str),
+                                    warn=EngineConfiguratorState.msim_agg_proposed["critical_mean"] > 0),
+                                _msim_stat("Load σ (mean)",
+                                    EngineConfiguratorState.msim_agg_proposed["load_variance_mean"].to(str)),
+                                _msim_stat("Runs",
+                                    EngineConfiguratorState.msim_agg_proposed["n_runs"].to(str)),
+                                class_name="engine-sim-stats",
                             ),
                         ),
-                        class_name="engine-sim-stat",
+                        # Baseline stats (shown only if comparison was run)
+                        rx.cond(
+                            EngineConfiguratorState.msim_agg_baseline != {},
+                            rx.el.div(
+                                rx.el.div("Baseline Config",
+                                          style={"fontSize": "10px", "fontWeight": "700",
+                                                 "color": "var(--ink2)",
+                                                 "textTransform": "uppercase",
+                                                 "letterSpacing": "0.1em",
+                                                 "marginBottom": "8px", "marginTop": "12px"}),
+                                rx.el.div(
+                                    _msim_stat("Fill rate (mean)",
+                                        EngineConfiguratorState.msim_agg_baseline["fill_rate_mean"].to(str)),
+                                    _msim_stat("Critical (mean)",
+                                        EngineConfiguratorState.msim_agg_baseline["critical_mean"].to(str),
+                                        warn=EngineConfiguratorState.msim_agg_baseline["critical_mean"] > 0),
+                                    _msim_stat("Load σ (mean)",
+                                        EngineConfiguratorState.msim_agg_baseline["load_variance_mean"].to(str)),
+                                    class_name="engine-sim-stats",
+                                ),
+                            ),
+                            rx.fragment(),
+                        ),
+                        # Output paths
+                        rx.el.div(
+                            rx.el.span("Report: ", style={"fontSize": "11px", "color": "var(--ink3)"}),
+                            rx.el.span(
+                                EngineConfiguratorState.msim_md_path,
+                                style={"fontSize": "11px", "color": "var(--ink2)",
+                                       "wordBreak": "break-all"},
+                            ),
+                            style={"marginTop": "10px"},
+                        ),
+                        style={"display": "flex", "flexDirection": "column", "gap": "4px"},
                     ),
-                    class_name="engine-sim-stats",
+                    rx.fragment(),
                 ),
+                style={"display": "flex", "flexDirection": "column", "gap": "10px"},
             ),
-            rx.fragment(),
         ),
         class_name="engine-sim-pane",
     )

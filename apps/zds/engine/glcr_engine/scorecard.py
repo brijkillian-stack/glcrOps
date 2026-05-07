@@ -55,6 +55,10 @@ _state = {
     # of override types active for that TM tonight (e.g. {"prefer_easier"}).
     # See set_soft_overrides_for_day().
     "soft_overrides": {},
+    # Phase 4e — cumulative weekly load accumulator.
+    # O(1) lookup replacing the O(n) day_placements scan in weekly_load_balance.
+    # fill_engine calls record_placement_load(dn, slot) after every placement.
+    "week_load_so_far": {},  # {display_name: float cumulative_load}
     # Phase 4c — configurable thresholds (previously hard-coded constants).
     # init() writes these from the active engine_config row; defaults match
     # the former constants so production behavior is unchanged at config-on.
@@ -148,6 +152,8 @@ def init(*, roster, tm_skill, slot_difficulty,
         # Phase 4c — new component state
         "sweeper_history":  sweeper_history  or {},
         "prior_placements": prior_placements or {},
+        # Phase 4e — reset cumulative load tracker on each full init
+        "week_load_so_far": {},
     })
 
 
@@ -170,6 +176,17 @@ def set_soft_overrides_for_day(soft_by_dn):
                     in fill_engine.py before scoring runs.
     """
     _state["soft_overrides"] = soft_by_dn or {}
+
+
+def record_placement_load(dn: str, slot_code: str) -> None:
+    """Accumulate this placement's slot load into week_load_so_far[dn].
+
+    Called by fill_engine._record_placement() after every successful placement.
+    Replaces the O(n) day_placements scan in weekly_load_balance — O(1) lookup
+    at score time vs. iterating all prior placements per candidate per slot.
+    """
+    load = _state["slot_loads"].get(slot_code, 2)
+    _state["week_load_so_far"][dn] = _state["week_load_so_far"].get(dn, 0.0) + load
 
 
 # ── Slot label / target matching ─────────────────────────────────────
@@ -428,16 +445,13 @@ def score_placement(rk, slot_code, *, skill_priority=False,
             prior_continuity_pen = 1.0  # penalty for displacing a stable assignment
 
     # weekly_load_balance — penalizes concentrating high-load slots on one TM.
-    # Reads slot_loads from _state to sum the TM's load across already-placed days.
-    # Weight defaults to 0.0; deferred full implementation (per-week accumulation).
+    # Phase 4e: O(1) lookup via week_load_so_far accumulator (replaces O(n)
+    # day_placements scan). fill_engine calls record_placement_load() after
+    # every placement so the dict stays current at scoring time.
     weekly_load_pen = 0.0
     slot_load_this = _state["slot_loads"].get(slot_code, 2)
     if slot_load_this >= 7:   # only fire for genuinely heavy slots
-        placed_load = 0
-        for d_placements in _state.get("day_placements", {}).values():
-            for placed_slot, placed_dn in d_placements.items():
-                if placed_dn and placed_dn.lower() == dn.lower():
-                    placed_load += _state["slot_loads"].get(placed_slot, 2)
+        placed_load = _state["week_load_so_far"].get(dn, 0.0)
         if placed_load >= 14:  # already carrying 2+ heavy slots
             weekly_load_pen = (placed_load - 14) / 7.0
 

@@ -4,6 +4,81 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Phase 4e: Scoring component wiring + multi-week simulator (Sonnet)
+
+### Phase 4e Part A — Wire all four Phase 4c scoring components
+
+**A.1 — `sweeper_history` (fill_engine.py + scorecard.py)**
+- Built from `archive_history` + `SWEEPER_TAGGED_SLOTS` after archive loads.
+  14-day lookback window; `{display_name: [iso_date, ...]}` structure counts
+  each sweeper slot's most-recent date within the window.
+- Passed to `_sc.init(sweeper_history=...)` so `sweeper_rotation_penalty`
+  fires on real data instead of always returning 0.
+
+**A.2 — `prior_placements` (fill_engine.py)**
+- Added `_slot_key_to_engine_code()` helper: maps DB `zone_assignments.slot_key`
+  + `rr_side` → fill_engine slot codes (e.g. `"rr_1_2"/"mens"` → `"MRR1"`).
+- Added `_load_prior_placements()`: queries `zone_assignments JOIN nights JOIN
+  tm_profiles` for the current week_id, returns `{day_name: {slot_code: dn}}`.
+- Passed to `_sc.init(prior_placements=...)` so `prior_run_continuity`
+  penalizes displacing stable assignments.
+
+**A.3 — `week_load_so_far` accumulator (scorecard.py + fill_engine.py)**
+- New `"week_load_so_far": {}` key in `_state` (reset on every `init()`).
+- New `record_placement_load(dn, slot_code)` function: O(1) increment of
+  `_state["week_load_so_far"][dn] += slot_load`.
+- `weekly_load_balance` component updated: reads `week_load_so_far[dn]`
+  directly instead of iterating all `day_placements` (O(n) → O(1)).
+- `_record_placement()` in fill_engine calls `_sc.record_placement_load(dn, slot)`
+  after every successful placement.
+
+**A.4 — `skill_stretch_reward` confirmed already wired correctly** (pure
+  function, no state change needed).
+
+**A.5 — Baseline weight migration applied via Supabase MCP**
+- New active `engine_config` row with Phase 4e tuned baselines:
+  `sweeper_rotation_penalty=0.3, skill_stretch_reward=0.3,
+  prior_run_continuity=0.4, weekly_load_balance=0.5`.
+- Previous all-zero row deactivated (preserved for rollback).
+
+**A.6 — Regression smoke test: `apps/zds/engine/tests/test_regression_weights.py`**
+- 6 tests verify byte-identical scorecard output when all 4 new component
+  weights are 0.0. Confirms new wiring is a strict no-op at zero weight.
+  All 6 pass.
+
+### Phase 4e Part B — Multi-week stochastic simulator
+
+**`apps/zds/engine/simulate_weeks.py`** (new CLI tool + library)
+- Discovers N most-recent schedule xlsx files, runs fill_engine M times per
+  schedule with Poisson(λ)-distributed simulated call-offs.
+- Call-offs injected via the `"simulated_unavailable"` key in the
+  `--config-override` JSON. fill_engine strips those TMs from all daily pools
+  before placement.
+- Aggregates per-run metrics: fill_rate, unresolved/critical count, load
+  variance σ, simulated call-off count. Computes mean + p95 across all runs.
+- Comparison mode (`--baseline`): runs both proposed and DB-active config with
+  the same RNG seed sequence; output table shows Δ for each metric.
+- Writes `Outputs/sim_<ts>/sim_results.json` and `sim_report.md`.
+- Fixed seed (default 42); Knuth Poisson draw for small λ, normal approx for λ≥30.
+
+**`fill_engine.py`** — `simulated_unavailable` support (Phase 4e B.2)
+- Reads `_CONFIG_OVERRIDE.get("simulated_unavailable", [])` after schedule
+  parsing and strips those TMs from all `daily_pools` before the fill loop.
+  Invisible to production runs (no `--config-override` → list is empty).
+
+**`apps/admin/engine_state.py`** — multi-week sim state + event (Phase 4e B.6)
+- New state vars: `sim_mode`, `msim_weeks`, `msim_runs`, `msim_callout_rate`,
+  `msim_seed`, `msim_compare_baseline`, `msim_running`, `msim_agg_proposed`,
+  `msim_agg_baseline`, `msim_run_rows`, `msim_json_path`, `msim_md_path`.
+- New event `run_multi_week_simulation()`: invokes simulate_weeks.main() in
+  executor; populates aggregate result vars on completion.
+- New setter events for all multi-week config params.
+
+**`apps/admin/pages/engine.py`** — sim pane upgraded (Phase 4e B.6)
+- `_sim_pane()` now has a Single-shot / Multi-week pill toggle.
+- Multi-week mode shows compact config controls (weeks, runs, λ, seed, baseline
+  checkbox) and after the run displays proposed vs baseline aggregate stat cards.
+
 ## 2026-05-07 — Session gshiftpage_phase4c_engine_configurator (Sonnet)
 
 ### GShiftPage Phase 4c — Engine Configurator + Dry-Run Simulation
