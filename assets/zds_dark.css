@@ -88,7 +88,12 @@
 [data-theme="dark"] .chip-header,
 [data-theme="light"] .chip-header {
   position: relative;
-  overflow: hidden;
+  /* overflow-x: clip keeps the chip pseudo-element bounded inside the header
+     so the casino dot pattern doesn't leak past the right edge.
+     overflow-y: visible allows the action-bar hstack to wrap onto a second
+     row without the wrapped buttons being clipped (Phase O fix). */
+  overflow-x: clip;
+  overflow-y: visible;
   border-bottom: 1px solid var(--zds-border) !important;
 }
 

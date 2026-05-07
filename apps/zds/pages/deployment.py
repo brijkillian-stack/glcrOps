@@ -743,12 +743,18 @@ def deployment() -> rx.Component:
                 value=ZdsState.active_tab,
                 on_change=ZdsState.set_active_tab,
             ),
+            # Phase O fix — flex_wrap allows the action bar to wrap on
+            # narrower viewports instead of getting clipped by .chip-header's
+            # overflow rule. row_gap covers the wrapped-row spacing.
             align="center", gap="12px",
+            flex_wrap="wrap",
+            row_gap="8px",
             padding="16px 24px",
             border_bottom="1px solid #e5e7eb",
             background="white",
             position="sticky", top="0", z_index="10",
             width="100%",
+            min_width="0",
             class_name="chip-header",
         ),
 
