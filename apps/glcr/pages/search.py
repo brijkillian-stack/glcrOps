@@ -9,7 +9,6 @@ import reflex as rx
 from ..state.search import SearchState
 from shared.base import AppState
 from ..state.people import PeopleState
-from shared.components.sidebar import sidebar
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
 from ..components.tm_drawer import global_tm_drawer
@@ -300,7 +299,6 @@ def hero_prompt() -> rx.Component:
 
 def search_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             search_bar(),

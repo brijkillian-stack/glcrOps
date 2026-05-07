@@ -8,7 +8,6 @@ an inline form for dropping a sentiment-tagged note without doing a full floor w
 import reflex as rx
 from ..state.areas import AreasState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
 
@@ -226,7 +225,6 @@ def section_grid(section_name: str, section_var) -> rx.Component:
 
 def areas_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             rx.cond(

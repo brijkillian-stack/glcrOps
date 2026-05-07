@@ -11,7 +11,6 @@ Changes vs original:
 import reflex as rx
 from ..state.tasks import TasksState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state, skeleton_card
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -413,7 +412,6 @@ def tasks_skeleton() -> rx.Component:
 
 def tasks_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             filter_tabs(),

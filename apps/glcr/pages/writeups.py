@@ -8,7 +8,6 @@ discipline level (verbal, written, final).
 import reflex as rx
 from ..state.writeups import WriteupsState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state, skeleton_card
 from shared.db import _format_ts
 
@@ -144,7 +143,6 @@ def writeups_section() -> rx.Component:
 
 def writeups_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             writeups_section(),

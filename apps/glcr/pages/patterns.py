@@ -11,7 +11,6 @@ import reflex as rx
 from ..state.patterns import PatternsState
 from shared.base import AppState
 from ..state.people import PeopleState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -275,7 +274,6 @@ def page_header() -> rx.Component:
 
 def patterns_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             # Row 1 — side by side panels

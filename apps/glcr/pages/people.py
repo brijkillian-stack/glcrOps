@@ -11,7 +11,6 @@ Drawer tabs:
 import reflex as rx
 from ..state.people import PeopleState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -1418,7 +1417,6 @@ def profile_drawer() -> rx.Component:
 
 def people_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             rx.el.header(
                 rx.el.div("Team", class_name="page-eyebrow"),

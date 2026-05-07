@@ -12,7 +12,6 @@ Crew rows are highlighted in the eligibility grid.
 import reflex as rx
 from ..state.deployment import DeploymentState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
 from shared.db import ELIGIBILITY_SLOTS, SLOT_GROUPS
@@ -346,7 +345,6 @@ def roster_grid() -> rx.Component:
 
 def deployment_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             tonight_crew_panel(),

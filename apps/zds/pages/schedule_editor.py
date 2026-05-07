@@ -17,7 +17,6 @@ import reflex as rx
 from ..state import ZdsState
 from ..state_schedule import ScheduleEditorState
 from ..components.zds_header import zds_header
-from shared.components.app_switcher import app_switcher
 
 
 # ── Category styling ──────────────────────────────────────────────────────────
@@ -583,7 +582,6 @@ def schedule_editor_page() -> rx.Component:
     return rx.box(
         # Top header (app switcher + back arrow + title)
         rx.hstack(
-            app_switcher(),
             rx.link(
                 rx.icon("arrow-left", size=16),
                 href=ScheduleEditorState.back_url,

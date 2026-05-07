@@ -198,11 +198,9 @@ def _night_card(night: dict) -> rx.Component:
 # ── Full page ─────────────────────────────────────────────────────────────────
 
 def week_overview() -> rx.Component:
-    from shared.components.app_switcher import app_switcher
     return rx.box(
         # ── Sticky top bar ────────────────────────────────────────────────────
         rx.hstack(
-            app_switcher(),
             rx.link(
                 rx.icon("arrow-left", size=16),
                 href="/zds",

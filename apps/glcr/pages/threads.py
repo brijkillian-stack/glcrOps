@@ -8,7 +8,6 @@ note count, and last active time. Click to expand and see linked notes.
 import reflex as rx
 from ..state.threads import ThreadsState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state, skeleton_card
 from shared.db import _format_ts
 
@@ -128,7 +127,6 @@ def threads_section() -> rx.Component:
 
 def threads_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             threads_section(),

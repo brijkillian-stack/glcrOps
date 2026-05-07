@@ -10,7 +10,6 @@ Additions vs original:
 import reflex as rx
 from ..state.today import TodayState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import kpi_card, brewing_card, feed_row, empty_state, skeleton_card
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -298,7 +297,6 @@ def numbers_column() -> rx.Component:
 
 def today_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             capture_bar(),

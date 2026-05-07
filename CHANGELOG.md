@@ -4,6 +4,42 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Session gshiftpage_phase2_navrail (Sonnet)
+
+### GShiftPage Phase 2 — Unified 60px nav rail + avatar dropdown + Sudo Admin stub
+
+- **`shared/components/nav_rail.py`** (new) — Single `nav_rail()` component
+  used by every page (Memory + ZDS). 60px sticky left column: G-mark logo → /,
+  divider, 6 nav chips (⊙ Shift, ▦ ZDS, ⌕ Search, ◍ People, ☐ Tasks, ✦ Patterns),
+  spacer, avatar chip "BK". Active state: blue color + blue-dim bg + 2px left
+  indicator. ZDS active check uses `.contains("/zds")` for sub-route matching.
+- **`shared/state/avatar_menu.py`** (new) — `AvatarMenuState` with `open: bool`,
+  `toggle()`, `close()` handlers.
+- **`assets/nav_rail.css`** (new) — Rail CSS with `.app-shell` grid
+  (`grid-template-columns: 60px 1fr`), `.nav-rail-*` classes, avatar dropdown,
+  `.app-shell .app { display: block }` override to unbreak GLCR page layout
+  after sidebar removal.
+- **`assets/avatar_menu.js`** (new) — Outside-click-to-close handler: dispatches
+  `avatar_menu_state.close` when click lands outside `.nav-rail-avatar-menu`.
+- **`apps/admin/`** (new) — Sudo Admin stub. `/admin` renders a placeholder page
+  "Coming soon. Phase 4 will populate this hub…" Registered as TIER-2 route.
+- **`brijkillian_stack/brijkillian_stack.py`** — Both `_with_grok` and
+  `_with_zds_chrome` now render `nav_rail()` in the left column of a 60px|1fr
+  CSS grid. Admin routes imported and registered. `nav_rail.css` + `avatar_menu.js`
+  added to `head_components`.
+- **`apps/zds/components/zds_header.py`** — Removed `app_switcher()` and
+  `theme_toggle` (both now in rail). Only `title_block` + optional `right` action
+  remain in the sticky header.
+- **`apps/zds/pages/{deployment,week_overview,schedule_editor}.py`** — Removed
+  inline `app_switcher()` import + call from each page's top-nav hstack.
+- **`apps/glcr/pages/*.py`** (13 files) — Removed `from shared.components.sidebar
+  import sidebar` and `sidebar()` call. Pages now render as right-column content
+  inside the shell grid supplied by `_with_grok`.
+- **`shared/components/sidebar.py`** — Deleted (replaced by nav rail).
+- **`shared/components/app_switcher.py`** — Deleted (replaced by nav rail).
+
+---
+
 ## 2026-05-06 — Session zds_phase1b_light_mode (Sonnet)
 
 ### Phase 1b — Sun/moon light-mode toggle with LocalStorage persistence

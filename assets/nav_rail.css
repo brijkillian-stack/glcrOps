@@ -1,0 +1,202 @@
+/*
+ * nav_rail.css — 60px unified left nav rail (GShiftPage Phase 2)
+ *
+ * The rail is shared by all pages (Memory + ZDS). It mounts via the
+ * _with_grok / _with_zds_chrome wrappers in brijkillian_stack.py.
+ *
+ * Tokens: --panel, --line, --blue, --blue-dim, --ink3, --ink2, --panel2,
+ *         --line2 — resolved from ops_tokens.css [data-theme] blocks.
+ * Fallbacks use the ZDS dark values for pages where ops_tokens.css
+ * hasn't stamped data-theme yet.
+ */
+
+/* ── Shell layout ─────────────────────────────────────────────────────────── */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  min-height: 100vh;
+}
+
+/* GLCR pages have an inner .app div that was previously the sidebar+main grid.
+   In the app-shell context the sidebar is gone; make .app a plain block so
+   rx.el.main fills the full right column instead of a 240px slot. */
+.app-shell .app {
+  display: block;
+  min-height: 100vh;
+}
+
+/* ── Rail container ───────────────────────────────────────────────────────── */
+
+.nav-rail {
+  width: 60px;
+  background: var(--panel, #131518);
+  border-right: 1px solid var(--line, #26292E);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 4px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+/* ── Logo G-mark ──────────────────────────────────────────────────────────── */
+
+.nav-rail-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--blue, #5CC0FF), #2A89C9);
+  display: grid;
+  place-items: center;
+  color: #0B1A2A;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+.nav-rail-logo:hover { opacity: 0.85; }
+
+/* ── Divider ──────────────────────────────────────────────────────────────── */
+
+.nav-rail-divider {
+  height: 16px;
+  width: 24px;
+  margin: 6px 0;
+  background: var(--line, #26292E);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* ── Nav items ────────────────────────────────────────────────────────────── */
+
+.nav-rail-item {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  color: var(--ink3, #82807A);
+  background: transparent;
+  position: relative;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.nav-rail-item:hover {
+  color: var(--ink2, #BFBBAE);
+  text-decoration: none;
+}
+.nav-rail-item.active {
+  color: var(--blue, #5CC0FF);
+  background: var(--blue-dim, rgba(92,192,255,0.12));
+}
+.nav-rail-item.active::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--blue, #5CC0FF);
+  border-radius: 999px;
+}
+
+/* ── Spacer ───────────────────────────────────────────────────────────────── */
+
+.nav-rail-spacer {
+  flex: 1;
+}
+
+/* ── Avatar chip ──────────────────────────────────────────────────────────── */
+
+.nav-rail-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--panel2, #191B1F);
+  border: 1px solid var(--line2, #33373D);
+  color: var(--ink2, #BFBBAE);
+  font-size: 11px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  /* Reset button styles */
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  padding: 0;
+  line-height: 1;
+}
+.nav-rail-avatar:hover {
+  border-color: var(--blue, #5CC0FF);
+  background: var(--panel, #131518);
+}
+
+/* ── Avatar dropdown menu ─────────────────────────────────────────────────── */
+
+.nav-rail-avatar-menu {
+  position: absolute;
+  bottom: 0;
+  left: 44px;   /* just outside the rail */
+  width: 180px;
+  background: var(--panel, #131518);
+  border: 1px solid var(--line2, #33373D);
+  border-radius: 8px;
+  box-shadow: var(--zds-shadow-menu, 0 8px 32px rgba(0,0,0,0.5));
+  padding: 6px;
+  z-index: 200;
+}
+
+.nav-rail-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ink2, #BFBBAE);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+.nav-rail-menu-item:hover {
+  background: var(--blue-dim, rgba(92,192,255,0.12));
+  color: var(--blue, #5CC0FF);
+  text-decoration: none;
+}
+.nav-rail-menu-item-danger {
+  color: var(--red, #F47373);
+}
+.nav-rail-menu-item-danger:hover {
+  background: var(--red-dim, rgba(244,115,115,0.12));
+  color: var(--red, #F47373);
+}
+
+/* ── Light-mode overrides ─────────────────────────────────────────────────── */
+
+[data-theme="light"] .nav-rail {
+  background: var(--panel, #f4f7fb);
+  border-right-color: var(--line, rgba(11,26,42,0.10));
+}
+[data-theme="light"] .nav-rail-divider {
+  background: var(--line, rgba(11,26,42,0.10));
+}
+[data-theme="light"] .nav-rail-avatar-menu {
+  background: var(--panel, #f4f7fb);
+  border-color: var(--line2, rgba(11,26,42,0.15));
+}

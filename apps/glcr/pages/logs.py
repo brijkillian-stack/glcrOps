@@ -9,7 +9,6 @@ Shift Recap timeline stays clean with only operational entries.
 import reflex as rx
 from ..state.logs import LogsState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -230,7 +229,6 @@ def logs_skeleton() -> rx.Component:
 
 def logs_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             controls_row(),

@@ -20,6 +20,7 @@ from shared.components.context_menu import global_context_menu
 from shared.components.highlight_toolbar import global_highlight_toolbar
 from shared.components.undo_toast import global_undo_toast
 from shared.components.audit_strip import audit_strip
+from shared.components.nav_rail import nav_rail
 
 from apps.glcr.routes import (
     ROUTES as GLCR_ROUTES,
@@ -27,6 +28,7 @@ from apps.glcr.routes import (
     VIEWER_OK_ROUTES as GLCR_VIEWER_OK,
 )
 from apps.zds.routes import ROUTES as ZDS_ROUTES, PUBLIC_ROUTES as ZDS_PUBLIC
+from apps.admin.routes import ROUTES as ADMIN_ROUTES
 
 # ── Keyboard shortcut script ──────────────────────────────────────────────────
 # Injected once at app level. ⌘K → palette, ⌘N → capture, ⌘J → toggle Grok, Esc → close all
@@ -88,47 +90,57 @@ _THEME_INIT_SCRIPT = """
 # (for GLCR protected pages; ZDS pages don't need Grok yet)
 
 def _with_grok(page_fn):
-    """Wrap a page component with Grok panel + Grok FAB + Area Check modal
-    + global context menu + left-click highlight toolbar.
+    """Wrap a GLCR Memory page with the unified nav rail + Grok panel/FAB
+    + Area Check modal + global overlays.
 
-    The Area Check overlay is mounted globally here so the sidebar's
-    "★ Area Check" action works on any protected GLCR page. The context
-    menu and highlight toolbar are mounted here so they're available on
-    every protected page (ZDS pages have their own wrapping below).
+    Layout: 60px rail | 1fr page content  (CSS grid via .app-shell).
+    The page_fn() result goes in the right column; overlays are portalled
+    at the top level so they float above the rail.
     """
     def wrapped() -> rx.Component:
-        return rx.fragment(
-            page_fn(),
-            grok_fab(),
-            grok_panel(),
-            area_check_modal(),
-            global_context_menu(),
-            global_highlight_toolbar(),
-            global_undo_toast(),
+        return rx.el.div(
+            nav_rail(),
+            rx.el.div(
+                page_fn(),
+                grok_fab(),
+                grok_panel(),
+                area_check_modal(),
+                global_context_menu(),
+                global_highlight_toolbar(),
+                global_undo_toast(),
+                style={"minHeight": "100vh", "position": "relative"},
+            ),
+            class_name="app-shell",
         )
     wrapped.__name__ = f"{page_fn.__name__}_with_grok"
     return wrapped
 
 
 def _with_zds_chrome(page_fn):
-    """Wrap a ZDS page with the theme system, casino-scatter bg, context menu + toolbar.
+    """Wrap a ZDS page with the unified nav rail + theme system + ZDS overlays.
 
+    Layout: 60px rail | 1fr ZDS content  (CSS grid via .app-shell).
     data-theme on <html> is set by _THEME_INIT_SCRIPT (runs in <head>) and
-    synced via rx.call_script in ZdsState.toggle_theme.  No Reflex binding
-    needed on this wrapper — ops_tokens.css scopes all tokens to html[data-theme].
+    synced via rx.call_script in ZdsState.toggle_theme.
     The .zds-casino-bg div is position:fixed so it renders behind all content.
     """
 
     def wrapped() -> rx.Component:
-        return rx.box(
-            rx.box(class_name="zds-casino-bg"),   # fixed SVG scatter behind content
-            page_fn(),
-            global_context_menu(),
-            global_highlight_toolbar(),
-            global_undo_toast(),
-            audit_strip(),
-            min_height="100vh",
-            position="relative",
+        return rx.el.div(
+            nav_rail(),
+            rx.box(
+                rx.box(class_name="zds-casino-bg"),   # fixed SVG scatter behind content
+                page_fn(),
+                global_context_menu(),
+                global_highlight_toolbar(),
+                global_undo_toast(),
+                audit_strip(),
+                min_height="100vh",
+                position="relative",
+                flex="1",
+                overflow_x="hidden",
+            ),
+            class_name="app-shell",
         )
     wrapped.__name__ = f"{page_fn.__name__}_zds"
     return wrapped
@@ -181,6 +193,9 @@ app = rx.App(
         # ── Undo toast (5-second auto-dismiss + manual Undo / × buttons) ──
         rx.el.link(rel="stylesheet", href="/undo_toast.css"),
         rx.el.script(src="/undo_toast.js"),
+        # ── Nav rail (Phase 2: 60px unified left rail) ────────────────────
+        rx.el.link(rel="stylesheet", href="/nav_rail.css"),
+        rx.el.script(src="/avatar_menu.js"),
     ],
 )
 
@@ -225,6 +240,16 @@ for entry in GLCR_ROUTES:
 
 # Register ZDS routes (all TIER 2 — viewer-OK)
 for entry in ZDS_ROUTES:
+    page_fn, route, title, on_load = entry
+    kwargs = {
+        "route":   route,
+        "title":   title,
+        "on_load": [AuthState.require_unlock] + (on_load or []),
+    }
+    app.add_page(_with_zds_chrome(page_fn), **kwargs)
+
+# Register Admin stub routes (TIER 2 — viewer-OK for now)
+for entry in ADMIN_ROUTES:
     page_fn, route, title, on_load = entry
     kwargs = {
         "route":   route,

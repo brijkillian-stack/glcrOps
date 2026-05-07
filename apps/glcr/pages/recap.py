@@ -8,7 +8,6 @@ Right column: auto-generated plain-text email draft, editable and copyable.
 import reflex as rx
 from ..state.recap import ShiftRecapState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import empty_state, feed_row
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
@@ -398,7 +397,6 @@ def draft_column() -> rx.Component:
 
 def recap_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             rx.el.section(

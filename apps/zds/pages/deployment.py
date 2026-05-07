@@ -647,13 +647,11 @@ def schedule_body() -> rx.Component:
 # ── Full page ─────────────────────────────────────────────────────────────────
 
 def deployment() -> rx.Component:
-    from shared.components.app_switcher import app_switcher
     night = ZdsState.current_night
 
     return rx.box(
         # Top nav
         rx.hstack(
-            app_switcher(),
             rx.link(
                 rx.icon("arrow-left", size=16),
                 href=ZdsState.week_overview_url,

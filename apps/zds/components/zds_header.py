@@ -1,14 +1,12 @@
 """
 components/zds_header.py — Sticky top header for every ZDS page.
 
-Hosts the GLCR/ZDS app switcher plus the page title and any per-page
-right-side action (e.g. "New Week" button). Replaces the bespoke
-top-nav hstack each ZDS page used to roll inline.
+Hosts the page title block and any per-page right-side action.
+The app-switcher and theme toggle were removed in Phase 2 — they now
+live in the unified 60px nav rail (shared/components/nav_rail.py).
 """
 
 import reflex as rx
-from shared.components.app_switcher import app_switcher
-from apps.zds.state import ZdsState
 
 
 def zds_header(
@@ -34,35 +32,7 @@ def zds_header(
         gap="0",
     )
 
-    # Sun/moon theme toggle: show sun icon in dark mode (click to go light),
-    # moon icon in light mode (click to go dark)
-    theme_toggle = rx.button(
-        rx.cond(
-            ZdsState.theme == "dark",
-            rx.icon("sun", size=16),
-            rx.icon("moon", size=16),
-        ),
-        on_click=ZdsState.toggle_theme,
-        height="40px",
-        padding="8px 12px",
-        border="1px solid #e5e7eb",
-        background="white",
-        color="#374151",
-        border_radius="6px",
-        cursor="pointer",
-        transition="all 0.2s ease",
-        _hover={
-            "border_color": "#d1d5db",
-            "background": "#f9fafb",
-        },
-    )
-
-    children = [
-        app_switcher(),
-        title_block,
-        rx.spacer(),
-        theme_toggle,
-    ]
+    children: list = [title_block, rx.spacer()]
     if right is not None:
         children.append(right)
 

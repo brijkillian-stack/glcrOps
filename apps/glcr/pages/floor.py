@@ -10,7 +10,6 @@ a floor_walk summary note that appears in Today's activity feed.
 import reflex as rx
 from ..state.floor import FloorState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.palette import command_palette
 from shared.components.capture import capture_modal
 
@@ -297,7 +296,6 @@ def section_items(section_name: str) -> rx.Component:
 
 def floor_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             walk_controls(),

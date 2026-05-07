@@ -8,7 +8,6 @@ and backend diagnostics.
 import reflex as rx
 from ..state.health import HealthState
 from shared.base import AppState
-from shared.components.sidebar import sidebar
 from shared.components.ui import kpi_card, empty_state, skeleton_card
 import os
 
@@ -119,7 +118,6 @@ def backend_section() -> rx.Component:
 
 def health_page() -> rx.Component:
     return rx.el.div(
-        sidebar(),
         rx.el.main(
             page_header(),
             rx.cond(
