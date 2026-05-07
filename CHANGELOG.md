@@ -4,6 +4,60 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Phase 4e.1 + 4e.2: Enriched sim report + inline disclosure (Sonnet)
+
+### Phase 4e.1 — Inline report disclosure in engine pane
+
+- Added `msim_report_md: str = ""` to `EngineConfiguratorState`.
+- After a successful multi-week sim run, `run_multi_week_simulation()` reads the
+  `sim_report.md` file and stores it in `msim_report_md`.
+- Added collapsible `rx.el.details` / `rx.el.summary("View full report")` block
+  after stat cards in `_sim_pane()` — renders the markdown inline via `rx.markdown`.
+- Added `.ops-sim-report-body` CSS to `assets/ops_tokens.css`: dark/light themed,
+  scrollable at 480 px max-height, table + heading styles.
+
+### Phase 4e.2A — `_extract_metrics()` enrichment (`simulate_weeks.py`)
+
+- Added `MUST_FILL_ZONES = {"Zone1", "Zone4", "Zone5", "Zone8"}` and
+  `SUPPORT_SLOTS = {"Support1", "Support2", "Support3", "MP1", "MP2"}` constants.
+- Added `_load_slot_loads()`: fetches `slot_load_scores` table from DB once at
+  startup; returns `{slot_id: float}`.
+- `_extract_metrics()` now accepts `slot_loads` kwarg and computes three new fields:
+  - `per_tm_load`: `{dn: weighted_load_sum}` — sum of `slot_load_scores` per TM.
+  - `per_must_fill`: `{zone: {filled_nights, total_nights}}` for Z1/Z4/Z5/Z8.
+  - `trainee_support_placements`: `{dn: count}` for TMs with `tm_skill ≤ 3` in
+    support slots.
+
+### Phase 4e.2B — `_aggregate()` enrichment
+
+- Added `per_tm_load_mean`: `{dn: mean_weighted_load}` across all runs.
+- Added `must_fill_rate`: `{zone: mean_fill_rate}` for Z1/Z4/Z5/Z8.
+- Added `must_fill_avg`: scalar average of the 4 must-fill rates (feeds UI stat card).
+- Added `trainee_support_mean`: `{dn: mean_support_placements}` across runs.
+- Added `trainee_support_total`: scalar sum (feeds UI stat card).
+
+### Phase 4e.2C — `_write_markdown()` enrichment (7 sections)
+
+1. Aggregated Results (existing)
+2. Comparison Delta with ✓/✗/≈ indicators (if baseline run)
+3. Must-Fill Zone Coverage table (Z1/Z4/Z5/Z8 + avg row)
+4. TM Load Distribution — top 10 most-loaded and bottom 10 least-loaded
+5. Trainee Support Exposure (skill ≤ 3 TMs only)
+6. Per-Run Details Proposed (existing)
+7. Per-Run Details Baseline (existing, if applicable)
+
+### Phase 4e.2D — Two new UI stat cards in `_sim_pane()`
+
+- **Z1/4/5/8 covered** — `must_fill_avg` formatted as float, warns red if < 0.9.
+- **Trainee runs/wk** — `trainee_support_total` (sum of trainee support placements
+  across all trainees, mean across runs).
+
+### Regression
+
+- All 6/6 Phase 4e regression smoke tests still pass after changes.
+
+---
+
 ## 2026-05-07 — Phase 4e: Scoring component wiring + multi-week simulator (Sonnet)
 
 ### Phase 4e Part A — Wire all four Phase 4c scoring components

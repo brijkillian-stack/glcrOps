@@ -54,6 +54,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 from shared.db import get_engine_roster_from_db, get_client as _get_db_client
 
+# ── Must-fill zones + support slot definitions ────────────────────────────────
+MUST_FILL_ZONES = {"Zone1", "Zone4", "Zone5", "Zone8"}
+SUPPORT_SLOTS   = {"Support1", "Support2", "Support3", "MP1", "MP2"}
+
 FILL_ENGINE    = _ENGINE_DIR / "fill_engine.py"
 SCHEDULE_DIR   = _ENGINE_DIR / "Inputs" / "Weekly Schedules"
 OUTPUTS_ROOT   = _ENGINE_DIR / "Outputs"
@@ -101,6 +105,18 @@ def _load_grave_pool() -> list[str]:
     except Exception as e:
         print(f"  [sim][warn] Roster load failed ({e}) — using empty pool")
         return []
+
+
+def _load_slot_loads() -> dict[str, float]:
+    """Fetch slot_load_scores from DB. Returns {slot_id: load}.
+    Used to weight per-TM load in simulation metrics."""
+    try:
+        sb = _get_db_client()
+        rows = sb.table("slot_load_scores").select("slot_id, load").execute()
+        return {r["slot_id"]: float(r["load"]) for r in (rows.data or [])}
+    except Exception as e:
+        print(f"  [sim][warn] slot_load_scores load failed ({e}) — using empty dict")
+        return {}
 
 
 def _load_active_config() -> dict:
@@ -183,8 +199,21 @@ def _run_engine_with_config(
 
 # ── Metrics extraction ────────────────────────────────────────────────────────
 
-def _extract_metrics(audit: dict, simulated_unavailable: list[str]) -> dict:
-    """Distil an audit JSON into summary metrics for the simulation report."""
+def _extract_metrics(
+    audit: dict,
+    simulated_unavailable: list[str],
+    slot_loads: dict | None = None,
+) -> dict:
+    """Distil an audit JSON into summary metrics for the simulation report.
+
+    Phase 4e.2A additions:
+      per_tm_load              — {dn: weighted_load_sum} using slot_load_scores
+      per_must_fill            — {zone: {filled_nights, total_nights}} for Z1/4/5/8
+      trainee_support_placements — {dn: count} for TMs with tm_skill ≤ 3 in support slots
+    """
+    if slot_loads is None:
+        slot_loads = {}
+
     summary    = audit.get("summary", {})
     unresolved = audit.get("unresolved_slots", [])
     placements = audit.get("placements", [])
@@ -217,22 +246,81 @@ def _extract_metrics(audit: dict, simulated_unavailable: list[str]) -> dict:
         if u.get("severity") == "critical":
             per_day[dt]["critical"] += 1
 
+    # ── Phase 4e.2A: enriched metrics ────────────────────────────────────────
+
+    # All distinct dates (covers nights with 0 placements via unresolved)
+    all_dates: set[str] = set()
+    for p in placements:
+        dt = p.get("date", "")
+        if dt:
+            all_dates.add(dt)
+    for u in unresolved:
+        dt = u.get("date", "")
+        if dt:
+            all_dates.add(dt)
+    total_nights = max(len(all_dates), 1)
+
+    # Per-TM weighted load sum (slot_load_scores values)
+    per_tm_load: dict[str, float] = {}
+    for p in placements:
+        dn   = p.get("tm_display_name", "")
+        slot = p.get("zone_slot", "")
+        if dn and slot:
+            per_tm_load[dn] = per_tm_load.get(dn, 0.0) + slot_loads.get(slot, 0.0)
+
+    # Must-fill zone coverage (Zone1, Zone4, Zone5, Zone8)
+    per_must_fill: dict[str, dict] = {}
+    for zone in MUST_FILL_ZONES:
+        filled_dates = set(
+            p.get("date", "") for p in placements
+            if p.get("zone_slot") == zone and p.get("date")
+        )
+        per_must_fill[zone] = {
+            "filled_nights": len(filled_dates),
+            "total_nights":  total_nights,
+        }
+
+    # Trainee support exposure (tm_skill ≤ 3 placed in support slots)
+    trainee_support: dict[str, int] = {}
+    for p in placements:
+        dn    = p.get("tm_display_name", "")
+        slot  = p.get("zone_slot", "")
+        skill = p.get("tm_skill", 99)
+        if dn and slot in SUPPORT_SLOTS:
+            try:
+                if float(skill) <= 3:
+                    trainee_support[dn] = trainee_support.get(dn, 0) + 1
+            except (TypeError, ValueError):
+                pass
+
     return {
-        "filled":                filled,
-        "total_slots":           total_slots,
-        "unresolved":            summary.get("unfilled", 0),
-        "critical":              critical,
-        "fill_rate":             round(fill_rate, 4),
-        "load_variance":         round(load_std, 4),
-        "simulated_call_offs":   len(simulated_unavailable),
-        "per_day":               per_day,
+        "filled":                      filled,
+        "total_slots":                 total_slots,
+        "unresolved":                  summary.get("unfilled", 0),
+        "critical":                    critical,
+        "fill_rate":                   round(fill_rate, 4),
+        "load_variance":               round(load_std, 4),
+        "simulated_call_offs":         len(simulated_unavailable),
+        "per_day":                     per_day,
+        # Phase 4e.2A
+        "per_tm_load":                 per_tm_load,
+        "per_must_fill":               per_must_fill,
+        "trainee_support_placements":  trainee_support,
     }
 
 
 # ── Aggregation ───────────────────────────────────────────────────────────────
 
 def _aggregate(run_metrics: list[dict]) -> dict:
-    """Compute mean + p95 across a list of per-run metrics dicts."""
+    """Compute mean + p95 across a list of per-run metrics dicts.
+
+    Phase 4e.2B additions:
+      per_tm_load_mean      — {dn: mean_weighted_load} across runs
+      must_fill_rate        — {zone: mean_fill_rate} for Z1/4/5/8
+      must_fill_avg         — scalar average of the 4 must-fill rates (UI stat card)
+      trainee_support_mean  — {dn: mean_support_placements} across runs
+      trainee_support_total — sum across all trainees (UI stat card)
+    """
     if not run_metrics:
         return {}
 
@@ -248,6 +336,45 @@ def _aggregate(run_metrics: list[dict]) -> dict:
         result[f"{k}_mean"] = round(sum(vals) / len(vals), 4)
         result[f"{k}_p95"]  = _p95(vals)
     result["n_runs"] = len(run_metrics)
+
+    # ── Phase 4e.2B: enriched aggregations ───────────────────────────────────
+
+    # Per-TM weighted load mean across runs
+    all_tms: set[str] = set()
+    for m in run_metrics:
+        all_tms.update(m.get("per_tm_load", {}).keys())
+    tm_load_means: dict[str, float] = {}
+    for dn in all_tms:
+        vals = [m.get("per_tm_load", {}).get(dn, 0.0) for m in run_metrics]
+        tm_load_means[dn] = round(sum(vals) / len(vals), 2)
+    result["per_tm_load_mean"] = tm_load_means
+
+    # Must-fill zone coverage (mean fill_rate per zone across runs)
+    must_fill_rates: dict[str, float] = {}
+    for zone in sorted(MUST_FILL_ZONES):
+        zone_rates = []
+        for m in run_metrics:
+            mf = m.get("per_must_fill", {}).get(zone, {})
+            fn = mf.get("filled_nights", 0)
+            tn = mf.get("total_nights", 1)
+            zone_rates.append(fn / max(tn, 1))
+        must_fill_rates[zone] = round(sum(zone_rates) / len(zone_rates), 4)
+    result["must_fill_rate"] = must_fill_rates
+    result["must_fill_avg"]  = round(
+        sum(must_fill_rates.values()) / max(len(must_fill_rates), 1), 4
+    )
+
+    # Trainee support exposure (mean support placements per trainee across runs)
+    all_trainees: set[str] = set()
+    for m in run_metrics:
+        all_trainees.update(m.get("trainee_support_placements", {}).keys())
+    trainee_means: dict[str, float] = {}
+    for dn in all_trainees:
+        vals = [m.get("trainee_support_placements", {}).get(dn, 0) for m in run_metrics]
+        trainee_means[dn] = round(sum(vals) / len(vals), 2)
+    result["trainee_support_mean"]  = trainee_means
+    result["trainee_support_total"] = round(sum(trainee_means.values()), 2)
+
     return result
 
 
@@ -263,56 +390,173 @@ def _write_markdown(
     agg_baseline: dict | None,
     elapsed_s: float,
 ) -> Path:
-    """Write human-readable sim_report.md."""
+    """Write human-readable sim_report.md.
+
+    Phase 4e.2C section order:
+      1. Header
+      2. Aggregated Results
+      3. Comparison Delta (if baseline) — ✓/✗/≈ indicators
+      4. Must-Fill Zone Coverage
+      5. TM Load Distribution (top 10 / bottom 10)
+      6. Trainee Support Exposure
+      7. Per-Run Details (Proposed)
+      8. Per-Run Details (Baseline, if run)
+    """
 
     def _fmt(v):
         if isinstance(v, float):
             return f"{v:.4f}"
         return str(v)
 
+    def _pct(v):
+        """Format a 0-1 rate as percentage string."""
+        try:
+            return f"{float(v)*100:.1f}%"
+        except (TypeError, ValueError):
+            return str(v)
+
+    def _delta_signal(key: str, delta: float) -> str:
+        """Return ✓/✗/≈ based on metric direction and magnitude."""
+        # lower-is-better metrics
+        lower_is_better = {"unresolved_mean", "critical_mean", "critical_p95",
+                           "load_variance_mean", "unresolved_p95"}
+        threshold_map = {
+            "fill_rate_mean":      0.005,
+            "fill_rate_p95":       0.005,
+            "unresolved_mean":     0.10,
+            "unresolved_p95":      0.10,
+            "critical_mean":       0.05,
+            "critical_p95":        0.05,
+            "load_variance_mean":  0.001,
+        }
+        thr = threshold_map.get(key, 0.005)
+        if key in lower_is_better:
+            if delta < -thr:
+                return "✓"
+            elif delta > thr:
+                return "✗"
+        else:
+            if delta > thr:
+                return "✓"
+            elif delta < -thr:
+                return "✗"
+        return "≈"
+
     lines = [
-        f"# GLCR Stochastic Simulation Report",
-        f"",
+        "# GLCR Stochastic Simulation Report",
+        "",
         f"**Run:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  ",
         f"**Seed:** {args.seed}  **Callout rate (λ):** {args.callout_rate}  ",
         f"**Schedules:** {len(schedules)}  **Runs/schedule:** {args.runs}  ",
         f"**Total runs:** {len(proposed_results)}  **Elapsed:** {elapsed_s:.1f}s",
-        f"",
-        f"## Config",
-        f"",
-        f"| | Proposed | Baseline |" if baseline_results else "| | Proposed |",
-        f"|---|---|---|" if baseline_results else "|---|---|",
+        "",
     ]
-    proposed_cfg = proposed_results[0].get("config_used", {}) if proposed_results else {}
-    baseline_cfg = baseline_results[0].get("config_used", {}) if baseline_results else {}
 
+    # ── Section 1: Aggregated Results ─────────────────────────────────────────
     metric_rows = [
-        ("fill_rate_mean",       "Fill rate (mean)"),
-        ("fill_rate_p95",        "Fill rate (p95)"),
-        ("unresolved_mean",      "Unresolved (mean)"),
-        ("critical_mean",        "Critical unresolved (mean)"),
-        ("critical_p95",         "Critical unresolved (p95)"),
-        ("load_variance_mean",   "Load variance σ (mean)"),
+        ("fill_rate_mean",           "Fill rate (mean)"),
+        ("fill_rate_p95",            "Fill rate (p95)"),
+        ("unresolved_mean",          "Unresolved (mean)"),
+        ("critical_mean",            "Critical unresolved (mean)"),
+        ("critical_p95",             "Critical unresolved (p95)"),
+        ("load_variance_mean",       "Load variance σ (mean)"),
         ("simulated_call_offs_mean", "Simulated call-offs (mean)"),
     ]
-    lines.append("")
-    lines.append("## Aggregated Results")
-    lines.append("")
+
+    lines += ["## Aggregated Results", ""]
     if baseline_results:
-        lines.append("| Metric | Proposed | Baseline | Δ |")
-        lines.append("|--------|----------|----------|---|")
+        lines += ["| Metric | Proposed | Baseline | Δ |",
+                  "|--------|----------|----------|---|"]
         for key, label in metric_rows:
             p_val = agg_proposed.get(key, 0)
             b_val = (agg_baseline or {}).get(key, 0)
             delta = round(p_val - b_val, 4)
             sign  = "+" if delta > 0 else ""
-            lines.append(f"| {label} | {_fmt(p_val)} | {_fmt(b_val)} | {sign}{_fmt(delta)} |")
+            lines.append(
+                f"| {label} | {_fmt(p_val)} | {_fmt(b_val)} | {sign}{_fmt(delta)} |"
+            )
     else:
-        lines.append("| Metric | Proposed |")
-        lines.append("|--------|----------|")
+        lines += ["| Metric | Proposed |", "|--------|----------|"]
         for key, label in metric_rows:
             lines.append(f"| {label} | {_fmt(agg_proposed.get(key, 0))} |")
 
+    # ── Section 2: Comparison Delta (baseline only) ───────────────────────────
+    if baseline_results and agg_baseline:
+        lines += [
+            "",
+            "## Comparison Delta",
+            "",
+            "Signals: **✓** proposed improves on baseline · **✗** proposed regresses · **≈** within threshold",
+            "",
+            "| Metric | Proposed | Baseline | Δ | Signal |",
+            "|--------|----------|----------|---|--------|",
+        ]
+        for key, label in metric_rows:
+            p_val = agg_proposed.get(key, 0)
+            b_val = agg_baseline.get(key, 0)
+            delta = round(p_val - b_val, 4)
+            sign  = "+" if delta > 0 else ""
+            sig   = _delta_signal(key, delta)
+            lines.append(
+                f"| {label} | {_fmt(p_val)} | {_fmt(b_val)} | {sign}{_fmt(delta)} | {sig} |"
+            )
+
+    # ── Section 3: Must-Fill Zone Coverage ────────────────────────────────────
+    lines += ["", "## Must-Fill Zone Coverage", ""]
+    mf_rates = agg_proposed.get("must_fill_rate", {})
+    if mf_rates:
+        lines += ["| Zone | Mean Fill Rate | Signal |",
+                  "|------|----------------|--------|"]
+        for zone in sorted(MUST_FILL_ZONES):
+            rate = mf_rates.get(zone, 0.0)
+            sig  = "✓" if rate >= 0.90 else "✗"
+            lines.append(f"| {zone} | {_pct(rate)} | {sig} |")
+        must_avg = agg_proposed.get("must_fill_avg", 0.0)
+        lines.append(f"| **Average** | **{_pct(must_avg)}** | {'✓' if must_avg >= 0.90 else '✗'} |")
+    else:
+        lines.append("_No must-fill data available — slot_load_scores may be empty._")
+
+    # ── Section 4: TM Load Distribution ──────────────────────────────────────
+    tm_load = agg_proposed.get("per_tm_load_mean", {})
+    if tm_load:
+        sorted_load = sorted(tm_load.items(), key=lambda x: x[1], reverse=True)
+        top10    = sorted_load[:10]
+        bottom10 = sorted_load[-10:][::-1]   # lightest 10, ascending
+
+        lines += ["", "## TM Load Distribution (Mean Weighted Load Across Runs)", ""]
+        lines += ["**Top 10 Most Loaded**", "",
+                  "| TM | Mean Load |",
+                  "|----|-----------|"]
+        for dn, load in top10:
+            lines.append(f"| {dn} | {load:.1f} |")
+
+        lines += ["", "**Bottom 10 Least Loaded**", "",
+                  "| TM | Mean Load |",
+                  "|----|-----------|"]
+        for dn, load in bottom10:
+            lines.append(f"| {dn} | {load:.1f} |")
+    else:
+        lines += ["", "## TM Load Distribution", "",
+                  "_No weighted load data — slot_load_scores may be empty._"]
+
+    # ── Section 5: Trainee Support Exposure ───────────────────────────────────
+    trainee_means = agg_proposed.get("trainee_support_mean", {})
+    lines += ["", "## Trainee Support Exposure (Skill ≤ 3)", ""]
+    if trainee_means:
+        sorted_trainees = sorted(trainee_means.items(), key=lambda x: x[1], reverse=True)
+        lines += ["| TM | Mean Support Placements/Week |",
+                  "|----|------------------------------|"]
+        for dn, count in sorted_trainees:
+            lines.append(f"| {dn} | {count:.1f} |")
+        total = agg_proposed.get("trainee_support_total", 0.0)
+        lines.append(f"| **Total** | **{total:.1f}** |")
+        lines.append(
+            f"\n_Support slots: {', '.join(sorted(SUPPORT_SLOTS))}_"
+        )
+    else:
+        lines.append("_No trainees (skill ≤ 3) placed in support slots during this simulation._")
+
+    # ── Section 6: Per-Run Details (Proposed) ────────────────────────────────
     lines += [
         "",
         "## Per-Run Details (Proposed)",
@@ -327,6 +571,7 @@ def _write_markdown(
             f" {m.get('load_variance',0):.4f} |"
         )
 
+    # ── Section 7: Per-Run Details (Baseline) ────────────────────────────────
     if baseline_results:
         lines += [
             "",
@@ -390,6 +635,10 @@ def main(argv=None):
         sys.exit(1)
     print(f"[sim] Schedules ({len(schedules)}): {', '.join(s.name for s in schedules)}\n")
 
+    # Load slot load scores once (used by _extract_metrics for weighted TM load)
+    slot_loads = _load_slot_loads()
+    print(f"[sim] Slot load scores: {len(slot_loads)} entries loaded")
+
     # Load grave pool for call-off sampling
     grave_pool = _load_grave_pool()
     if not grave_pool:
@@ -430,7 +679,7 @@ def main(argv=None):
                 print(f"  [FAILED]")
                 continue
 
-            m_p = _extract_metrics(audit_p, unavailable)
+            m_p = _extract_metrics(audit_p, unavailable, slot_loads=slot_loads)
             m_p.update({
                 "run":      run_num,
                 "schedule": sched.name,
@@ -448,7 +697,7 @@ def main(argv=None):
                 baseline_cfg_run["simulated_unavailable"] = unavailable
                 audit_b = _run_engine_with_config(baseline_cfg_run, sched, verbose=False)
                 if audit_b:
-                    m_b = _extract_metrics(audit_b, unavailable)
+                    m_b = _extract_metrics(audit_b, unavailable, slot_loads=slot_loads)
                     m_b.update({
                         "run":      run_num,
                         "schedule": sched.name,

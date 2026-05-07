@@ -472,6 +472,16 @@ def _sim_pane() -> rx.Component:
                                     EngineConfiguratorState.msim_agg_proposed["load_variance_mean"].to(str)),
                                 _msim_stat("Runs",
                                     EngineConfiguratorState.msim_agg_proposed["n_runs"].to(str)),
+                                # Phase 4e.2D: two new stat cards
+                                _msim_stat(
+                                    "Z1/4/5/8 covered",
+                                    EngineConfiguratorState.msim_agg_proposed["must_fill_avg"].to(str),
+                                    warn=EngineConfiguratorState.msim_agg_proposed["must_fill_avg"].to(float) < 0.9,
+                                ),
+                                _msim_stat(
+                                    "Trainee runs/wk",
+                                    EngineConfiguratorState.msim_agg_proposed["trainee_support_total"].to(str),
+                                ),
                                 class_name="engine-sim-stats",
                             ),
                         ),
@@ -496,6 +506,29 @@ def _sim_pane() -> rx.Component:
                                     _msim_stat("Load σ (mean)",
                                         EngineConfiguratorState.msim_agg_baseline["load_variance_mean"].to(str)),
                                     class_name="engine-sim-stats",
+                                ),
+                            ),
+                            rx.fragment(),
+                        ),
+                        # Phase 4e.1: collapsible inline report disclosure
+                        rx.cond(
+                            EngineConfiguratorState.msim_report_md != "",
+                            rx.el.details(
+                                rx.el.summary(
+                                    "View full report",
+                                    style={
+                                        "fontSize": "11px",
+                                        "fontWeight": "600",
+                                        "color": "var(--accent-amber)",
+                                        "cursor": "pointer",
+                                        "userSelect": "none",
+                                        "marginTop": "10px",
+                                        "display": "block",
+                                    },
+                                ),
+                                rx.el.div(
+                                    rx.markdown(EngineConfiguratorState.msim_report_md),
+                                    class_name="ops-sim-report-body",
                                 ),
                             ),
                             rx.fragment(),
