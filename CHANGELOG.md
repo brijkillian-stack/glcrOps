@@ -4,6 +4,44 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Session gshiftpage_phase4b_admin_hub (Sonnet)
+
+### GShiftPage Phase 4b — Sudo Admin Hub + Long-Tail Memory Aliases
+
+- **`apps/admin/state.py`** (new) — `AdminHubState`: loads `logs_recent`
+  count (events in last 7 days) on page mount for the Logs card chip.
+- **`shared/components/admin_card.py`** (new) — `admin_card(glyph, title,
+  tagline, href, count=None)`: reusable hub card rendered as `<a>`. Hover
+  produces border-color: var(--blue) + blue-dim bg + translateY(-1px).
+  Optional count chip (monospace, muted, top-right) via `count` arg.
+- **`shared/components/admin_section_head.py`** (new) — Two exports:
+  `admin_section_head(title)`: 10px/700/gold-bar section header matching
+  the SectionHead atom from shift-hud-hifi.jsx.
+  `admin_breadcrumb(section, page_title)`: 11px eyebrow sub-bar
+  "← Sudo Admin · {section} · {page_title}" shown at top of all
+  /admin/* sub-pages.
+- **`assets/admin_hub.css`** (new) — `.admin-hub-card`, `.admin-hub-grid`
+  (3-col responsive → 2-col → 1-col), `.admin-breadcrumb`, `.admin-hub-*`
+  layout classes. All colors use ops_tokens.css vars — dual-theme automatic.
+- **`apps/admin/pages/index.py`** (replaced stub) — Full 3-section hub:
+  Activity (Logs/Threads/Floor Walk/Write-Ups), Workflows (Shift Recap/
+  Areas/Engine Config), System (Health/Today legacy/Deployment legacy).
+  11 cards total. PT Serif italic "Sudo Admin" heading + gold eyebrow.
+- **`apps/admin/pages/today.py`** (new) — `admin_today_page()`: breadcrumb
+  (System > Today legacy) + `today_page()` from apps/glcr/pages/today.py.
+- **`apps/admin/pages/deployment.py`** (new) — `admin_deployment_page()`:
+  breadcrumb (System > Deployment legacy) + `deployment_page()`.
+- **`apps/admin/pages/engine.py`** (new) — `admin_engine_page()`: Phase 4c
+  stub with breadcrumb (Workflows > Engine Config) + coming-soon chips for
+  Weight Sliders, Threshold Editors, Slot-Difficulty Editor, Simulation Pane.
+- **`apps/admin/routes.py`** (updated) — 4 routes: /admin (AdminHubState
+  .load_hub), /admin/today (TodayState.load_today), /admin/deployment
+  (DeploymentState.load_roster), /admin/engine (no on_load).
+- **`brijkillian_stack/brijkillian_stack.py`** (updated) — Registers
+  `/admin_hub.css` in `head_components`.
+
+---
+
 ## 2026-05-07 — Session gshiftpage_phase4a_captures (Sonnet)
 
 ### GShiftPage Phase 4a — Thumb Cluster Capture Handlers + Command Palette + ⌘K

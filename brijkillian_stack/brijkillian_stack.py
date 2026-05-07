@@ -211,6 +211,8 @@ app = rx.App(
         rx.el.script(src="/avatar_menu.js"),
         # ── Shift HUD (Phase 3: /shift page) ──────────────────────────────
         rx.el.link(rel="stylesheet", href="/shift_hud.css"),
+        # ── Sudo Admin hub (Phase 4b: /admin hub + sub-pages) ─────────────
+        rx.el.link(rel="stylesheet", href="/admin_hub.css"),
     ],
 )
 

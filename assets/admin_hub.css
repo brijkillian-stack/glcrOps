@@ -1,0 +1,133 @@
+/*
+ * admin_hub.css — Sudo Admin hub layout + card styles
+ *
+ * Loaded via head_components in brijkillian_stack.py.
+ * All colors use ops_tokens.css vars — both themes work automatically.
+ */
+
+/* ── Hub card ──────────────────────────────────────────────────────────────── */
+
+.admin-hub-card {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.12s ease,
+              box-shadow 0.14s ease;
+}
+
+.admin-hub-card:hover {
+  border-color: var(--blue);
+  background: var(--blue-dim);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(92, 192, 255, 0.12);
+}
+
+/* Count chip inside card top row */
+.admin-card-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink3);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Hub grid ──────────────────────────────────────────────────────────────── */
+
+.admin-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+/* Responsive: 2-col below 900px, 1-col below 520px */
+@media (max-width: 900px) {
+  .admin-hub-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-hub-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Hub page wrapper ──────────────────────────────────────────────────────── */
+
+.admin-hub-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+.admin-hub-header {
+  padding: 36px 40px 24px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+  margin-bottom: 32px;
+}
+
+.admin-hub-body {
+  padding: 0 40px 48px;
+  max-width: 900px;
+}
+
+.admin-hub-section {
+  margin-bottom: 32px;
+}
+
+/* ── Breadcrumb sub-bar ────────────────────────────────────────────────────── */
+
+.admin-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 28px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  flex-shrink: 0;
+}
+
+.admin-breadcrumb a {
+  color: var(--blue);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.admin-breadcrumb a:hover {
+  color: var(--ink);
+}
+
+/* ── Admin sub-page wrapper ────────────────────────────────────────────────── */
+
+.admin-subpage-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.admin-subpage-content {
+  flex: 1;
+  overflow-y: auto;
+}

@@ -224,3 +224,15 @@
   background: var(--zds-bg-1);
   color: var(--zds-t1);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HIDE "BUILT WITH REFLEX" BADGE
+   The rx.App(show_built_with_reflex=False) flag isn't honored on this Reflex
+   build, so we hide the anchor by href as a CSS-level backstop. The badge is
+   an <a href="https://reflex.dev"> rendered fixed bottom-right.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+a[href="https://reflex.dev"],
+a[href*="reflex.dev"][target="_blank"] {
+  display: none !important;
+}
