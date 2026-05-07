@@ -597,6 +597,43 @@ def _sim_pane() -> rx.Component:
                             ),
                             style={"marginTop": "10px"},
                         ),
+                        # Phase 4f hotfix #5: collapsible engine-output tail —
+                        # always present after a sim run, even on success.
+                        # Surfaces "Placement method: lap (scipy_available=...)"
+                        # plus per-run engine warnings so silent fallbacks
+                        # (LAP-degrading-to-greedy when scipy is missing) are
+                        # visible without digging into Render logs.
+                        rx.cond(
+                            EngineConfiguratorState.msim_stdout_tail != "",
+                            rx.el.details(
+                                rx.el.summary(
+                                    "Engine output (tail)",
+                                    style={
+                                        "fontSize": "11px",
+                                        "color": "var(--ink3)",
+                                        "cursor": "pointer",
+                                        "padding": "6px 0",
+                                        "marginTop": "6px",
+                                    },
+                                ),
+                                rx.el.pre(
+                                    EngineConfiguratorState.msim_stdout_tail,
+                                    style={
+                                        "fontSize": "10.5px",
+                                        "color": "var(--ink2)",
+                                        "background": "var(--surface-card)",
+                                        "border": "1px solid var(--border-subtle)",
+                                        "borderRadius": "4px",
+                                        "padding": "10px",
+                                        "maxHeight": "300px",
+                                        "overflow": "auto",
+                                        "whiteSpace": "pre-wrap",
+                                        "fontFamily": "var(--font-mono, monospace)",
+                                    },
+                                ),
+                            ),
+                            rx.fragment(),
+                        ),
                         style={"display": "flex", "flexDirection": "column", "gap": "4px"},
                     ),
                     rx.fragment(),

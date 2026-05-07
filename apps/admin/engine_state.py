@@ -135,6 +135,7 @@ class EngineConfiguratorState(rx.State):
     msim_md_path: str = ""            # path to sim_report.md
     msim_elapsed_s: float = 0.0
     msim_report_md: str = ""          # Phase 4e.1: inline markdown for <details> disclosure
+    msim_stdout_tail: str = ""        # Phase 4f hotfix: simulator stdout tail (always populated)
 
     # ── Saved baseline (for diff) ────────────────────────────────────────
     _saved_weights: dict = {}
@@ -463,6 +464,14 @@ class EngineConfiguratorState(rx.State):
         self.msim_agg_proposed = {}
         self.msim_agg_baseline = {}
         self.msim_report_md = ""      # Phase 4e.1: reset before each run
+        self.msim_stdout_tail = ""    # Phase 4f hotfix #5: reset before each run
+
+        # Phase 4f hotfix #4: yield to flush msim_running=True to the browser
+        # BEFORE we kick off the long-running subprocess. Without this yield,
+        # Reflex batches all state updates in this handler into one response
+        # at the end — by which point msim_running is already False (set in
+        # finally), so the loading scrim never visibly renders.
+        yield
 
         config_override = {
             "weights":          self._weights_dict(),
@@ -572,12 +581,18 @@ class EngineConfiguratorState(rx.State):
                         "json":   json_path,
                         "md":     md_path,
                     }
+                # Phase 4f hotfix #5: ALWAYS capture last 3KB of simulator
+                # stdout so diagnostic lines (placement_method, scipy
+                # availability, per-run engine warnings) are visible even on
+                # successful runs. Critical for spotting silent fallbacks.
+                stdout_tail = (proc.stdout or "")[-3000:].strip()
                 return {
                     "json":         json_path,
                     "md":           md_path,
                     "md_body":      md_body,
                     "agg_proposed": agg_p,
                     "agg_baseline": agg_b,
+                    "stdout_tail":  stdout_tail,
                 }
 
         try:
@@ -595,6 +610,7 @@ class EngineConfiguratorState(rx.State):
                 self.msim_json_path    = result.get("json") or ""
                 self.msim_md_path      = result.get("md") or ""
                 self.msim_report_md    = result.get("md_body") or ""
+                self.msim_stdout_tail  = result.get("stdout_tail") or ""
                 self.msim_ran = True
         except Exception as exc:
             self.msim_error = f"Multi-week sim error: {exc}"

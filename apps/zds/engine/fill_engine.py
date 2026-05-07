@@ -123,7 +123,17 @@ if "--config-override" in sys.argv:
 # "lap"              — Hungarian/LAP solver for constrained block (22 slots).
 # Override via config_override JSON key "placement_method" or engine_config DB.
 PLACEMENT_METHOD: str = str(_CONFIG_OVERRIDE.get("placement_method", "greedy")).lower()
-print(f"  Placement method: {PLACEMENT_METHOD}")
+# Phase 4f hotfix #3: surface scipy availability so we can tell at-a-glance
+# whether LAP is actually optimizing or silently falling back to greedy.
+# The simulator captures this stdout and surfaces it in the UI banner when
+# something looks off.
+try:
+    from glcr_engine.lap_solver import _SCIPY_OK as _LAP_SCIPY_OK
+except Exception:
+    _LAP_SCIPY_OK = False
+print(f"  Placement method: {PLACEMENT_METHOD}  (scipy_available={_LAP_SCIPY_OK})")
+if PLACEMENT_METHOD == "lap" and not _LAP_SCIPY_OK:
+    print("  [warn] placement_method=lap but scipy not installed — LAP will degrade to greedy")
 
 # ── SIMULATED UNAVAILABLE (Phase 4e — stochastic simulator) ──────────
 # When simulate_weeks.py runs fill_engine in a simulated call-off scenario
