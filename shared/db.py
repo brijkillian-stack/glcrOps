@@ -3030,3 +3030,131 @@ def save_area_note(area_id: str, content: str, sentiment: str = "neutral") -> bo
     except Exception:
         print(f"[db] save_area_note error:\n{traceback.format_exc()}")
         return False
+
+
+# ── Shift HUD capture helpers (Phase 4a) ─────────────────────────────────────
+
+def insert_note(
+    content: str,
+    content_type: str,
+    sentiment: str,
+    original_date: str,
+    author: str = "brian",
+    captured_via: str = "shift-hud",
+    metadata: dict | None = None,
+    entity_ids: list[str] | None = None,
+    event_id: str | None = None,
+) -> str | None:
+    """Write a row to public.notes, link entities via note_entities, and
+    optionally link to a parent event via event_notes.
+
+    Returns the new note id on success, None on failure.
+    """
+    import uuid as _uuid
+    try:
+        note_id = f"note_{_uuid.uuid4().hex[:12]}"
+        sb = get_client()
+        sb.table("notes").insert({
+            "id":           note_id,
+            "content":      content,
+            "content_type": content_type,
+            "sentiment":    sentiment,
+            "original_date": original_date,
+            "author":       author,
+            "captured_via": captured_via,
+            "metadata":     metadata or {},
+            "archived":     False,
+        }).execute()
+
+        # Link entities
+        for eid in (entity_ids or []):
+            if eid:
+                try:
+                    sb.table("note_entities").insert({
+                        "note_id":   note_id,
+                        "entity_id": eid,
+                        "role":      "subject",
+                    }).execute()
+                except Exception:
+                    pass  # entity link is non-fatal
+
+        # Link to parent shift_log event
+        if event_id:
+            try:
+                sb.table("event_notes").insert({
+                    "event_id": event_id,
+                    "note_id":  note_id,
+                }).execute()
+            except Exception:
+                pass  # event link is non-fatal
+
+        return note_id
+    except Exception:
+        print(f"[db] insert_note error:\n{traceback.format_exc()}")
+        return None
+
+
+def ensure_shift_log_event(shift_date: str) -> str | None:
+    """Get or create the shift_log event for the given date. Idempotent.
+
+    Queries events WHERE event_type='shift_log' AND event_date=shift_date.
+    Creates one if missing. Returns the event id, or None on error.
+    """
+    import uuid as _uuid
+    try:
+        sb = get_client()
+        res = (
+            sb.table("events")
+            .select("id")
+            .eq("event_type", "shift_log")
+            .eq("event_date", shift_date)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if rows:
+            return rows[0]["id"]
+
+        # Create a new shift_log event
+        from datetime import datetime as _dt
+        try:
+            d = _dt.strptime(shift_date, "%Y-%m-%d")
+            long_label = d.strftime("%A, %B %-d, %Y")
+        except Exception:
+            long_label = shift_date
+        event_id = f"evt_{_uuid.uuid4().hex[:12]}"
+        sb.table("events").insert({
+            "id":         event_id,
+            "event_type": "shift_log",
+            "event_date": shift_date,
+            "shift":      "graves",
+            "title":      f"Graves Shift Log — {long_label}",
+            "summary":    "Supervisor: Brian Killian / Jeff Lawson",
+            "metadata":   {"created_via": "shift-hud"},
+        }).execute()
+        return event_id
+    except Exception:
+        print(f"[db] ensure_shift_log_event error:\n{traceback.format_exc()}")
+        return None
+
+
+def lookup_entity_id_by_name(display_name: str) -> str | None:
+    """Look up an entity id by display_name from the entities table.
+
+    Used by capture flows when tm_id isn't already known.
+    """
+    try:
+        sb = get_client()
+        res = (
+            sb.table("entities")
+            .select("id")
+            .eq("display_name", display_name)
+            .eq("entity_type", "person")
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0]["id"] if rows else None
+    except Exception:
+        print(f"[db] lookup_entity_id_by_name error:\n{traceback.format_exc()}")
+        return None

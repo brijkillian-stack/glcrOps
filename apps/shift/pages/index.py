@@ -14,6 +14,8 @@ from ..state import ShiftState
 from shared.components.shift_zone_card import shift_zone_card
 from shared.components.shift_timeline import shift_timeline
 from shared.components.thumb_cluster import thumb_cluster
+from shared.components.capture_modals import capture_modals
+from shared.components.capture_toast import capture_toast
 
 # ── Palette helpers (dark HUD; ignores light-mode for now) ──────────────────
 
@@ -706,7 +708,10 @@ def shift_page() -> rx.Component:
     return rx.el.div(
         _header_block(),
         _body_grid(),
+        # Fixed overlays — order matters: cluster < toast < modals (modal z-index wins)
         thumb_cluster(),
+        capture_toast(),
+        capture_modals(),
         style={
             "display": "flex",
             "flexDirection": "column",

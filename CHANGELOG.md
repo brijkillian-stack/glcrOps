@@ -4,6 +4,55 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-07 — Session gshiftpage_phase4a_captures (Sonnet)
+
+### GShiftPage Phase 4a — Thumb Cluster Capture Handlers + Command Palette + ⌘K
+
+- **`shared/db.py`** (extended) — `insert_note()`: writes to `public.notes`,
+  links entities via `note_entities`, anchors to parent shift_log event via
+  `event_notes`. `ensure_shift_log_event(shift_date)`: idempotent — one
+  `event_type=shift_log` event per date, created on first call, reused
+  thereafter. `lookup_entity_id_by_name(display_name)`: fallback entity
+  resolution by display_name.
+- **`apps/shift/types.py`** — Added `tm_id: str` field to `HudRosterChip`.
+- **`apps/shift/state.py`** — New vars `shift_date_iso`, `shift_log_event_id`,
+  `roster_name_to_id`. `on_load` anchors shift_log event after header build.
+  `_build_header` sets `shift_date_iso`. `_build_from_zds` sets
+  `roster_name_to_id` and populates `tm_id` on each roster chip.
+  New `refresh()` event: lightweight `_build_tasks + _build_activity`.
+- **`shared/state/capture_toast.py`** (new) — `CaptureToastState`: message,
+  visible, `show(msg)`, `dismiss()`.
+- **`shared/state/call_out_modal.py`** (new) — `CallOutModalState`: TM picker
+  chips, points float input, note dropdown (PTO/LOA/Intermittent/FMLA).
+  `confirm()`: writes `call_offs` row + `notes` row (content_type=flag,
+  section=Call-Outs), shows toast, refreshes HUD.
+- **`shared/state/kudos_modal.py`** (new) — `KudosModalState`: TM picker +
+  textarea. `submit()`: writes kudos note (content_type=kudos, section=Floor Walk).
+- **`shared/state/beo_modal.py`** (new) — `BeoModalState`: multi-select TM chips
+  + time input (default = current hour). `submit()`: one observation note per
+  selected TM (section=BEOs, beo_time in metadata).
+- **`shared/state/command_palette.py`** (new) — `CommandPaletteState`: open,
+  raw_text, submitting. `toggle/close/set_raw_text`. Quick-action openers
+  close palette then call the corresponding modal. `submit_raw()`: writes
+  content_type=reference note via `insert_note`.
+- **`shared/components/capture_toast.py`** (new) — `capture_toast()`: fixed
+  bottom-center 3s auto-dismiss toast. MutationObserver JS watches
+  `.capture-toast-panel` and fires `capture_toast_state.dismiss` after 3s.
+- **`shared/components/capture_modals.py`** (new) — `call_out_modal()`,
+  `kudos_modal()`, `beo_modal()`, `command_palette_modal()`. All use
+  `rx.dialog.root(open=..., on_open_change=...)` — Radix handles focus-trap
+  and Escape. `capture_modals()` mounts all four as `rx.fragment`.
+- **`shared/components/thumb_cluster.py`** (updated) — All four buttons wired:
+  ⚑ → `CallOutModalState.open_modal`, ★ → `KudosModalState.open_modal`,
+  ⊟ → `BeoModalState.open_modal`, + FAB → `CommandPaletteState.toggle`.
+- **`apps/shift/pages/index.py`** (updated) — `capture_toast()` and
+  `capture_modals()` mounted at page root inside `shift_page()`.
+- **`brijkillian_stack/brijkillian_stack.py`** (updated) — `_KBD_SCRIPT`
+  extended: ⌘K/Ctrl+K now also dispatches `command_palette_state.toggle`
+  (no-op on non-Shift pages); Escape also closes `command_palette_state`.
+
+---
+
 ## 2026-05-07 — Session gshiftpage_phase3_shifthud (Sonnet)
 
 ### GShiftPage Phase 3 — Shift HUD at /shift

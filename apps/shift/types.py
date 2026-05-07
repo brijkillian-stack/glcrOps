@@ -58,6 +58,7 @@ class HudRosterChip(TypedDict):
     """One chip in the roster strip on the right panel."""
 
     name: str
+    tm_id: str          # entity id — "" if unknown
     kind: str           # "g" grave | "p" pm_ol | "a" am_ol | "x" off
     zone: str           # assigned zone label, or "—"
 

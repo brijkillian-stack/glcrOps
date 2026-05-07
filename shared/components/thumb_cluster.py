@@ -2,29 +2,26 @@
 shared/components/thumb_cluster.py — Thumb cluster FAB for the Shift HUD.
 
 Fixed bottom-right stack:
-  ⚑ Call-out  (red)
-  ★ Kudos     (gold)
-  ⊟ BEO       (blue)
-  + FAB       (blue radial gradient, 64×64)
+  ⚑ Call-out  (red)   → opens CallOutModalState
+  ★ Kudos     (gold)  → opens KudosModalState
+  ⊟ BEO       (blue)  → opens BeoModalState
+  + FAB       (blue radial gradient, 64×64) → toggles CommandPaletteState
 
-Phase 3 ships read-only (no capture wiring yet).  Each button will
-trigger the shared capture modal in a follow-on phase.
+Phase 4a: all four buttons are wired to their respective capture handlers.
 """
 
 import reflex as rx
+from shared.state.call_out_modal import CallOutModalState
+from shared.state.kudos_modal import KudosModalState
+from shared.state.beo_modal import BeoModalState
+from shared.state.command_palette import CommandPaletteState
 
 
-_CLUSTER_BUTTONS = [
-    {"icon": "⚑", "label": "Call-out", "color": "var(--red)"},
-    {"icon": "★", "label": "Kudos",    "color": "var(--gold)"},
-    {"icon": "⊟", "label": "BEO",      "color": "var(--blue)"},
-]
-
-
-def _cluster_btn(icon: str, label: str, color: str) -> rx.Component:
+def _cluster_btn(icon: str, label: str, color: str, on_click) -> rx.Component:
     return rx.el.button(
         rx.el.span(icon, style={"fontSize": "13px"}),
         rx.el.span(label),
+        on_click=on_click,
         style={
             "display": "flex",
             "alignItems": "center",
@@ -48,6 +45,7 @@ def _cluster_btn(icon: str, label: str, color: str) -> rx.Component:
 def _fab() -> rx.Component:
     return rx.el.button(
         "+",
+        on_click=CommandPaletteState.toggle,
         style={
             "width": "64px",
             "height": "64px",
@@ -71,11 +69,11 @@ def _fab() -> rx.Component:
 
 
 def thumb_cluster() -> rx.Component:
-    """Fixed bottom-right thumb cluster."""
+    """Fixed bottom-right thumb cluster — all buttons wired (Phase 4a)."""
     return rx.el.div(
-        _cluster_btn("⚑", "Call-out", "var(--red)"),
-        _cluster_btn("★", "Kudos",    "var(--gold)"),
-        _cluster_btn("⊟", "BEO",      "var(--blue)"),
+        _cluster_btn("⚑", "Call-out", "var(--red)",  CallOutModalState.open_modal),
+        _cluster_btn("★", "Kudos",    "var(--gold)", KudosModalState.open_modal),
+        _cluster_btn("⊟", "BEO",      "var(--blue)", BeoModalState.open_modal),
         _fab(),
         style={
             "position": "fixed",

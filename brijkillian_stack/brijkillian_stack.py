@@ -38,9 +38,15 @@ from apps.admin.routes import ROUTES as ADMIN_ROUTES
 _KBD_SCRIPT = """
 document.addEventListener('keydown', function(e) {
   const cmd = e.metaKey || e.ctrlKey;
+  // Ignore shortcuts when focus is inside a text input / textarea
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   if (cmd && e.key === 'k') {
     e.preventDefault();
+    // GLCR Memory pages: open their command palette
     window._reflexDispatch && window._reflexDispatch('app_state.open_palette', {});
+    // Shift HUD: toggle its command palette (no-op on non-Shift pages)
+    window._reflexDispatch && window._reflexDispatch('command_palette_state.toggle', {});
   } else if (cmd && e.key === 'n') {
     e.preventDefault();
     window._reflexDispatch && window._reflexDispatch('app_state.open_capture', {});
@@ -51,6 +57,8 @@ document.addEventListener('keydown', function(e) {
     window._reflexDispatch && window._reflexDispatch('app_state.close_palette', {});
     window._reflexDispatch && window._reflexDispatch('app_state.close_capture', {});
     window._reflexDispatch && window._reflexDispatch('grok_state.close_panel', {});
+    // Shift HUD: close command palette + all capture modals
+    window._reflexDispatch && window._reflexDispatch('command_palette_state.close', {});
   }
 });
 """

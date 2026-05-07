@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import reflex as rx
 
 from apps.zds.state import ZdsState
-from shared.db import get_tonight_tasks, get_activity_feed
+from shared.db import get_tonight_tasks, get_activity_feed, ensure_shift_log_event
 from .types import (
     HudZoneSlot,
     HudRRSlot,
@@ -111,6 +111,24 @@ def _activity_color(content_type: str) -> str:
     return _CT_COLOR.get((content_type or "").lower(), "ink2")
 
 
+def _now_approx_label() -> str:
+    """Return a human-readable approx time label, e.g. '1:42am'."""
+    now = datetime.datetime.now(tz=_ET)
+    return now.strftime("%-I:%M%p").lower()
+
+
+def _tonight_date_iso() -> str:
+    """ISO date string for tonight's shift.
+
+    Grave shift runs 11 PM → 7 AM. For the purpose of anchoring captures,
+    we use 'today's date' as defined by the morning side of the shift:
+    before 7 AM → use today's date (the shift is still running from last night);
+    7 AM or later → shift hasn't started yet, use today's date as tomorrow's anchor.
+    In practice: just use date.today() which is always correct for the log date.
+    """
+    return datetime.date.today().isoformat()
+
+
 class ShiftState(rx.State):
     """State for the Shift HUD page."""
 
@@ -148,9 +166,18 @@ class ShiftState(rx.State):
 
     # ── Header pills ──────────────────────────────────────────────────────────
     shift_date_label: str = ""   # "Wed · May 7 · Grave shift"
+    shift_date_iso: str = ""     # "2026-05-07" — used by capture writes
     greeting: str = ""           # "Good evening, Brian."
     live_label: str = ""         # "01:42 in"
     carry_count: int = 0
+
+    # ── Shift log event anchor ─────────────────────────────────────────────────
+    # Created once per shift_date; all captures attach to this event_id.
+    shift_log_event_id: str = ""
+
+    # ── Entity lookup (display_name → entity id) ───────────────────────────────
+    # Populated from ZdsState.tm_name_to_id on load; used by capture modals.
+    roster_name_to_id: dict = {}
 
     # ── Loading ───────────────────────────────────────────────────────────────
     loading: bool = False
@@ -160,6 +187,14 @@ class ShiftState(rx.State):
         self.loading = True
         try:
             await self._build_header()
+            # Anchor shift_log event idempotently on first load each night
+            if self.shift_date_iso and not self.shift_log_event_id:
+                try:
+                    eid = ensure_shift_log_event(self.shift_date_iso)
+                    if eid:
+                        self.shift_log_event_id = eid
+                except Exception:
+                    print(f"[ShiftState.on_load] shift_log anchor error:\n{traceback.format_exc()}")
             await self._build_from_zds()
             await self._build_tasks()
             await self._build_activity()
@@ -168,11 +203,22 @@ class ShiftState(rx.State):
         finally:
             self.loading = False
 
+    @rx.event
+    async def refresh(self):
+        """Lightweight refresh: tasks + activity only (no ZDS re-read).
+        Called after captures to update the right-panel feed."""
+        try:
+            await self._build_tasks()
+            await self._build_activity()
+        except Exception:
+            print(f"[ShiftState.refresh] error:\n{traceback.format_exc()}")
+
     async def _build_header(self):
         now = datetime.datetime.now(tz=_ET)
         day_abbr = now.strftime("%a")
         month_abbr = now.strftime("%b %-d")
         self.shift_date_label = f"{day_abbr} · {month_abbr} · Grave shift"
+        self.shift_date_iso = _tonight_date_iso()
         hour = now.hour
         if 5 <= hour < 12:
             greeting_word = "Good morning"
@@ -197,6 +243,8 @@ class ShiftState(rx.State):
     async def _build_from_zds(self):
         """Pull tonight's zone/rr/aux/break data from ZdsState."""
         zds = await self.get_state(ZdsState)
+        # Copy the name→entity_id lookup so capture modals can resolve entity ids
+        self.roster_name_to_id = dict(zds.tm_name_to_id or {})
 
         # ── Zone slots ────────────────────────────────────────────────────────
         zones: list[HudZoneSlot] = []
@@ -281,6 +329,7 @@ class ShiftState(rx.State):
         pmol_pool:  set[str] = set(zds.night_pm_ol_pool or [])
         amol_pool:  set[str] = set(zds.night_am_ol_pool or [])
 
+        name_to_id = dict(zds.tm_name_to_id or {})
         seen: set[str] = set()
         for z in zones:
             nm = z["tm_name"]
@@ -295,12 +344,18 @@ class ShiftState(rx.State):
                 kind = "a"
             else:
                 kind = "g"
-            chips.append(HudRosterChip(name=nm, kind=kind, zone=z["slot_key"]))
+            chips.append(HudRosterChip(
+                name=nm, tm_id=name_to_id.get(nm, ""),
+                kind=kind, zone=z["slot_key"],
+            ))
 
         # Add called-off TMs not assigned anywhere
         for nm in called_off_names:
             if nm not in seen:
-                chips.append(HudRosterChip(name=nm, kind="x", zone="—"))
+                chips.append(HudRosterChip(
+                    name=nm, tm_id=name_to_id.get(nm, ""),
+                    kind="x", zone="—",
+                ))
                 seen.add(nm)
 
         self.roster_chips = chips
