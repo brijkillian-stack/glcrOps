@@ -310,12 +310,16 @@ class ZdsState(rx.State):
         )
 
     @rx.var
-    def card_badge_classes(self) -> dict:
+    def card_badge_classes(self) -> dict[str, str]:
         """Map card_code → space-separated CSS badge class string.
 
         Used by zone_card.py to apply .card-priority / .card-has-note /
         .card-has-adhoc classes to the outer card wrapper.
         Only entries with at least one badge are included.
+
+        Typed return matters: Reflex 0.9 needs dict[str, str] so that
+        `tm_badge_classes[tm_id] + " "` resolves cleanly (a bare `dict`
+        return crashes with TypeError on the + concat).
         """
         out: dict[str, str] = {}
         for code, anns in (self.card_annotation_data or {}).items():
@@ -331,11 +335,15 @@ class ZdsState(rx.State):
         return out
 
     @rx.var
-    def tm_badge_classes(self) -> dict:
+    def tm_badge_classes(self) -> dict[str, str]:
         """Map tm_id → space-separated CSS badge class string.
 
         Used by zone_card.py to apply .tm-has-note / .tm-has-profile-log chips.
         Only entries with at least one badge are included (missing key → no badge).
+
+        Typed return matters: Reflex 0.9 needs dict[str, str] so that
+        `tm_badge_classes[tm_id] + " "` in zone_card.py resolves cleanly
+        (bare `dict` return crashes with TypeError on the + concat).
         """
         out: dict[str, str] = {}
         for tm_id, anns in (self.tm_annotation_data or {}).items():
