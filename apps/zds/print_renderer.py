@@ -51,6 +51,20 @@ CSS                = _rdb.CSS
 SVG_SPRITE         = _rdb.SVG_SPRITE
 HTML_SHELL         = _rdb.HTML_SHELL
 
+
+# ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
+# day_idx is 1-based (Friday=1, Thursday=7). The 7-letter array maps directly:
+# [F]riday, [S]aturday, [S]unday, [M]onday, [T]uesday, [W]ednesday, [T]hursday.
+_WEEK_LETTERS = ['F', 'S', 'S', 'M', 'T', 'W', 'T']
+
+def _week_dots_html(day_idx: int) -> str:
+    """Build the F-S-S-M-T-W-T strip with the current day highlighted."""
+    cur_i = (day_idx - 1) if 1 <= day_idx <= 7 else -1
+    return '<div class="week-dots">' + ''.join(
+        f'<div class="week-dot{ "  cur" if i == cur_i else "" }">{d}</div>'
+        for i, d in enumerate(_WEEK_LETTERS)
+    ) + '</div>'
+
 # ── Slot-key mappings ─────────────────────────────────────────────────────────
 # DB slot_key → index in rr_mens / rr_womens arrays
 _RR_IDX  = {"rr_1_2": 0, "rr_6": 1, "rr_7": 2, "rr_8": 3, "rr_10": 4}
@@ -371,6 +385,7 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     </div>
     <div class="mast-context">
       <div class="shift">Grave · 11pm – 7am</div>
+      {_week_dots_html(day_idx)}
       <div class="group-key">
         Group <span class="gp" data-group="1">1</span>
         <span class="gp" data-group="2">2</span>
@@ -656,6 +671,7 @@ def _render_break_page(night: dict, day: dict, slot_map: dict,
     </div>
     <div class="mast-context">
       <div class="shift">By Break Wave</div>
+      {_week_dots_html(day_idx)}
       <div class="group-key">Take breaks together</div>
     </div>
   </header>
