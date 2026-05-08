@@ -1333,6 +1333,15 @@ class ZdsState(rx.State):
             self.eligible_tms = []
         self.show_picker = True
 
+    def open_overlap_picker(self, slot_id: str, window: str, position: int):
+        """Phase 4g convenience handler — open the TM picker for a PM/AM overlap slot.
+        Derives slot_key from window ('pm'|'am') + position (1–6) and delegates to open_picker."""
+        prefix    = "PMOL" if window == "pm" else "AMOL"
+        slot_key  = f"{prefix}{position}"
+        win_label = "PM Overlap" if window == "pm" else "AM Overlap"
+        label     = f"{win_label} {position}"
+        self.open_picker(slot_id, slot_key, "", label)
+
     def close_picker(self):
         self.show_picker = False
         self.picker_slot_id = ""

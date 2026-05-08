@@ -467,7 +467,7 @@ def join_assigns(tasks) -> str:
 
 _AUX_ORDER = ["z9_sr", "admin", "trash_1_5", "trash_6_10",
               "support_1", "support_2", "support_3"]
-_AUX_COLOR = {"z9_sr": "red", "z9_sr_buddy": "red", "admin": "purple",
+_AUX_COLOR = {"z9_sr": "red", "z9_sr_buddy": "red", "admin": "yellow",  # Phase 4g: purple→yellow
               "trash_1_5": "orange", "trash_6_10": "orange",
               "support_1": "grey", "support_2": "grey", "support_3": "teal"}
 
@@ -1099,7 +1099,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
                         group=BG_AUX.get("z9_sr"),
                         buddy_name=z9sr_buddy,
                         buddy_group=BG_AUX.get("z9_sr_buddy")),
-        render_aux_card("admin",      day["aux"]["admin"],      "purple",
+        render_aux_card("admin",      day["aux"]["admin"],      "yellow",  # Phase 4g: purple→yellow
                         alert=alerts.get("aux_admin", ""),
                         group=BG_AUX.get("admin")),
         render_aux_card("trash_1_5",  day["aux"]["trash_1_5"],  "orange",
@@ -1169,6 +1169,8 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
       <div class="day-name">{weekday}</div>
       <div class="month-str">{month_name} · Day {idx} of {total}</div>
       <div class="status-row">
+        <span class="stat"><span class="num">{sum(v[0] for v in cs.values())}</span><span class="lbl">Filled</span></span>
+        <span class="stat"><span class="num">{sum(v[1] - v[0] for v in cs.values())}</span><span class="lbl">Open</span></span>
         <span class="break-bar">
           <span class="lbl">Breaks</span>
           <span class="break-dot g1">{g1}</span>
@@ -1180,13 +1182,10 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     <div class="mast-right">
       <div class="shift-label">Grave · 11pm – 7am</div>
       <div class="week-dots">
-        <div class="week-dot">F</div>
-        <div class="week-dot">S</div>
-        <div class="week-dot">S</div>
-        <div class="week-dot">M</div>
-        <div class="week-dot{'  cur' if current_idx == idx - 1 else ''}">T</div>
-        <div class="week-dot">W</div>
-        <div class="week-dot">T</div>
+        {''.join(
+          f'<div class="week-dot{"  cur" if i == current_idx else ""}">{d}</div>'
+          for i, d in enumerate(['F','S','S','M','T','W','T'])
+        )}
       </div>
       <div class="group-key">
         Group <span class="gp g1">1</span><span class="gp g2">2</span><span class="gp g3">3</span>
@@ -1239,7 +1238,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
   </footer>
 </article>"""
 
-def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
+def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None, current_idx=None):
     """LANDSCAPE break sheet (Phase 6, 5/6/26 — page 2 of each day).
 
     Buckets every staffed slot into Group 1/2/3 break waves and renders three
@@ -1259,6 +1258,26 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
     page_num   = 2 * idx
     page_total = 2 * total
 
+    # Phase 4g: overlaps on break sheet — same task-lookup logic as render_day_page
+    iso_bs       = day["date"].isoformat()
+    pm_tasks_bs  = list(TASKS_PM_OL); am_tasks_bs = list(TASKS_AM_OL)
+    ovr_bs       = OVERLAP_OVERRIDES.get(iso_bs, {}) or {}
+    def _apply_bs(task_list, slot_prefix, ovr):
+        for k, v in (ovr or {}).items():
+            if isinstance(k, int) and 0 <= k < len(task_list): task_list[k] = v
+            elif isinstance(k, str) and k.upper().startswith(slot_prefix):
+                idx2 = int(k[len(slot_prefix):]) - 1
+                if 0 <= idx2 < len(task_list): task_list[idx2] = v
+    _apply_bs(pm_tasks_bs, "PMOL", ovr_bs.get("PM") or ovr_bs.get("pm"))
+    _apply_bs(am_tasks_bs, "AMOL", ovr_bs.get("AM") or ovr_bs.get("am"))
+    pm_minis_bs = "".join(render_overlap_mini(day["pm_ol"][i], pm_tasks_bs[i]) for i in range(6))
+    am_minis_bs = "".join(render_overlap_mini(day["am_ol"][i], am_tasks_bs[i]) for i in range(6))
+
+    week_dots_bs = ''.join(
+        f'<div class="week-dot{"  cur" if current_idx is not None and i == current_idx else ""}">{d}</div>'
+        for i, d in enumerate(['F','S','S','M','T','W','T'])
+    )
+
     return f"""<article class="page" style="--day-color:{day_color};">
   <header class="mast">
     <div class="mast-day outline">{day['day_num']}</div>
@@ -1277,13 +1296,28 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None):
     </div>
     <div class="mast-right">
       <div class="shift-label">By Break Wave</div>
-      <div style="font-size:10px; color:var(--ink-500); margin-top:4px; letter-spacing:0.06em;">Take breaks together</div>
+      <div class="week-dots" style="margin-top:4px;">
+        {week_dots_bs}
+      </div>
     </div>
   </header>
   <div class="body">
-    <div class="break-cols">
+    <div class="break-cols" style="max-height:5.4in; overflow:hidden;">
 {cols_html}
     </div>
+    <section class="overlaps-section" style="margin-top:10px;">
+      <h2 class="section-lbl" style="margin-bottom:4px;">
+        Overlaps <span class="meta">11p–1a &amp; 5a–7a</span>
+      </h2>
+      <div class="overlap-row">
+        <div class="overlap-time">11p – 1a<span class="kind">Late evening</span></div>
+        <div class="overlap-mini-grid">{pm_minis_bs}</div>
+      </div>
+      <div class="overlap-row">
+        <div class="overlap-time">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="overlap-mini-grid">{am_minis_bs}</div>
+      </div>
+    </section>
   </div>
   <footer class="page-foot">
     <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
@@ -1570,7 +1604,7 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
   padding: 0 10px 8px; display: grid; grid-template-rows: auto auto 1fr;
   gap: 2px; position: relative; overflow: hidden;
 }
-.zone-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--card-color); }
+.zone-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 5px; background: var(--card-color); }  /* Phase 4g: 3px→5px */
 .zone-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; min-width: 0; }
 .zone-meta .zone-num { min-width: 0; overflow: hidden; }
 .zone-num {
@@ -1644,7 +1678,7 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
   min-height: 44px;
 }
 .aux-card::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;  /* Phase 4g: 2px→4px */
   background: var(--card-color);
 }
 .aux-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; min-width: 0; }
@@ -1962,7 +1996,7 @@ li.sweeper-task .sweeper-route {
   font-weight: 900;
   letter-spacing: -0.06em;
   color: var(--card-color);
-  opacity: 0.10;
+  opacity: 0.07;  /* Phase 4g: 0.10→0.07 */
   pointer-events: none;
   user-select: none;
   z-index: 0;
@@ -1971,7 +2005,7 @@ li.sweeper-task .sweeper-route {
      rather than fighting the small meta label up top. */
   padding-top: 8px;
 }
-.zone-card .card-watermark { font-size: 130px; }
+.zone-card .card-watermark { font-size: 90px; }  /* Phase 4g: 130px→90px */
 .rr-card   .card-watermark { font-size: 95px; }
 /* When a card has only a digit (e.g. "1", "6"), kick the size up a touch. */
 .rr-card.c-yellow .card-watermark { font-size: 78px; letter-spacing: -0.08em; }
@@ -2350,7 +2384,7 @@ HTML_SHELL = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Zone Deployment Book — Week ending {week_end_short}</title>
+<title>Zone Deployment Book — {week_end_short}</title>
 <style>{css}</style>
 </head>
 <body>
@@ -2440,7 +2474,8 @@ def main(argv):
         )
         page_blocks.append(
             render_break_sheet_page(d, day_idx, len(days),
-                                    males=males, no_sweeper_tms=no_sweeper)
+                                    males=males, no_sweeper_tms=no_sweeper,
+                                    current_idx=idx)  # Phase 4g: pass current_idx for week-dot highlight
         )
     pages_html = "\n".join(page_blocks)
 

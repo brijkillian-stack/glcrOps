@@ -4,6 +4,66 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4g: Deployment Book visual refresh + Break Sheet redesign (Sonnet)
+
+### 4g.1 — Title fix (`render_deployment_book.py`)
+- Removed duplicate "Week ending" prefix from HTML_SHELL `<title>` tag. The
+  `week_end_short` variable already contains the formatted date string; the old
+  template prepended "Week ending " again → "Week ending Week ending …".
+
+### 4g.2 — Zone color stripe boost + Admin color (`render_deployment_book.py`, `print_renderer.py`)
+- `.zone-card::before` stripe height boosted 3 px → 5 px for stronger visual anchor.
+- `.aux-card::before` stripe height boosted 2 px → 4 px.
+- Admin aux card color changed purple → yellow in both `_AUX_COLOR` dict and
+  `render_aux_card()` call site (`render_deployment_book.py`) and `_aux_color_map`
+  in `_break_row_meta()` (`print_renderer.py`).
+
+### 4g.3 — Watermark opacity/size reduction (`render_deployment_book.py`)
+- `.card-watermark` base opacity: 0.10 → 0.07.
+- `.zone-card .card-watermark` font-size: 130 px → 90 px (less visual noise on
+  crowded zone cards; `.rr-card` stays at 95 px).
+
+### 4g.4 — Week-dot strip dynamic highlight (`render_deployment_book.py`)
+- Fixed hardcoded bug in `render_day_page()`: the F/S/S/M/T/W/T dot strip always
+  highlighted T (Tuesday) because `current_idx == idx - 1` is structurally always
+  True. Replaced with a dynamic `enumerate` + `i == current_idx` comparison.
+- Added week-dots strip to `render_break_sheet_page()` (was showing plain text
+  "Take breaks together"; now shows the matching dot row with correct day highlighted).
+- `render_break_sheet_page()` gains `current_idx=None` keyword arg; call site at
+  line 2444 now passes `current_idx=idx`.
+
+### 4g.5 — Filled/Open counts in deployment masthead (`render_deployment_book.py`)
+- Added `X Filled · Y Open` stat spans to the `status-row` in `render_day_page()`,
+  computed from `count_summary()` totals across zones + rr + aux + overlaps.
+
+### 4g.6 — Break Sheet group model fix (`print_renderer.py`)
+- Root cause of 25/0/0 bug: Phase 4d set all `break_wave` DB column values to 1.
+  `_render_break_page()` read that column → every TM ended up in Wave 1.
+- Added `_wave_for_slot_ref(slot_ref: str) -> int` helper that derives the break
+  wave from slot_ref using `BG_ZONE / BG_RR_M / BG_RR_W / BG_AUX` dicts (same
+  source of truth as `render_deployment_book.py`). Safe fallback returns 1.
+- `_render_break_page()` now sorts by `sort_order` only and derives wave via
+  `_wave_for_slot_ref()` — ignores the unreliable DB column.
+
+### 4g.7 — OVERLAPS on break sheet page (`render_deployment_book.py`)
+- `render_break_sheet_page()` now renders a full OVERLAPS section (PM 11p–1a and
+  AM 5a–7a mini-card grids) below the break columns — mirrors the layout the
+  standalone deployment page already had.
+- `break-cols` constrained to `max-height: 5.4in` so overlaps section is never
+  pushed off-page.
+- Task lookup uses the same `TASKS_PM_OL / TASKS_AM_OL / OVERLAP_OVERRIDES`
+  globals already loaded at render time.
+
+### 4g.8 — Selectable AM/PM overlaps on live Break Sheet (`state.py`, `deployment.py`)
+- Added `ZdsState.open_overlap_picker(slot_id, window, position)` event handler
+  that derives `slot_key` ("PMOL1"–"PMOL6" / "AMOL1"–"AMOL6") and delegates to
+  `open_picker()` — no changes to the picker itself.
+- Overlap mini-cards in `_overlap_row_comp()` now have `cursor="pointer"`,
+  `on_click=ZdsState.open_overlap_picker(…)`, and a blue hover ring, matching the
+  tap-to-edit pattern of zone/RR/aux cards.
+
+---
+
 ## 2026-05-07 — Phase 4f: Hungarian/LAP solver for constrained block (Sonnet)
 
 ### F.1 — scipy dependency

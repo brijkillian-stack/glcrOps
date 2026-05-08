@@ -420,6 +420,53 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
 
 # ── Break sheet renderer ──────────────────────────────────────────────────────
 
+def _wave_for_slot_ref(slot_ref: str) -> int:
+    """Derive break wave (1/2/3) from a slot_ref string using BG_ZONE/BG_RR_M/BG_RR_W/BG_AUX.
+
+    Phase 4g fix: the DB `break_wave` column is unreliable (Phase 4d set all=1).
+    This replicates the same lookup logic render_deployment_book.py uses.
+    Returns 1 if the slot cannot be mapped (safe fallback, same as before).
+    """
+    r  = slot_ref.strip()
+    rl = r.lower()
+
+    # Zone: compact "Z1"–"Z10" or long "Zone 1"
+    if r.startswith("Z") and " " not in r and r[1:].isdigit():
+        return BG_ZONE.get(int(r[1:]), 1)
+    if rl.startswith("zone "):
+        try: return BG_ZONE.get(int(r.split()[-1]), 1)
+        except ValueError: pass
+
+    # Restroom: compact "RR7 M", "RR1+2 W", or long "RR 7 Men's"
+    if r.upper().startswith("RR") and " " in r:
+        parts = r[2:].strip().split()
+        num_str = parts[0]; side_str = parts[-1].upper() if len(parts) >= 2 else ""
+        n = 1 if num_str == "1+2" else (int(num_str) if num_str.isdigit() else None)
+        if n is not None:
+            if side_str in ("M", "MEN'S"): return BG_RR_M.get(n, 1)
+            if side_str in ("W", "WOMEN'S"): return BG_RR_W.get(n, 1)
+    if rl.startswith("rr "):
+        parts = r.split()
+        nstr = parts[1] if len(parts) > 1 else ""
+        n = 1 if nstr == "1+2" else (int(nstr) if nstr.isdigit() else None)
+        # Can't tell M/W from slot_ref alone in long format → default Men's table
+        if n is not None: return BG_RR_M.get(n, 1)
+
+    # Auxiliary: map to _AUX_COLOR keys used in BG_AUX
+    _aux_key_map = {
+        "z9 sr": "z9_sr", "z9sr": "z9_sr", "z9 sr buddy": "z9_sr_buddy",
+        "admin":   "admin",
+        "trash 1": "trash_1_5", "trash 2": "trash_6_10",
+        "supp 1":  "support_1", "supp 2": "support_2", "supp 3": "support_3",
+        "support 1": "support_1", "support 2": "support_2", "support 3": "support_3",
+    }
+    for key, rdb_key in _aux_key_map.items():
+        if rl == key or rl.startswith(key):
+            return BG_AUX.get(rdb_key, 1)
+
+    return 1  # safe fallback
+
+
 def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
     """Derive {section, badge, color, assign} for a break-sheet row.
 
@@ -500,7 +547,7 @@ def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
     # ── Auxiliary ────────────────────────────────────────────────────────────
     _aux_color_map = {
         "z9 sr":    "red",    "z9sr":    "red",
-        "admin":    "purple",
+        "admin":    "yellow",  # Phase 4g: purple→yellow (matches render_deployment_book)
         "trash 1":  "orange", "trash 2": "orange",
         "supp 1":   "grey",   "supp 2":  "grey",   "supp 3": "teal",
         "support 1":"grey",   "support 2":"grey",  "support 3":"teal",
@@ -544,15 +591,15 @@ def _render_break_page(night: dict, day: dict, slot_map: dict,
     # Fetch break_assignments for this night
     break_rows_raw = database.fetch_break_assignments(night["id"])
 
-    # Group into waves, derive metadata for each row
+    # Group into waves, derive metadata for each row.
+    # Phase 4g: derive wave from slot_ref via _wave_for_slot_ref() instead of the DB
+    # break_wave column, which is unreliable (all rows set to 1 since Phase 4d).
     groups: dict[int, list] = {1: [], 2: [], 3: []}
     _seen_section: dict[int, str] = {1: "", 2: "", 3: ""}
-    for br in sorted(break_rows_raw, key=lambda x: (x["break_wave"], x.get("sort_order", 0))):
-        wave = br["break_wave"]
-        if wave not in (1, 2, 3):
-            continue
-        tm   = br.get("tm_name") or ""
+    for br in sorted(break_rows_raw, key=lambda x: x.get("sort_order", 0)):
         sref = br.get("slot_ref") or ""
+        wave = _wave_for_slot_ref(sref)  # Phase 4g: ignore DB break_wave; derive from slot_ref
+        tm   = br.get("tm_name") or ""
         meta = _break_row_meta(sref, tm, slot_map)
         groups[wave].append({
             "section": meta["section"],

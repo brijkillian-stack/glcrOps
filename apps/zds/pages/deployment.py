@@ -456,6 +456,11 @@ def _overlap_row_comp(rows: list, label: str, time_range: str) -> rx.Component:
                         border="1px solid #e5e7eb",
                         border_radius="6px",
                         min_width="120px",
+                        cursor="pointer",  # Phase 4g: clickable — opens TM picker
+                        on_click=ZdsState.open_overlap_picker(
+                            row["id"], row["overlap_window"], row["position"]
+                        ),
+                        _hover={"border_color": "#93c5fd", "background": "#f0f9ff"},
                     ),
                 ),
                 columns="6", gap="6px", flex="1",
