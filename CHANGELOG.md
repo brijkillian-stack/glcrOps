@@ -4,6 +4,94 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Hotfix: break tab wave grouping + canonical overlap slot rendering (Sonnet)
+
+### Fix 1 — Break Sheet tab: all TMs landing in column 1
+- `break_wave_1/2/3` computed vars in `ZdsState` were filtering on `r["break_wave"]`,
+  which is intentionally hardcoded to `1` in `_do_engine_night()` as Phase 4d scaffolding
+  for future sub-wave subdivision.
+- Changed filters to read `r["group_num"]` instead, which carries the real break wave
+  derived from `BG_ZONE` / `BG_RR_M` / `BG_RR_W` / `BG_AUX` maps during engine runs.
+- `_do_engine_night()` untouched — `break_wave: 1` comment thread preserved.
+
+### Fix 2 — AM/PM Overlap rows: empty slots not rendering
+- `fetch_overlap_assignments` only returns engine-written rows; canonical unfilled slots
+  were absent, causing PMOL/AMOL cards to never render for empty positions.
+- After `fetch_overlap_assignments`, `_load_night()` now pads `overlap_rows` to guarantee
+  all 12 canonical slots (PMOL1–6, AMOL1–6) are present.
+- Canonical task text sourced from `zone_tasks` table via `shared.db.list_tasks(category=)`.
+- Empty slots render as placeholder rows with `is_filled=False`, `tm_name=""`, and the
+  canonical task label — matching the existing `open_overlap_picker` click handler shape.
+
+---
+
+## 2026-05-08 — Phase 4k.3: Task right-click annotation menu (Sonnet)
+
+### `apps/zds/types.py`
+- Added `TaskItem` TypedDict (`id: str`, `name: str`).
+- Changed `ZoneSlot.display_tasks` and `RRSlot.display_tasks` from `list[str]` to
+  `list[TaskItem]`. Custom/hardcoded tasks carry `id=""` ; DB-backed tasks carry
+  their zone_tasks UUID.
+
+### `apps/zds/database.py`
+- `fetch_zone_assignments()`: all four `display_tasks` generation sites updated to
+  emit `list[{id, name}]` dicts (custom tasks, DB tasks, hardcoded fallbacks, sweeper
+  append).
+
+### `apps/zds/state.py`
+- Added 8 annotation state vars: `task_menu_open`, `task_menu_x/y`, `task_menu_task_id`,
+  `task_menu_task_name`, `task_menu_subview`, `task_menu_note_text`, `task_annotation_data`.
+- `_load_task_annotations()` — loads `zds_annotations` for the current night via
+  `shared.db.list_annotations_grouped`; called in `_load_night()`.
+- 8 new `@rx.event` handlers: `open_task_menu`, `close_task_menu`, `set_task_menu_subview`,
+  `set_task_menu_note_text`, `set_task_highlight`, `set_task_symbol`, `save_task_note`,
+  `toggle_task_skip`, `clear_task_annotation`.
+- `_get_slot_tasks()` updated to extract `name` from dict format before DB writes.
+
+### `apps/zds/components/task_annotation_menu.py` (new)
+- Floating context menu; mounts once in `deployment()`. Four subviews (`root`, `color`,
+  `symbol`, `note`) controlled by `rx.match`; backdrop div at z-index 998 dismisses on
+  outside click; panel at z-index 999.
+- Color picker: yellow / orange / blue / green / red swatches.
+- Symbol picker: ⚠ ★ ✓ ✗ ! buttons.
+- Note subview: `rx.text_area` + Save button.
+- Panel flips left when `task_menu_x > 800px` to stay in viewport.
+
+### `assets/task_annotation.js` (new)
+- Capture-phase `contextmenu` listener on `.task-ctx-trigger` elements; stops
+  propagation so TM context menu doesn't also fire.
+- Touch long-press (500ms, 8px drift tolerance) using `pointerdown/move/up/cancel`.
+- Dispatches `window._reflexDispatch("zds_state.open_task_menu", {args: [x,y,id,name]})`.
+
+### `apps/zds/components/zone_card.py`
+- `_task_section()` updated: `rx.foreach` over `list[{id, name}]`; each row carries
+  `class_name="task-ctx-trigger"` and `data-task-id` / `data-task-name` custom attrs;
+  `×` remove button uses `task["name"]` for `remove_task` event.
+
+### `apps/zds/pages/deployment.py`
+- Imports and mounts `task_annotation_menu()` as first child.
+
+### `brijkillian_stack.py`
+- Registers `rx.el.script(src="/task_annotation.js")` in `head_components`.
+
+### `assets/ops_tokens.css`
+- Added 9 annotation utility classes: `.task-ctx-trigger`, `.task-hl-{color}` (×5),
+  `.task-skip`, `.task-symbol`, `.task-note`.
+
+### `apps/zds/print_renderer.py`
+- `from shared.db import list_annotations_grouped as _list_annotations_grouped`.
+- Added `_day_key_from_weekday(weekday)` module-level helper.
+- Added `_apply_task_annotations(items, annots) -> list[str]` module-level helper —
+  extracts names, skips tasks with `skip` annotation, prepends symbol, appends note.
+- `zone_tasks(n)`: handles `list[{id, name}]`; derives `week_ending` from night date
+  (GLCR Fri–Thu week); loads `task_annots` via `_list_annotations_grouped`; applies
+  `_apply_task_annotations`.
+- `rr_extra_tasks()`: deduplication now compares by `name` string, not dict identity;
+  feeds through `_apply_task_annotations`.
+- `aux_extra_tasks()`: same dict-safe dedup + annotation pass.
+
+---
+
 ## 2026-05-08 — Phase 4k.2: zds_annotations table + accessors (Sonnet)
 
 ### Schema — `zds_annotations`

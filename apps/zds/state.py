@@ -215,6 +215,19 @@ class ZdsState(rx.State):
     task_edit_slot_id: str = ""
     task_edit_text:    str = ""
 
+    # ── Task annotation menu (Phase 4k.3) ────────────────────────────────────
+    # Floating context menu opened on right-click of a task row.
+    task_menu_open:      bool = False
+    task_menu_x:         int  = 0
+    task_menu_y:         int  = 0
+    task_menu_task_id:   str  = ""
+    task_menu_task_name: str  = ""
+    task_menu_subview:   str  = "root"  # "root" | "color" | "symbol" | "note"
+    task_menu_note_text: str  = ""
+    # Annotation data for current night: {task_uuid: {annotation_kind: value_dict}}
+    # Reloaded each time _load_night runs or after any annotation write.
+    task_annotation_data: dict = {}
+
     # ── Loading / error ───────────────────────────────────────────────────────
     loading: bool = False
     error:   str = ""
@@ -423,20 +436,23 @@ class ZdsState(rx.State):
 
     @rx.var
     def break_wave_1(self) -> list[BreakRow]:
+        # Hotfix: filter on group_num (sourced from BG_ZONE/BG_RR_M/BG_RR_W/BG_AUX maps).
+        # break_wave is intentionally hardcoded to 1 in _do_engine_night() as Phase 4d
+        # scaffolding for future sub-wave subdivision — do NOT read it here.
         return _mark_section_headers(
-            [r for r in self.break_rows if r["break_wave"] == 1]
+            [r for r in self.break_rows if r["group_num"] == 1]
         )
 
     @rx.var
     def break_wave_2(self) -> list[BreakRow]:
         return _mark_section_headers(
-            [r for r in self.break_rows if r["break_wave"] == 2]
+            [r for r in self.break_rows if r["group_num"] == 2]
         )
 
     @rx.var
     def break_wave_3(self) -> list[BreakRow]:
         return _mark_section_headers(
-            [r for r in self.break_rows if r["break_wave"] == 3]
+            [r for r in self.break_rows if r["group_num"] == 3]
         )
 
     @rx.var
@@ -1191,6 +1207,53 @@ class ZdsState(rx.State):
 
             self.break_rows   = database.fetch_break_assignments(night_id)
             self.overlap_rows = database.fetch_overlap_assignments(night_id)
+
+            # ── Hotfix: guarantee all 12 canonical overlap slots are present ─────
+            # fetch_overlap_assignments only returns rows the engine wrote; unfilled
+            # slots are absent, so PMOL/AMOL cards never render for empty positions.
+            # Source canonical slots from zone_tasks (Phase 4k.1) and pad any missing
+            # positions with clickable placeholder rows.
+            from shared.db import list_tasks as _list_tasks
+            _canonical: list[dict] = []
+            for _cat, _win in (("overlap_pm", "pm"), ("overlap_am", "am")):
+                for _t in _list_tasks(category=_cat):
+                    # Extract trailing digit(s) from code (e.g. "PMOL3" → 3, "AMOL6" → 6)
+                    _digits = "".join(c for c in _t.get("code", "") if c.isdigit())
+                    _pos = int(_digits) if _digits else 0
+                    if _pos:
+                        _canonical.append({
+                            "window":   _win,
+                            "position": _pos,
+                            "task":     _t.get("name") or "",
+                        })
+            _filled = {
+                (r["overlap_window"], r["position"]): r
+                for r in self.overlap_rows
+            }
+            _padded: list[OverlapRow] = []
+            for _c in sorted(_canonical, key=lambda x: (x["window"], x["position"])):
+                _key = (_c["window"], _c["position"])
+                if _key in _filled:
+                    # Engine-placed row — keep it; backfill task text if blank
+                    _row = dict(_filled[_key])
+                    if not _row.get("task"):
+                        _row["task"] = _c["task"]
+                    _padded.append(_row)  # type: ignore[arg-type]
+                else:
+                    # Empty slot — placeholder that opens the picker on click
+                    _padded.append({             # type: ignore[arg-type]
+                        "id":             "",
+                        "overlap_window": _c["window"],
+                        "position":       _c["position"],
+                        "is_filled":      False,
+                        "task":           _c["task"],
+                        "tm_id":          "",
+                        "tm_name":        "",
+                    })
+            if _padded:
+                self.overlap_rows = _padded
+            # ─────────────────────────────────────────────────────────────────────
+
             # Extract schedule pool lists for this night
             self._update_night_pools()
 
@@ -1223,6 +1286,8 @@ class ZdsState(rx.State):
             for rr in self.rr_slots:
                 rr["mens_warning_status"]   = _classify(rr.get("mens_name", ""))
                 rr["womens_warning_status"] = _classify(rr.get("womens_name", ""))
+            # Phase 4k.3 — load task annotations for this night's day
+            self._load_task_annotations()
         except Exception as e:
             self.error = str(e)
         finally:
@@ -1977,17 +2042,179 @@ class ZdsState(rx.State):
         except Exception as e:
             self.error = str(e)
 
+    # =========================================================================
+    # Task annotation menu (Phase 4k.3)
+    # =========================================================================
+
+    def _current_day_key(self) -> str:
+        """Return the 3-letter lowercase day key for the current night (fri/sat/…)."""
+        _day_map = {
+            "Friday": "fri", "Saturday": "sat", "Sunday": "sun",
+            "Monday": "mon", "Tuesday": "tue", "Wednesday": "wed", "Thursday": "thu",
+        }
+        for n in self.nights:
+            if n["id"] == self.current_night_id:
+                day_name = n.get("day_name", "")
+                return _day_map.get(day_name, day_name[:3].lower() if day_name else "fri")
+        return "fri"
+
+    def _load_task_annotations(self):
+        """Load zds_annotations for the current night into task_annotation_data."""
+        from shared.db import list_annotations_grouped
+        week_ending = self.week_info.get("week_ending", "")
+        day = self._current_day_key()
+        if not week_ending:
+            self.task_annotation_data = {}
+            return
+        try:
+            grouped = list_annotations_grouped(week_ending, day)
+            # grouped = {target_kind: {target_ref: {annotation_kind: value}}}
+            # We only care about target_kind="task" for this state var.
+            self.task_annotation_data = grouped.get("task", {})
+        except Exception as exc:
+            print(f"[ZdsState] _load_task_annotations error: {exc}")
+            self.task_annotation_data = {}
+
+    @rx.event
+    def open_task_menu(self, x: int, y: int, task_id: str, task_name: str):
+        """Open the task annotation context menu at the given viewport coords."""
+        self.task_menu_x         = int(x or 0)
+        self.task_menu_y         = int(y or 0)
+        self.task_menu_task_id   = task_id or ""
+        self.task_menu_task_name = task_name or ""
+        self.task_menu_subview   = "root"
+        # Pre-populate note text if an annotation already exists.
+        self.task_menu_note_text = (
+            self.task_annotation_data.get(task_id, {}).get("note", {}).get("text", "")
+            if task_id else ""
+        )
+        self.task_menu_open = True
+
+    @rx.event
+    def close_task_menu(self):
+        self.task_menu_open = False
+
+    @rx.event
+    def set_task_menu_subview(self, subview: str):
+        self.task_menu_subview = subview
+
+    @rx.event
+    def set_task_menu_note_text(self, val: str):
+        self.task_menu_note_text = val
+
+    @rx.event
+    def set_task_highlight(self, color: str):
+        """Toggle a highlight annotation on the current task (same color → clears it)."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.task_menu_task_id:
+            self.task_menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("highlight")
+        if existing and existing.get("color") == color:
+            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "highlight")
+        else:
+            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "highlight",
+                              {"color": color})
+        self._load_task_annotations()
+        self.task_menu_open = False
+
+    @rx.event
+    def set_task_symbol(self, symbol: str):
+        """Toggle a symbol annotation on the current task (same symbol → clears it)."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.task_menu_task_id:
+            self.task_menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("symbol")
+        if existing and existing.get("char") == symbol:
+            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "symbol")
+        else:
+            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "symbol",
+                              {"char": symbol})
+        self._load_task_annotations()
+        self.task_menu_open = False
+
+    @rx.event
+    def save_task_note(self):
+        """Save (or delete if blank) a note annotation on the current task."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.task_menu_task_id:
+            self.task_menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        text        = self.task_menu_note_text.strip()
+        if text:
+            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "note",
+                              {"text": text})
+        else:
+            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "note")
+        self._load_task_annotations()
+        self.task_menu_open = False
+
+    @rx.event
+    def toggle_task_skip(self):
+        """Toggle the skip-tonight annotation on the current task."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.task_menu_task_id:
+            self.task_menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("skip")
+        if existing is not None:
+            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "skip")
+        else:
+            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "skip",
+                              {"skipped": True})
+        self._load_task_annotations()
+        self.task_menu_open = False
+
+    @rx.event
+    def clear_task_annotation(self):
+        """Remove ALL annotations for the current task."""
+        from shared.db import list_annotations, delete_annotation
+        if not self.task_menu_task_id:
+            self.task_menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        rows = list_annotations(week_ending, day, target_kind="task",
+                                target_ref=self.task_menu_task_id)
+        for row in rows:
+            delete_annotation(week_ending, day, "task",
+                              self.task_menu_task_id, row["annotation_kind"])
+        self._load_task_annotations()
+        self.task_menu_open = False
+
+    # =========================================================================
+    # Private slot-task helpers
+    # =========================================================================
+
     def _get_slot_tasks(self, slot_id: str) -> list[str]:
-        """Return the current display_tasks list for a given slot_id."""
+        """Return the current task-name list for a given slot_id.
+
+        Phase 4k.3: display_tasks is now list[{id, name}] dicts. This helper
+        still returns list[str] (names only) because DB writes (custom_tasks)
+        remain list[str]. Handles both the new dict format and the legacy
+        plain-string format gracefully.
+        """
+        def _names(tasks):
+            return [t["name"] if isinstance(t, dict) else t for t in tasks]
+
         for s in self.zone_slots:
             if s["id"] == slot_id:
-                return list(s.get("display_tasks", []))
+                return _names(s.get("display_tasks", []))
         for s in self.aux_slots:
             if s["id"] == slot_id:
-                return list(s.get("display_tasks", []))
+                return _names(s.get("display_tasks", []))
         for rr in self.rr_slots:
             if rr.get("mens_slot_id") == slot_id:
-                return list(rr.get("display_tasks", []))
+                return _names(rr.get("display_tasks", []))
         return []
 
     # =========================================================================
