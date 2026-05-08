@@ -658,6 +658,22 @@ def main(argv=None):
     print(f"GLCR Stochastic Simulator  |  seed={args.seed}  λ={args.callout_rate}")
     print(f"Schedules: {args.weeks}  Runs/schedule: {args.runs}  "
           f"Total runs: {args.weeks * args.runs}")
+    # Phase 4f hotfix #6: surface scipy availability up-front. If LAP mode is
+    # enabled but scipy is missing, lap_solver returns all-None and fill_engine
+    # silently falls back to greedy slot-by-slot — making LAP runs produce the
+    # same numbers as greedy. This print makes that diagnosable in one glance.
+    try:
+        from scipy.optimize import linear_sum_assignment  # noqa: F401
+        _scipy_ok = True
+        try:
+            import scipy
+            _scipy_ver = scipy.__version__
+        except Exception:
+            _scipy_ver = "?"
+    except ImportError as _exc:
+        _scipy_ok = False
+        _scipy_ver = f"missing ({_exc})"
+    print(f"[sim] scipy: available={_scipy_ok}  version={_scipy_ver}")
     print(f"{'='*60}\n")
 
     # Load proposed config
