@@ -558,8 +558,8 @@ def _edit_drawer() -> rx.Component:
 
 def admin_tasks_page() -> rx.Component:
     return rx.el.div(
-        # Breadcrumb
-        admin_breadcrumb("Zone Tasks"),
+        # Breadcrumb — admin_breadcrumb takes (section, page_title) keyword args.
+        admin_breadcrumb(section="Workflows", page_title="Zone Tasks"),
         # Header
         rx.el.div(
             rx.el.div(
