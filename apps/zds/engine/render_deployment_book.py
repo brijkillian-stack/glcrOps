@@ -1684,11 +1684,13 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 /* ── ZONE CARD ── */
 .zone-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
-  padding: 0 10px 8px; display: grid; grid-template-rows: auto auto 1fr;
+  /* Phase 4g polish: padding-top 0 → 11px so the "ZONE 1" label has clear
+     space below the 5px colored stripe (was crushed against it). */
+  padding: 11px 10px 8px; display: grid; grid-template-rows: auto auto 1fr;
   gap: 2px; position: relative; overflow: hidden;
 }
 .zone-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 5px; background: var(--card-color); }  /* Phase 4g: 3px→5px */
-.zone-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; min-width: 0; }
+.zone-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 0; min-width: 0; }
 .zone-meta .zone-num { min-width: 0; overflow: hidden; }
 .zone-num {
   font-weight: 700; font-size: 11.5px; letter-spacing: 0.09em;
@@ -1764,7 +1766,9 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
   grid-auto-rows: 1fr; align-items: stretch; gap: 7px; min-width: 0; }
 .aux-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
-  padding: 6px 10px 7px;
+  /* Phase 4g polish: padding-top 6px → 9px so the "TRASH 1" label clears
+     the 4px colored stripe with breathing room. */
+  padding: 9px 10px 7px;
   /* Make tasks a flex region that absorbs spare vertical space so single-
      line cards no longer collapse to ~44px while neighbors stretch to 70px. */
   display: grid; grid-template-rows: auto auto 1fr; gap: 2px;
@@ -1801,12 +1805,15 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 .rr-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; min-height: 0; align-items: stretch; }
 .rr-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
-  position: relative; overflow: hidden; padding: 6px 10px 7px;
+  /* Phase 4g polish: padding-top 6px → 9px so the "RR 7" label clears the
+     4px colored top stripe. Also bumped stripe 2px → 4px for visual parity
+     with zone cards. */
+  position: relative; overflow: hidden; padding: 9px 10px 7px;
   display: grid; grid-template-rows: auto auto auto; gap: 6px;
   align-content: start;
 }
 .rr-card::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
   background: var(--card-color);
 }
 .rr-head {
