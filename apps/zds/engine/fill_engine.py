@@ -793,40 +793,48 @@ def parse(ws, ptype):
                     # was loaded once at startup, so the new TM can't be placed
                     # in THIS run. They become eligible next run after Brian
                     # configures their tm_eligibility flags.
-                    _stub_threw = False
-                    _stub_created = False
-                    try:
-                        _stub_created = create_new_tm_stub_in_db(full_name, first, WEEK_ENDING)
-                        if _stub_created:
-                            print(f"  ★ NEW GRAVE TM detected: {full_name} — stub added to DB")
-                    except Exception as _e:
-                        # Real exception (vs. "already exists" False return).
-                        # Previously: silent `pass` swallowed the error completely.
-                        _stub_threw = True
-                        print(f"  ⚠ NEW GRAVE TM {full_name}: stub failed with {type(_e).__name__}: {_e}")
+                    # Phase 4h: create_new_tm_stub_in_db now returns a str:
+                    #   "created"         — new stub inserted
+                    #   "exists_active"   — already in tm_profiles by display_name (silent)
+                    #   "exists_inactive" — legal name found in entities but TM is
+                    #                       transferred/separated/LOA — needs attention
+                    #   "error"           — exception inside the function
+                    _stub_result = create_new_tm_stub_in_db(full_name, first, WEEK_ENDING)
 
-                    if _stub_threw:
-                        audit_items.append({
-                            "severity": "error",
-                            "type":     "NEW_TM_STUB_FAILED",
-                            "tm_name":  full_name,
-                            "detail":   "On grave schedule, stub creation threw — see engine stderr. Add to roster manually.",
-                        })
-                    else:
-                        # Either stub_created=True (just inserted) or False
-                        # (idempotent no-op because already in tm_profiles).
-                        # Either way: TM exists in tm_profiles but needs
-                        # eligibility configured before they can be placed.
+                    if _stub_result == "created":
+                        print(f"  ★ NEW GRAVE TM detected: {full_name} — stub added to DB")
                         audit_items.append({
                             "severity": "warning",
                             "type":     "NEW_TM_NEEDS_ELIGIBILITY",
                             "tm_name":  full_name,
                             "detail":   (
-                                "On grave schedule, stub exists in tm_profiles. "
+                                "On grave schedule, new stub created in tm_profiles. "
                                 "Configure tm_eligibility flags + training pair "
                                 "(if applicable) so they're placeable next run."
                             ),
                         })
+                    elif _stub_result == "exists_inactive":
+                        print(f"  ⚠ {full_name} on schedule but existing record is inactive — see audit")
+                        audit_items.append({
+                            "severity": "warning",
+                            "type":     "TM_ON_SCHEDULE_BUT_INACTIVE",
+                            "tm_name":  full_name,
+                            "detail":   (
+                                f"{full_name} appears on the grave schedule but the existing "
+                                f"record is inactive (transferred / separated / LOA). "
+                                f"Either reactivate that TM in the People page or remove "
+                                f"this name from the schedule."
+                            ),
+                        })
+                    elif _stub_result == "error":
+                        print(f"  ⚠ NEW GRAVE TM {full_name}: stub creation failed — see engine stderr")
+                        audit_items.append({
+                            "severity": "error",
+                            "type":     "NEW_TM_STUB_FAILED",
+                            "tm_name":  full_name,
+                            "detail":   "On grave schedule, stub creation failed — see engine stderr. Add to roster manually.",
+                        })
+                    # exists_active → silent no-op (TM already properly in tm_profiles)
                 elif ptype != "grave":
                     # OL workers not in roster are expected — suppress warning
                     pass

@@ -2766,28 +2766,65 @@ def get_training_schedule_from_db() -> dict:
         return {"schedule": {}}
 
 
-def create_new_tm_stub_in_db(full_name: str, display_name: str, week_ending: str) -> bool:
+def create_new_tm_stub_in_db(full_name: str, display_name: str, week_ending: str) -> str:
     """
     DB replacement for the new-TM auto-detection file write in fill_engine.py.
 
     Creates minimal entity + tm_profiles rows for an unrecognised grave-pool TM
-    found on the schedule. Returns True if inserted, False if TM already exists
-    (no-op) or on error.
+    found on the schedule.
+
+    Return values (Phase 4h — changed from bool):
+      "created"         — new stub inserted into entities + tm_profiles
+      "exists_active"   — display_name already in tm_profiles (silent no-op)
+      "exists_inactive" — legal full_name found in entities but TM is excluded
+                          from the roster (transferred / separated / LOA / etc.)
+                          Caller should surface as an audit warning.
+      "error"           — exception caught; see stderr for traceback
     """
     import uuid as _uuid
     try:
         sb = get_client()
-        # Idempotency check: bail if display_name already in tm_profiles
-        existing = (
+
+        # ── Phase 4h: idempotency check broadened ─────────────────────────────
+        # Step 1: check by legal full name in entities (case-insensitive).
+        # This catches TMs who exist under a different display_name (e.g.
+        # "Liz" in the DB but "Elizabeth Pierce" on the schedule) and TMs
+        # who are transferred/separated but still have an entity row.
+        existing_by_legal = (
+            sb.table("entities")
+            .select("id, display_name, status, metadata")
+            .ilike("name", full_name)       # case-insensitive exact match
+            .eq("entity_type", "tm")
+            .limit(1)
+            .execute()
+        )
+        if existing_by_legal.data:
+            found = existing_by_legal.data[0]
+            status = found.get("status") or "unknown"
+            print(
+                f"[db] create_new_tm_stub_in_db: {full_name!r} already exists as "
+                f"id={found['id']} display_name={found['display_name']!r} "
+                f"status={status!r} — no new stub created. "
+                f"If this is the wrong person, rename or alias the existing record."
+            )
+            # Distinguish active-and-in-roster from inactive/excluded records
+            active_statuses = {"active", "active_grave", "part_time"}
+            if status.lower() in active_statuses:
+                return "exists_active"
+            return "exists_inactive"
+
+        # Step 2: fallback — check display_name in tm_profiles (prior contract).
+        existing_by_display = (
             sb.table("tm_profiles")
             .select("tm_id")
             .eq("display_name", display_name)
             .limit(1)
             .execute()
         )
-        if existing.data:
-            return False
+        if existing_by_display.data:
+            return "exists_active"
 
+        # ── New stub ──────────────────────────────────────────────────────────
         tm_id = f"tm_{display_name.lower().replace(' ', '_')}_{_uuid.uuid4().hex[:4]}"
 
         # Insert entity row
@@ -2826,10 +2863,10 @@ def create_new_tm_stub_in_db(full_name: str, display_name: str, week_ending: str
             "status":        "active",
         }).execute()
 
-        return True
+        return "created"
     except Exception:
         print(f"[db] create_new_tm_stub_in_db error:\n{traceback.format_exc()}")
-        return False
+        return "error"
 
 
 # ── Engine Overrides (Phase D / K.4) ─────────────────────────────────────────

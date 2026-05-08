@@ -4,6 +4,46 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4h: Prevent duplicate stub creation for existing TMs (Sonnet)
+
+### Root cause
+`create_new_tm_stub_in_db` only checked idempotency by `display_name` in `tm_profiles`.
+When a TM appears on the schedule under their legal name (e.g. "Elizabeth Pierce") but
+the canonical DB record uses a nickname (`display_name='Liz'`), the display_name check
+missed it → a new duplicate stub was created. This had been manually merged twice in 24 h.
+
+### 4h.A — `shared/db.py`: broadened idempotency + richer return type
+- Return type changed `bool` → `str` with four values:
+  - `"created"` — new stub inserted
+  - `"exists_active"` — legal name found in `entities` and status is active
+  - `"exists_inactive"` — legal name found in `entities` but TM is excluded
+    from roster (transferred / separated / LOA)
+  - `"error"` — exception caught inside the function
+- New Step 1: `entities.name ILIKE full_name` check before any `tm_profiles` lookup.
+  Catches transferred/inactive records AND nickname mismatches (Liz ↔ Elizabeth Pierce).
+  Logs the found entity's `id`, `display_name`, and `status` to stderr.
+- Step 2 (fallback): unchanged `tm_profiles.display_name` equality check, now returns
+  `"exists_active"` instead of `False`.
+
+### 4h.B — `apps/zds/engine/fill_engine.py`: updated call site
+- Replaced `bool _stub_created` pattern with `str _stub_result` match:
+  - `"created"` → ★ print + `NEW_TM_NEEDS_ELIGIBILITY` warning audit item
+  - `"exists_inactive"` → ⚠ print + new `TM_ON_SCHEDULE_BUT_INACTIVE` warning audit item
+  - `"error"` → ⚠ print + `NEW_TM_STUB_FAILED` error audit item
+  - `"exists_active"` → silent no-op (already properly in tm_profiles)
+- Removed the old try/except wrapper around the call (exceptions now caught inside the
+  function and returned as `"error"`).
+
+### Verified against live DB
+- `create_new_tm_stub_in_db("Elizabeth Pierce", ...)` → `"exists_active"` (matched
+  `tm_liz`, status=active); zero new rows in `entities` or `tm_profiles`.
+- `create_new_tm_stub_in_db("Sheri Oneil", ...)` → `"exists_active"` (matched
+  `tm_sheri_o`); zero new rows.
+- `create_new_tm_stub_in_db("Zzztest Fictionalname", ...)` → `"created"`; +1 row each
+  table; cleaned up afterward.
+
+---
+
 ## 2026-05-08 — Phase 4g: Deployment Book visual refresh + Break Sheet redesign (Sonnet)
 
 ### 4g.1 — Title fix (`render_deployment_book.py`)
