@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import database
+from shared.db import list_annotations_grouped as _list_annotations_grouped
+from .components.glcr_icons import glcr_icon as _glcr_icon
 
 # ── Dynamic import of the rendering engine ───────────────────────────────────
 # Vendored to apps/zds/engine/render_deployment_book.py during Phase G.1.
@@ -51,6 +53,55 @@ CSS                = _rdb.CSS
 SVG_SPRITE         = _rdb.SVG_SPRITE
 HTML_SHELL         = _rdb.HTML_SHELL
 
+
+# ── Phase 4k.4 — TM annotation print CSS ─────────────────────────────────────
+# Appended to the engine's CSS block at render time so we don't touch the engine.
+
+_TM_ANNOTATION_CSS = """
+/* Phase 4k.4 — TM pre-shift annotation markers */
+.tm-preshift-note {
+  display: block;
+  margin-left: 14px;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #4b5563;
+  line-height: 1.2;
+}
+.tm-log-marker {
+  vertical-align: -1px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+"""
+
+# ── Phase 4k.5 — Card annotation print CSS ───────────────────────────────────
+
+_CARD_ANNOTATION_CSS = """
+/* Phase 4k.5 — card-level annotation markers in print output */
+.card-priority-stripe {
+  border-left: 3px solid #d97706;
+  padding-left: 3px;
+}
+.card-note {
+  display: block;
+  font-size: 0.8em;
+  font-style: italic;
+  color: #4b5563;
+  margin-top: 2px;
+  margin-left: 2px;
+}
+.card-adhoc-task {
+  display: block;
+  font-size: 0.78em;
+  color: #374151;
+  margin-top: 1px;
+  margin-left: 2px;
+}
+.card-adhoc-task::before {
+  content: "→ ";
+  color: #9ca3af;
+}
+"""
 
 # ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
 # day_idx is 1-based (Friday=1, Thursday=7). The 7-letter array maps directly:
@@ -206,6 +257,203 @@ def _grp(sk: str, slot_map: dict) -> Optional[int]:
 
 # ── Deployment page renderer ───────────────────────────────────────────────────
 
+# ── Phase 4k.3: annotation helpers ───────────────────────────────────────────
+
+_DAY_KEY_MAP = {
+    "Friday": "fri", "Saturday": "sat", "Sunday": "sun",
+    "Monday": "mon", "Tuesday": "tue", "Wednesday": "wed", "Thursday": "thu",
+}
+
+
+def _day_key_from_weekday(weekday: str) -> str:
+    """Map full weekday name → 3-letter day slug used in zds_annotations."""
+    return _DAY_KEY_MAP.get(weekday, weekday[:3].lower() if weekday else "fri")
+
+
+def _apply_task_annotations(items: list, annots: dict) -> list[str]:
+    """Apply skip / symbol / note annotations; return final display strings.
+
+    items:  list of {id, name} dicts  (custom/hardcoded tasks carry id="")
+    annots: {task_uuid: {annotation_kind: value_dict}} — the "task" sub-dict
+            from list_annotations_grouped(); pass {} to skip the annotation pass.
+
+    Returns a list of plain-text name strings:
+      • Symbol annotations are prepended  (e.g. "★ Mop entrance")
+      • Note annotations are appended     (e.g. "Mop entrance (check near door)")
+      • Tasks with a skip annotation are omitted entirely
+      • Custom / hardcoded tasks (id="") pass through unchanged
+    """
+    result: list[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            task_id = item.get("id", "")
+            name    = item.get("name", "")
+        else:
+            task_id = ""
+            name    = str(item)
+
+        if task_id and task_id in annots:
+            task_ann = annots[task_id]
+            # Skip — omit from print output entirely
+            if task_ann.get("skip"):
+                continue
+            sym_ann  = task_ann.get("symbol") or {}
+            sym_sec  = sym_ann.get("section", "")
+            sym_slug = sym_ann.get("slug", "")
+            sym_char = sym_ann.get("char", "")   # legacy fallback (pre-4k.3.1 rows)
+            note_val = (task_ann.get("note") or {}).get("text", "")
+            if sym_sec and sym_slug:
+                try:
+                    prefix = _glcr_icon(sym_sec, sym_slug, size=11,
+                                        css_class="task-symbol") + " "
+                except Exception:
+                    prefix = ""
+            elif sym_char:
+                prefix = f"{sym_char} "
+            else:
+                prefix = ""
+            suffix = f" ({note_val})" if note_val else ""
+            result.append(f"{prefix}{name}{suffix}")
+        else:
+            result.append(name)
+
+    return result
+
+
+def _apply_tm_annotations(card_html: str, tm_id: str, tm_name: str,
+                          tm_annots: dict) -> str:
+    """Post-process a rendered card HTML string to inject TM annotation markup.
+
+    Finds the escaped TM name inside any *-name div
+    (zone-name / name / aux-name) and appends:
+      • pin-bookmark SVG inline next to name if profile_log annotation exists
+      • italic pre-shift note block below name if note annotation exists
+
+    Phase 4k.4. Called after render_zone_card / render_rr_card / render_aux_card
+    because those engine functions HTML-escape `name_str`, so we cannot inject
+    HTML before the call.
+
+    Args:
+        card_html:  Full HTML string returned by a render_*_card function.
+        tm_id:      The TM's UUID (also the entities.id).
+        tm_name:    The TM's plain display name (used to locate the text in HTML).
+        tm_annots:  The "tm" sub-dict of list_annotations_grouped() —
+                    {tm_id: {annotation_kind: value_dict}}.
+
+    Returns the card_html unchanged if tm_id / tm_name are empty or no annotations exist.
+    """
+    from html import escape as _html_escape
+    if not tm_id or not tm_name:
+        return card_html
+    tm_anns = tm_annots.get(tm_id, {})
+    if not tm_anns:
+        return card_html
+
+    note = tm_anns.get("note")
+    log  = tm_anns.get("profile_log")
+
+    extras = ""
+    if log:
+        try:
+            extras += _glcr_icon("ui", "pin-bookmark", size=10,
+                                 css_class="tm-log-marker")
+        except Exception:
+            pass
+    if note and note.get("text"):
+        extras += (f'<span class="tm-preshift-note">'
+                   f'{_html_escape(note["text"])}</span>')
+
+    if not extras:
+        return card_html
+
+    # All three card types escape the TM name then insert a closing "</div>".
+    # We find ">escaped_name<" and append the extras before the "<".
+    escaped_name = esc(tm_name)
+    needle = f">{escaped_name}<"
+    replacement = f">{escaped_name}{extras}<"
+    return card_html.replace(needle, replacement, 1)
+
+
+def _apply_card_annotations(card_html: str, card_code: str,
+                            card_annots: dict) -> str:
+    """Post-process a rendered card HTML string to inject card annotation markup.
+
+    Uses the collapsed card_annotation_data format produced by
+    _collapse_card_annotations():
+      {card_code: {note?, priority?, adhoc_tasks: [{ref, name}, ...]}}
+
+    Injections:
+      • priority stripe: adds card-priority-stripe class to the outer card div
+      • note + adhoc blocks: injects after the card's header meta div
+        (engine class names: zone-meta, rr-head, aux-meta)
+
+    Phase 4k.5. Called after render_zone_card / render_rr_card / render_aux_card.
+    """
+    from html import escape as _html_escape
+    if not card_code:
+        return card_html
+    anns = card_annots.get(card_code, {})
+    if not anns:
+        return card_html
+
+    # Priority stripe — inject class onto any top-level card wrapper.
+    # Engine uses zone-card, rr-card, aux-card — match any.
+    priority = anns.get("priority")
+    if priority:
+        for card_cls in ("zone-card", "rr-card", "aux-card"):
+            marker = f'class="{card_cls} '
+            if marker in card_html:
+                card_html = card_html.replace(marker,
+                    f'class="{card_cls} card-priority-stripe ', 1)
+                break
+            # Card with no extra classes: class="zone-card"
+            marker2 = f'class="{card_cls}"'
+            if marker2 in card_html:
+                card_html = card_html.replace(marker2,
+                    f'class="{card_cls} card-priority-stripe"', 1)
+                break
+
+    # Note + adhoc tasks — build a block then inject after the header meta div.
+    extras = ""
+    note = anns.get("note")
+    if note and note.get("text"):
+        extras += f'<div class="card-note">{_html_escape(note["text"])}</div>'
+    for task in (anns.get("adhoc_tasks") or []):
+        name = task.get("name", "")
+        if name:
+            extras += f'<div class="card-adhoc-task">{_html_escape(name)}</div>'
+
+    if extras:
+        # Try each engine meta-div class in order
+        for meta_cls in ("zone-meta", "rr-head", "aux-meta"):
+            open_tag = f'<div class="{meta_cls}'
+            if open_tag not in card_html:
+                continue
+            # Find the closing </div> of this section and inject after it
+            start = card_html.find(open_tag)
+            # Walk forward to find the matching </div>
+            depth = 0
+            i = start
+            while i < len(card_html):
+                if card_html[i:i+4] == "<div":
+                    depth += 1
+                    i += 4
+                elif card_html[i:i+6] == "</div>":
+                    depth -= 1
+                    if depth == 0:
+                        inject_at = i + 6
+                        card_html = (card_html[:inject_at]
+                                     + f'<div class="card-annots">{extras}</div>'
+                                     + card_html[inject_at:])
+                        break
+                    i += 6
+                else:
+                    i += 1
+            break
+
+    return card_html
+
+
 def _notice_badges_html(slot_key: str, notices_by_slot: dict) -> str:
     """Phase E — render inline notice badges for print output.
 
@@ -231,79 +479,145 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     notices_by_slot = day.get("notices_by_slot", {})
     is_locked       = day.get("is_locked", False)
 
-    def zone_tasks(n: int) -> list:
-        """Use DB display_tasks (respects custom overrides + sweeper); fallback to defaults."""
-        sk   = f"zone_{n}"
-        s    = slot_map.get(sk, {})
-        base = list(s["display_tasks"]) if s.get("display_tasks") is not None \
-               else list(TASKS_ZONE.get(n, []))
-        # sw_add may carry sweeper task; only append if not already in list
-        for t in sw_add.get(f"zone_{n}", []):
-            if t not in base:
-                base.append(t)
-        return base
+    # ── Phase 4k.3: load task annotations for this night ─────────────────────
+    # Derive week_ending (the Thursday) from the night's calendar date.
+    # GLCR week runs Fri–Thu; weekday() gives 0=Mon…3=Thu…6=Sun.
+    _ndate    = day["date"]                                    # dt.date object
+    _delta    = (3 - _ndate.weekday()) % 7                    # days to Thursday
+    _week_end = _ndate + dt.timedelta(days=_delta)
+    _day_slug = _day_key_from_weekday(weekday)
+    try:
+        _all_annots = _list_annotations_grouped(_week_end, _day_slug)
+        task_annots = _all_annots.get("task", {})
+        tm_annots   = _all_annots.get("tm",   {})
+        # Phase 4k.5 — collapsed card annotations keyed by card code
+        from .state import _collapse_card_annotations
+        card_annots = _collapse_card_annotations(_all_annots.get("card", {}))
+    except Exception:
+        _all_annots = {}
+        task_annots = {}
+        tm_annots   = {}
+        card_annots = {}
+    # ─────────────────────────────────────────────────────────────────────────
 
-    def rr_extra_tasks(rr_sk: str) -> list | None:
-        """Collect custom-added tasks for an RR bank (sweeper + any user additions)."""
+    def zone_tasks(n: int) -> list[str]:
+        """Use DB display_tasks (respects custom overrides + sweeper); fallback to defaults.
+
+        Phase 4k.3: display_tasks is now list[{id, name}]. Skip/symbol/note
+        annotations are applied via _apply_task_annotations; skipped tasks are
+        omitted from print output.
+        """
+        sk    = f"zone_{n}"
+        s     = slot_map.get(sk, {})
+        items = (
+            list(s["display_tasks"])
+            if s.get("display_tasks") is not None
+            else [{"id": "", "name": t} for t in TASKS_ZONE.get(n, [])]
+        )
+        # Append sweeper labels (plain strings → no UUID → id="")
+        existing_names = {(i["name"] if isinstance(i, dict) else i) for i in items}
+        for t in sw_add.get(f"zone_{n}", []):
+            if t not in existing_names:
+                items.append({"id": "", "name": t})
+        return _apply_task_annotations(items, task_annots)
+
+    def rr_extra_tasks(rr_sk: str) -> list[str] | None:
+        """Collect custom-added tasks for an RR bank (sweeper + any user additions).
+
+        Phase 4k.3: display_tasks items are now {id, name} dicts; dedup by name.
+        """
         sm   = slot_map.get(f"{rr_sk}_mens",   {})
         sw   = slot_map.get(f"{rr_sk}_womens", {})
         n    = _RR_NUM.get(_RR_IDX.get(rr_sk, -1), -1)
-        base = set(TASKS_RR.get(n, []))
-        # Pull user-added tasks from mens or womens display_tasks beyond the defaults
-        extras = []
+        base          = set(TASKS_RR.get(n, []))
+        extras_items: list = []
+        extras_names: set  = set()
         for s in (sm, sw):
-            for t in (s.get("display_tasks") or []):
-                if t not in base and t not in extras:
-                    extras.append(t)
-        # Add sweeper label from sw_add
+            for item in (s.get("display_tasks") or []):
+                name = item["name"] if isinstance(item, dict) else item
+                if name not in base and name not in extras_names:
+                    extras_items.append(
+                        item if isinstance(item, dict) else {"id": "", "name": item}
+                    )
+                    extras_names.add(name)
         for t in sw_add.get(f"rr_{n}", []):
-            if t not in extras:
-                extras.append(t)
-        return extras or None
+            if t not in extras_names:
+                extras_items.append({"id": "", "name": t})
+                extras_names.add(t)
+        if not extras_items:
+            return None
+        result = _apply_task_annotations(extras_items, task_annots)
+        return result or None
 
-    def aux_extra_tasks(db_key: str, rdb_key: str) -> list | None:
-        """Collect custom-added tasks for an aux slot beyond its defaults."""
-        s    = slot_map.get(db_key, {})
+    def aux_extra_tasks(db_key: str, rdb_key: str) -> list[str] | None:
+        """Collect custom-added tasks for an aux slot beyond its defaults.
+
+        Phase 4k.3: display_tasks items are now {id, name} dicts; dedup by name.
+        """
+        s      = slot_map.get(db_key, {})
         _, sub = TASKS_AUX.get(rdb_key, ("", ""))
-        base = {sub} if sub else set()
-        extras = []
-        for t in (s.get("display_tasks") or []):
-            if t not in base and t not in extras:
-                extras.append(t)
+        base          = {sub} if sub else set()
+        extras_items: list = []
+        extras_names: set  = set()
+        for item in (s.get("display_tasks") or []):
+            name = item["name"] if isinstance(item, dict) else item
+            if name not in base and name not in extras_names:
+                extras_items.append(
+                    item if isinstance(item, dict) else {"id": "", "name": item}
+                )
+                extras_names.add(name)
         for t in sw_add.get(f"aux_{rdb_key}", []):
-            if t not in extras:
-                extras.append(t)
-        return extras or None
+            if t not in extras_names:
+                extras_items.append({"id": "", "name": t})
+                extras_names.add(t)
+        if not extras_items:
+            return None
+        result = _apply_task_annotations(extras_items, task_annots)
+        return result or None
 
     # Zone cards
     zone_cards = []
     for n in range(1, 11):
-        sk = f"zone_{n}"
-        s  = slot_map.get(sk, {})
-        zone_cards.append(render_zone_card(
-            n, s.get("tm_name") or "", ZONE_COLOR[n],
+        sk     = f"zone_{n}"
+        s      = slot_map.get(sk, {})
+        tm_nm  = s.get("tm_name") or ""
+        tm_id_z = s.get("tm_id") or ""
+        card = render_zone_card(
+            n, tm_nm, ZONE_COLOR[n],
             zone_tasks(n),
             alert=_alert(sk, slot_map),
             group=_grp(sk, slot_map),
-        ))
+        )
+        card = _apply_tm_annotations(card, tm_id_z, tm_nm, tm_annots)
+        # card code matches ZONE_LABELS["zone_N"] = "Zone N" = slot["label"] in UI
+        card = _apply_card_annotations(card, f"Zone {n}", card_annots)
+        zone_cards.append(card)
 
     # RR cards
     rr_nums = [1, 6, 7, 8, 10]
     rr_cards = []
     for idx, n in enumerate(rr_nums):
-        rr_sk = "rr_1_2" if n == 1 else f"rr_{n}"
-        sm    = slot_map.get(f"{rr_sk}_mens",   {})
-        sw    = slot_map.get(f"{rr_sk}_womens",  {})
-        alert = _alert(f"{rr_sk}_mens", slot_map) or _alert(f"{rr_sk}_womens", slot_map)
-        rr_cards.append(render_rr_card(
-            n,
-            sm.get("tm_name") or "", sw.get("tm_name") or "",
-            RR_COLOR[n],
+        rr_sk   = "rr_1_2" if n == 1 else f"rr_{n}"
+        sm      = slot_map.get(f"{rr_sk}_mens",   {})
+        sw      = slot_map.get(f"{rr_sk}_womens",  {})
+        alert   = _alert(f"{rr_sk}_mens", slot_map) or _alert(f"{rr_sk}_womens", slot_map)
+        m_name  = sm.get("tm_name") or ""
+        w_name  = sw.get("tm_name") or ""
+        m_id    = sm.get("tm_id") or ""
+        w_id    = sw.get("tm_id") or ""
+        card = render_rr_card(
+            n, m_name, w_name, RR_COLOR[n],
             extra_tasks=rr_extra_tasks(rr_sk),
             alert=alert,
             mens_group=sm.get("group_num") or None,
             womens_group=sw.get("group_num") or None,
-        ))
+        )
+        card = _apply_tm_annotations(card, m_id, m_name, tm_annots)
+        card = _apply_tm_annotations(card, w_id, w_name, tm_annots)
+        # card code: ZONE_LABELS["rr_N"] = "RR N" or "RR 1 + 2" — matches slot["label"] in UI
+        rr_label = "RR 1 + 2" if n == 1 else f"RR {n}"
+        card = _apply_card_annotations(card, rr_label, card_annots)
+        rr_cards.append(card)
 
     # Aux cards
     aux_order = [
@@ -316,21 +630,35 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     ]
     aux_cards = []
     for db_key, rdb_key, color in aux_order:
-        s     = slot_map.get(db_key, {})
-        aux_cards.append(render_aux_card(
-            rdb_key, s.get("tm_name") or "", color,
+        s      = slot_map.get(db_key, {})
+        a_name = s.get("tm_name") or ""
+        a_id   = s.get("tm_id") or ""
+        card = render_aux_card(
+            rdb_key, a_name, color,
             extra_tasks=aux_extra_tasks(db_key, rdb_key),
             alert=_alert(db_key, slot_map),
             group=_grp(db_key, slot_map),
-        ))
+        )
+        # card code: ZONE_LABELS[db_key] — matches slot["label"] in UI
+        aux_label = database.ZONE_LABELS.get(db_key, db_key)
+        card = _apply_tm_annotations(card, a_id, a_name, tm_annots)
+        card = _apply_card_annotations(card, aux_label, card_annots)
+        aux_cards.append(card)
     s3 = slot_map.get("support_3", {})
     if s3.get("tm_name"):
-        aux_cards.append(render_aux_card(
-            "support_3", s3["tm_name"], "teal",
+        s3_name = s3["tm_name"]
+        s3_id   = s3.get("tm_id") or ""
+        card = render_aux_card(
+            "support_3", s3_name, "teal",
             alert=_alert("support_3", slot_map),
             group=_grp("support_3", slot_map),
             conditional=True,
-        ))
+        )
+        card = _apply_tm_annotations(card, s3_id, s3_name, tm_annots)
+        card = _apply_card_annotations(
+            card, database.ZONE_LABELS.get("support_3", "Support 3"), card_annots
+        )
+        aux_cards.append(card)
     has_s3      = bool(s3.get("tm_name"))
     aux_strip_cls = "aux-strip" + (" has-support-3" if has_s3 else "")
 
@@ -734,7 +1062,7 @@ def render_night_html(night_id: str) -> str:
                               page_base=1, page_total=2)
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS,
         sprite=SVG_SPRITE,
         pages=pages,
     )
@@ -761,7 +1089,185 @@ def render_week_html(week_id: str) -> str:
     title = week.get("label") or f"Week ending {week.get('week_ending', '')}"
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS,
         sprite=SVG_SPRITE,
         pages="\n".join(pages),
     )
+
+
+def render_single_card_html(night_id: str, card_code: str) -> str:
+    """Return a self-contained portrait HTML page with a single rendered card.
+
+    Intended for the "Print this card" action in the Phase 4k.5 card annotation
+    menu. Renders the card at full size on a letter-portrait page with the GLCR
+    masthead, a recipient line, and auto-launches print dialog on load.
+
+    card_code: the slot["label"] value from the live UI — e.g. "Zone 1",
+    "RR 1 + 2", "Z9 SR", "Admin", "Trash 1", "Support 1", etc.
+    """
+    night, day, slot_map, _overlaps = _fetch_night_data(night_id)
+    # Use the actual calendar weekday from night_date (same convention as _render_deployment_page)
+    day_name   = day.get("weekday") or night.get("day_name", "")
+    week_id    = night.get("week_id", "")
+
+    week = {}
+    if week_id:
+        week_res = (database._client().table("weeks")
+                    .select("week_ending, label")
+                    .eq("id", week_id).single().execute())
+        week = week_res.data or {}
+    # Derive week_ending (Thursday) from night date — same logic as _render_deployment_page
+    _ndate    = day["date"]
+    _delta    = (3 - _ndate.weekday()) % 7
+    week_ending = str(_ndate + dt.timedelta(days=_delta))
+    day_slug = _day_key_from_weekday(day_name) if day_name else "fri"
+
+    # Load annotations
+    try:
+        _all_annots = _list_annotations_grouped(week_ending, day_slug)
+        task_annots = _all_annots.get("task", {})
+        tm_annots   = _all_annots.get("tm",   {})
+        from .state import _collapse_card_annotations
+        card_annots = _collapse_card_annotations(_all_annots.get("card", {}))
+    except Exception:
+        task_annots = tm_annots = card_annots = {}
+
+    # Build the card HTML for this specific code
+    card_html = ""
+
+    # Normalise card_code lookup helpers
+    from .database import ZONE_LABELS as _ZL
+    # Reverse ZONE_LABELS: display label → slot_key
+    _label_to_sk = {v: k for k, v in _ZL.items()}
+    sk = _label_to_sk.get(card_code, "")
+
+    if sk and sk.startswith("zone_"):
+        try:
+            n = int(sk.split("_")[1])
+        except (IndexError, ValueError):
+            n = 0
+        if n:
+            s  = slot_map.get(sk, {})
+            tm = s.get("tm_name") or ""
+            tm_id = s.get("tm_id") or ""
+            raw_tasks = (list(s["display_tasks"])
+                         if s.get("display_tasks") is not None
+                         else [{"id": "", "name": t} for t in TASKS_ZONE.get(n, [])])
+            z_tasks = _apply_task_annotations(raw_tasks, task_annots)
+            card_html = render_zone_card(
+                n, tm, ZONE_COLOR[n],
+                z_tasks,
+                alert=_alert(sk, slot_map),
+                group=_grp(sk, slot_map),
+            )
+            card_html = _apply_tm_annotations(card_html, tm_id, tm, tm_annots)
+            card_html = _apply_card_annotations(card_html, card_code, card_annots)
+
+    elif sk and sk.startswith("rr_"):
+        rr_num = 1 if sk == "rr_1_2" else int(sk.split("_")[1])
+        sm = slot_map.get(f"{sk}_mens",   {})
+        sw = slot_map.get(f"{sk}_womens", {})
+        alert = (_alert(f"{sk}_mens", slot_map)
+                 or _alert(f"{sk}_womens", slot_map))
+        card_html = render_rr_card(
+            rr_num,
+            sm.get("tm_name") or "",
+            sw.get("tm_name") or "",
+            RR_COLOR[rr_num],
+            extra_tasks=None,  # standard tasks from engine; custom tasks omitted in single-card view
+            alert=alert,
+            mens_group=sm.get("group_num") or None,
+            womens_group=sw.get("group_num") or None,
+        )
+        card_html = _apply_tm_annotations(card_html, sm.get("tm_id", ""),
+                                          sm.get("tm_name", ""), tm_annots)
+        card_html = _apply_tm_annotations(card_html, sw.get("tm_id", ""),
+                                          sw.get("tm_name", ""), tm_annots)
+        card_html = _apply_card_annotations(card_html, card_code, card_annots)
+
+    else:
+        # Aux card — sk maps to a db_key (z9_sr, admin, trash_1, etc.)
+        # For support_3 the label is "Support 3" but sk may be empty in reverse map
+        if not sk:
+            # Try to find by direct ZONE_LABELS value
+            for db_k, lbl in _ZL.items():
+                if lbl == card_code:
+                    sk = db_k
+                    break
+        if sk:
+            s = slot_map.get(sk, {})
+            a_name = s.get("tm_name") or ""
+            a_id   = s.get("tm_id") or ""
+            # Build the rdb_key the same way aux_order does
+            _rdb_key_map = {
+                "z9_sr": "z9_sr", "admin": "admin",
+                "trash_1": "trash_1_5", "trash_2": "trash_6_10",
+                "support_1": "support_1", "support_2": "support_2",
+                "support_3": "support_3",
+            }
+            rdb_key = _rdb_key_map.get(sk, sk)
+            card_html = render_aux_card(
+                rdb_key, a_name,
+                {"z9_sr":"red","admin":"purple","trash_1":"orange",
+                 "trash_2":"orange","support_1":"grey","support_2":"grey",
+                 "support_3":"teal"}.get(sk, "grey"),
+                alert=_alert(sk, slot_map),
+                group=_grp(sk, slot_map),
+            )
+            card_html = _apply_tm_annotations(card_html, a_id, a_name, tm_annots)
+            card_html = _apply_card_annotations(card_html, card_code, card_annots)
+
+    if not card_html:
+        card_html = f'<p style="color:#ef4444">Card "{esc(card_code)}" not found.</p>'
+
+    week_label = week.get("label") or f"Week ending {week_ending}"
+
+    _SINGLE_CARD_CSS = """
+@page { size: letter portrait; margin: 0.5in; }
+body { margin: 0; font-family: system-ui, sans-serif; }
+.sc-masthead {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 2px solid #111827;
+}
+.sc-title { font-size: 18px; font-weight: 700; color: #111827; }
+.sc-sub   { font-size: 12px; color: #6b7280; }
+.sc-card-wrap {
+  display: flex; justify-content: center; padding: 16px 0;
+}
+.sc-card-wrap > * { max-width: 340px; width: 100%; }
+.sc-recipient {
+  margin-top: 20px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+  font-size: 12px; color: #6b7280;
+}
+"""
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{esc(card_code)} — {esc(week_label)}</title>
+<style>
+{CSS}
+{_TM_ANNOTATION_CSS}
+{_CARD_ANNOTATION_CSS}
+{_SINGLE_CARD_CSS}
+</style>
+<script>window.addEventListener('load', function(){{window.print();}});</script>
+</head>
+<body>
+{SVG_SPRITE}
+<div class="sc-masthead">
+  <span class="sc-title">GLCR Zone Deployment</span>
+  <span class="sc-sub">{esc(week_label)} · {esc(day_name)}</span>
+</div>
+<div class="sc-card-wrap">
+  {card_html}
+</div>
+<div class="sc-recipient">
+  <strong>To:</strong> _____________________&nbsp;&nbsp;
+  <strong>From:</strong> Brian Killian&nbsp;&nbsp;
+  <strong>Night of:</strong> {esc(day_name)}
+</div>
+</body>
+</html>"""

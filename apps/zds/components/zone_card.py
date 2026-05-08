@@ -246,6 +246,11 @@ def _task_section(slot_id, tasks) -> rx.Component:
     """
     Shows the task list for a slot with per-task remove buttons and an
     inline add-task form.  `slot_id` and `tasks` may both be Reflex Vars.
+
+    Phase 4k.3: `tasks` is now list[{id, name}] dicts. Each task row has
+    a `.task-ctx-trigger` class and data-task-* attrs so that
+    task_annotation.js can dispatch ZdsState.open_task_menu on right-click
+    or long-press.
     """
     return rx.vstack(
         # ── Existing tasks ──
@@ -253,13 +258,22 @@ def _task_section(slot_id, tasks) -> rx.Component:
             tasks,
             lambda task: rx.hstack(
                 rx.text("·", size="1", color="#9ca3af", flex_shrink="0"),
-                rx.text(task, size="1", color="#6b7280", flex="1", line_height="1.3"),
+                rx.text(
+                    task["name"],
+                    size="1", color="#6b7280", flex="1", line_height="1.3",
+                    # Phase 4k.3 — right-click trigger for task annotation menu
+                    class_name="task-ctx-trigger",
+                    custom_attrs={
+                        "data-task-id":   task["id"],
+                        "data-task-name": task["name"],
+                    },
+                ),
                 rx.text(
                     "×",
                     size="1", color="#c4c4c4",
                     cursor="pointer",
                     _hover={"color": "#ef4444"},
-                    on_click=ZdsState.remove_task(slot_id, task),
+                    on_click=ZdsState.remove_task(slot_id, task["name"]),
                     flex_shrink="0",
                     padding="0 2px",
                 ),
@@ -369,17 +383,28 @@ def zone_card(slot: dict) -> rx.Component:
                 # classes let CSS pick the right color per theme — inline
                 # color is now empty for filled rows so the class wins.
                 # card-tm-name-calledoff → red text via CSS; card-tm-name → normal filled
-                class_name="ctx-menu-trigger ht-trigger " + rx.cond(
-                    slot["is_filled"],
-                    rx.cond(
-                        slot["warning_status"] == "called_off",
-                        "card-tm-name card-tm-name-calledoff",
-                        "card-tm-name",
-                    ),
-                    "card-empty-label",
+                class_name=(
+                    "ctx-menu-trigger ht-trigger "
+                    + rx.cond(slot["is_filled"], "tm-annot-trigger ", "")
+                    # Phase 4k.4 — badge classes (✎ note / 📌 profile-log)
+                    + rx.cond(
+                        slot["is_filled"]
+                        & ZdsState.tm_badge_classes.contains(slot["tm_id"]),
+                        ZdsState.tm_badge_classes[slot["tm_id"]] + " ",
+                        "",
+                    )
+                    + rx.cond(
+                        slot["is_filled"],
+                        rx.cond(
+                            slot["warning_status"] == "called_off",
+                            "card-tm-name card-tm-name-calledoff",
+                            "card-tm-name",
+                        ),
+                        "card-empty-label",
+                    )
                 ),
                 custom_attrs={
-                    # Context menu attrs
+                    # Context menu attrs (ContextMenuState — operational actions)
                     "data-ctx-target-type":  "assignment",
                     "data-ctx-target-id":    slot["tm_id"],
                     "data-ctx-target-label": slot["display_name"],
@@ -390,6 +415,9 @@ def zone_card(slot: dict) -> rx.Component:
                     "data-ht-tm-id":         slot["tm_id"],
                     "data-ht-night-id":      ZdsState.current_night_id,
                     "data-ht-slot-key":      slot["slot_key"],
+                    # Phase 4k.4 — TM annotation menu attrs (ZdsState)
+                    "data-tm-annot-id":      slot["tm_id"],
+                    "data-tm-annot-name":    slot["display_name"],
                 },
             ),
             rx.cond(
@@ -417,19 +445,43 @@ def zone_card(slot: dict) -> rx.Component:
                 f"1px solid {_LOCK_GOLD}",
                 "1px solid #e5e7eb",
             ),
+            # Phase 4k.5 — outer wrapper carries .card-annot-trigger so a
+            # right-click on any empty area of the card opens the card annotation
+            # menu instead of the operational ContextMenuState menu.
             "class_name": rx.cond(
                 slot["is_locked"],
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card zone-card-filled zone-card-locked",
-                    "zone-card zone-card-empty zone-card-locked",
+                    "zone-card zone-card-filled zone-card-locked card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
+                    "zone-card zone-card-empty zone-card-locked card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
                 ),
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card zone-card-filled",
-                    "zone-card zone-card-empty",
+                    "zone-card zone-card-filled card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
+                    "zone-card zone-card-empty card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
                 ),
             ),
+            "custom_attrs": {"data-card-annot-code": slot["label"]},
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
         min_height="108px",
@@ -542,11 +594,23 @@ def rr_card(slot: dict) -> rx.Component:
         **{
             **CARD_BASE,
             "cursor": "default",
+            # Phase 4k.5 — card-annot-trigger on RR card outer wrapper.
             "class_name": rx.cond(
                 slot["mens_is_filled"] | slot["womens_is_filled"],
-                "zone-card rr-card rr-card-filled",
-                "zone-card rr-card rr-card-empty",
+                "zone-card rr-card rr-card-filled card-annot-trigger "
+                + rx.cond(
+                    ZdsState.card_badge_classes.contains(slot["label"]),
+                    ZdsState.card_badge_classes[slot["label"]],
+                    "",
+                ),
+                "zone-card rr-card rr-card-empty card-annot-trigger "
+                + rx.cond(
+                    ZdsState.card_badge_classes.contains(slot["label"]),
+                    ZdsState.card_badge_classes[slot["label"]],
+                    "",
+                ),
             ),
+            "custom_attrs": {"data-card-annot-code": slot["label"]},
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
         min_height="80px",
@@ -599,19 +663,41 @@ def aux_card(slot: dict) -> rx.Component:
                 f"1px solid {_LOCK_GOLD}",
                 "1px solid #e5e7eb",
             ),
+            # Phase 4k.5 — card-annot-trigger on aux card outer wrapper.
             "class_name": rx.cond(
                 slot["is_locked"],
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card aux-card zone-card-filled zone-card-locked",
-                    "zone-card aux-card zone-card-empty zone-card-locked",
+                    "zone-card aux-card zone-card-filled zone-card-locked card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
+                    "zone-card aux-card zone-card-empty zone-card-locked card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
                 ),
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card aux-card zone-card-filled",
-                    "zone-card aux-card zone-card-empty",
+                    "zone-card aux-card zone-card-filled card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
+                    "zone-card aux-card zone-card-empty card-annot-trigger "
+                    + rx.cond(
+                        ZdsState.card_badge_classes.contains(slot["label"]),
+                        ZdsState.card_badge_classes[slot["label"]],
+                        "",
+                    ),
                 ),
             ),
+            "custom_attrs": {"data-card-annot-code": slot["label"]},
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
         min_height="60px",

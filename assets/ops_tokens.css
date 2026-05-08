@@ -242,6 +242,28 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   GLCR CARD COLOR TOKENS  (theme-independent)
+   Mirror of the --c-* variables in render_deployment_book.py's embedded CSS.
+   Defined here so the live ZDS grid (ops_tokens.css) and the PDF renderer
+   (render_deployment_book.py) share the same hue values.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --c-yellow: #B89708;   /* Zone 1, Zone 2, RR 1+2           */
+  --c-red:    #E53935;   /* Zone 3–5, Z9, Z9 SR              */
+  --c-pink:   #B7679A;   /* Zone 6, RR 6                     */
+  --c-blue:   #1E88E5;   /* Zone 7, RR 7                     */
+  --c-brown:  #6B5346;   /* Zone 8, RR 8                     */
+  --c-green:  #43A047;   /* Zone 10, RR 10, Support 3        */
+  --c-orange: #FB8C00;   /* Trash 1, Trash 2                 */
+  --c-purple: #8E24AA;   /* Admin                            */
+  --c-grey:   #4a5568;   /* Support 1, Support 2             */
+  --c-teal:   #14b8a6;   /* fallback                         */
+  --c-alert:  #e53935;   /* alert dot background             */
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
    HIDE "BUILT WITH REFLEX" BADGE
    The rx.App(show_built_with_reflex=False) flag isn't honored on this Reflex
    build, so we hide the anchor by href as a CSS-level backstop. The badge is
@@ -427,4 +449,136 @@ details > summary::-webkit-details-marker {
 
 [data-theme="light"] .ops-sim-report-body strong {
   color: #1a1a1a;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TASK ANNOTATION VISUAL STATES (Phase 4k.3)
+   Applied to task rows on the deployment grid and in the PDF print output.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Right-click cursor affordance for annotatable task text spans */
+.task-ctx-trigger {
+  cursor: context-menu;
+}
+
+/* Highlight tints — applied as background on the task row in PDF/print.
+   color-mix() ties tints to the canonical --c-* card color tokens so they
+   track any palette update automatically.
+   Fallback rgba values (for reference / non-Chrome environments):
+     yellow: rgba(184,151,8,0.22)   red:    rgba(229,57,53,0.14)
+     green:  rgba(67,160,71,0.16)   blue:   rgba(30,136,229,0.16)
+     purple: rgba(142,36,170,0.16)  orange: rgba(251,140,0,0.16)      */
+.task-hl-yellow { background: color-mix(in srgb, var(--c-yellow) 18%, transparent); border-radius: 3px; padding: 1px 4px; }
+.task-hl-red    { background: color-mix(in srgb, var(--c-red)    14%, transparent); border-radius: 3px; padding: 1px 4px; }
+.task-hl-green  { background: color-mix(in srgb, var(--c-green)  16%, transparent); border-radius: 3px; padding: 1px 4px; }
+.task-hl-blue   { background: color-mix(in srgb, var(--c-blue)   16%, transparent); border-radius: 3px; padding: 1px 4px; }
+.task-hl-purple { background: color-mix(in srgb, var(--c-purple) 16%, transparent); border-radius: 3px; padding: 1px 4px; }
+.task-hl-orange { background: color-mix(in srgb, var(--c-orange) 16%, transparent); border-radius: 3px; padding: 1px 4px; }
+
+/* Skip-tonight — greyed-out strikethrough in the live grid  */
+.task-skip {
+  opacity: 0.38;
+  text-decoration: line-through;
+  pointer-events: none;
+}
+
+/* Symbol prefix glyph */
+.task-symbol {
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+/* Note suffix */
+.task-note {
+  font-style: italic;
+  color: #6b7280;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* ── TM chip annotation badges (Phase 4k.4) ────────────────────────────────── */
+/* ✎ badge — TM has a pre-shift note tonight */
+.tm-has-note         { position: relative; padding-right: 16px; }
+.tm-has-note::after  {
+  content: "✎";
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: var(--ink3, #6b7280);
+}
+
+/* 📌 badge — TM has an observation logged to Memory Backend tonight */
+.tm-has-profile-log         { position: relative; padding-right: 16px; }
+.tm-has-profile-log::after  {
+  content: "📌";
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  font-size: 11px;
+}
+
+/* When both note AND profile-log are present, stack the markers */
+.tm-has-note.tm-has-profile-log         { padding-right: 30px; }
+.tm-has-note.tm-has-profile-log::before {
+  content: "📌";
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  font-size: 11px;
+}
+.tm-has-note.tm-has-profile-log::after  { content: "✎"; }
+
+/* ── Card annotation badges (Phase 4k.5) ───────────────────────────────────── */
+
+/* ★ priority ring — gold left-border accent on the card */
+.card-priority {
+  border-left: 3px solid var(--c-yellow, #d97706) !important;
+}
+
+/* 📝 note badge — small pencil indicator in the card top-right corner */
+.card-has-note {
+  position: relative;
+}
+.card-has-note::before {
+  content: "📝";
+  position: absolute;
+  top: 4px; right: 4px;
+  font-size: 10px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ✚ adhoc badge — plus marker when adhoc tasks exist (doesn't collide with note) */
+.card-has-adhoc {
+  position: relative;
+}
+.card-has-adhoc::after {
+  content: "✚";
+  position: absolute;
+  top: 4px; right: 18px;
+  font-size: 10px;
+  color: var(--ink3, #6b7280);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* When only adhoc (no note), shift right so it doesn't hover in empty space */
+.card-has-adhoc:not(.card-has-note)::after {
+  right: 4px;
+}
+
+/* Card note inline text (printed under zone header — used by PDF renderer) */
+.card-note {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--ink3, #6b7280);
+  margin-top: 2px;
+  display: block;
+}
+
+/* Adhoc task row inline (printed in PDF renderer) */
+.card-adhoc-task {
+  font-size: 10px;
+  color: var(--ink2, #374151);
+  margin-top: 1px;
+  display: block;
+}
+.card-adhoc-task::before {
+  content: "→ ";
+  color: var(--ink3, #6b7280);
 }

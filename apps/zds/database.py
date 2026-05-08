@@ -1215,7 +1215,8 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
         # ── display_tasks: custom_tasks → DB zone_tasks → hardcoded constants ──
         custom = row.get("custom_tasks")
         if custom is not None:
-            row["display_tasks"] = list(custom)
+            # custom_tasks in DB are list[str] — wrap as TaskItem dicts (id="" for custom)
+            row["display_tasks"] = [{"id": "", "name": t} for t in custom]
         else:
             # Resolve DB lookup key from slot type + slot_key
             if st == "zone":
@@ -1229,18 +1230,20 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
                 _num    = 0
             _db_rows = _db_zone_tasks.get(_db_key, [])
             if _db_rows:
-                row["display_tasks"] = [t["name"] for t in _db_rows]
+                # Phase 4k.3: carry UUID so annotation handlers can reference by id
+                row["display_tasks"] = [{"id": t["id"], "name": t["name"]} for t in _db_rows]
             elif st == "zone":
-                row["display_tasks"] = list(TASKS_ZONE.get(_num, []))
+                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_ZONE.get(_num, [])]
             elif st == "rr":
-                row["display_tasks"] = list(TASKS_RR.get(_num, []))
+                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_RR.get(_num, [])]
             else:
-                row["display_tasks"] = list(TASKS_AUX_SLOT.get(sk, []))
+                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_AUX_SLOT.get(sk, [])]
         # ── Sweeper task: always appended on top (never stored in custom_tasks) ──
         if row.get("is_sweeper") and row.get("sweeper_route"):
             sweeper_label = f"Sweeper – {row['sweeper_route']}"
-            if sweeper_label not in row["display_tasks"]:
-                row["display_tasks"] = list(row["display_tasks"]) + [sweeper_label]
+            _existing_names = [t["name"] for t in row["display_tasks"]]
+            if sweeper_label not in _existing_names:
+                row["display_tasks"] = list(row["display_tasks"]) + [{"id": "", "name": sweeper_label}]
         # ── Normalise is_locked ──
         row["is_locked"] = bool(row.get("is_locked"))
 

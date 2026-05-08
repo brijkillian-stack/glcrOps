@@ -89,6 +89,37 @@ def _mark_section_headers(rows: list[dict]) -> list[dict]:
     return result
 
 
+def _collapse_card_annotations(raw: dict) -> dict:
+    """Collapse raw card-kind annotation rows into a per-card dict.
+
+    The raw grouped data has two ref shapes:
+      - "Z9"        → direct card-level annotations (note, priority, …)
+      - "Z9:abc123" → composite ref for a single adhoc task
+
+    Returns {card_code: {note?, priority?, adhoc_tasks: [{ref, name}, ...]}}
+    so the UI and print renderer never have to know about composite refs.
+    """
+    out: dict[str, dict] = {}
+    for ref, anns in (raw or {}).items():
+        if ":" in ref:
+            # Composite adhoc task ref
+            card_code = ref.split(":", 1)[0]
+            adhoc_val = anns.get("adhoc", {})
+            if adhoc_val:
+                card = out.setdefault(card_code, {})
+                tasks = card.setdefault("adhoc_tasks", [])
+                tasks.append({"ref": ref, "name": adhoc_val.get("name", "")})
+        else:
+            # Direct card-level annotation(s)
+            card = out.setdefault(ref, {})
+            for k, v in anns.items():
+                card[k] = v
+    # Ensure every entry has the adhoc_tasks key
+    for anns in out.values():
+        anns.setdefault("adhoc_tasks", [])
+    return out
+
+
 class ZdsState(rx.State):
     # ── Week list (index page) ────────────────────────────────────────────────
     weeks: list[Week] = []
@@ -217,16 +248,100 @@ class ZdsState(rx.State):
 
     # ── Task annotation menu (Phase 4k.3) ────────────────────────────────────
     # Floating context menu opened on right-click of a task row.
-    task_menu_open:      bool = False
-    task_menu_x:         int  = 0
-    task_menu_y:         int  = 0
-    task_menu_task_id:   str  = ""
-    task_menu_task_name: str  = ""
-    task_menu_subview:   str  = "root"  # "root" | "color" | "symbol" | "note"
-    task_menu_note_text: str  = ""
+    # ── Generic annotation context menu (Phase 4k.3.1 refactor) ─────────────
+    # target_kind drives which root subview renders:
+    #   "task"  → task annotation menu (4k.3)
+    #   "tm"    → TM annotation menu   (4k.4, stub for now)
+    #   "card"  → card annotation menu (4k.5, stub for now)
+    menu_open:        bool = False
+    menu_x:           int  = 0
+    menu_y:           int  = 0
+    menu_target_kind: str  = ""     # "task" | "tm" | "card"
+    menu_target_ref:  str  = ""     # task UUID | tm_id | card code
+    menu_target_name: str  = ""     # display label shown in menu header
+    menu_target_day:  str  = ""     # day slug ("fri"…"thu") of the open night
+    menu_subview:     str  = "root" # "root" | "color" | "symbol" | "note"
+    menu_note_text:   str  = ""
     # Annotation data for current night: {task_uuid: {annotation_kind: value_dict}}
     # Reloaded each time _load_night runs or after any annotation write.
     task_annotation_data: dict = {}
+    # TM annotation data for current night: {tm_id: {annotation_kind: value_dict}}
+    # Phase 4k.4 — pre-shift notes + profile-log markers.
+    tm_annotation_data: dict = {}
+    # Card annotation data for current night.
+    # Phase 4k.5 — collapsed from raw "card" grouped annotations.
+    # Structure: {card_code: {note?, priority?, adhoc_tasks: [{ref, name}, ...]}}
+    card_annotation_data: dict = {}
+
+    @rx.var
+    def card_menu_adhoc_tasks(self) -> list:
+        """Adhoc task list for the card currently open in the annotation menu.
+
+        Avoids chained Var subscripts in the component — returns a plain list
+        of {ref, name} dicts for the active card_code.
+        """
+        if not self.menu_target_ref:
+            return []
+        return self.card_annotation_data.get(self.menu_target_ref, {}).get(
+            "adhoc_tasks", []
+        )
+
+    @rx.var
+    def card_menu_has_note(self) -> bool:
+        """True when the currently targeted card has a note annotation this night."""
+        if not self.menu_target_ref:
+            return False
+        return bool(
+            self.card_annotation_data.get(self.menu_target_ref, {}).get("note")
+        )
+
+    @rx.var
+    def card_menu_has_priority(self) -> bool:
+        """True when the currently targeted card has a priority annotation."""
+        if not self.menu_target_ref:
+            return False
+        return bool(
+            self.card_annotation_data.get(self.menu_target_ref, {}).get("priority")
+        )
+
+    @rx.var
+    def card_badge_classes(self) -> dict:
+        """Map card_code → space-separated CSS badge class string.
+
+        Used by zone_card.py to apply .card-priority / .card-has-note /
+        .card-has-adhoc classes to the outer card wrapper.
+        Only entries with at least one badge are included.
+        """
+        out: dict[str, str] = {}
+        for code, anns in (self.card_annotation_data or {}).items():
+            parts = []
+            if anns.get("priority"):
+                parts.append("card-priority")
+            if anns.get("note"):
+                parts.append("card-has-note")
+            if anns.get("adhoc_tasks"):
+                parts.append("card-has-adhoc")
+            if parts:
+                out[code] = " ".join(parts)
+        return out
+
+    @rx.var
+    def tm_badge_classes(self) -> dict:
+        """Map tm_id → space-separated CSS badge class string.
+
+        Used by zone_card.py to apply .tm-has-note / .tm-has-profile-log chips.
+        Only entries with at least one badge are included (missing key → no badge).
+        """
+        out: dict[str, str] = {}
+        for tm_id, anns in (self.tm_annotation_data or {}).items():
+            parts = []
+            if "note" in anns:
+                parts.append("tm-has-note")
+            if "profile_log" in anns:
+                parts.append("tm-has-profile-log")
+            if parts:
+                out[tm_id] = " ".join(parts)
+        return out
 
     # ── Loading / error ───────────────────────────────────────────────────────
     loading: bool = False
@@ -2059,137 +2174,400 @@ class ZdsState(rx.State):
         return "fri"
 
     def _load_task_annotations(self):
-        """Load zds_annotations for the current night into task_annotation_data."""
+        """Load zds_annotations for the current night into task_annotation_data,
+        tm_annotation_data (Phase 4k.4), and card_annotation_data (Phase 4k.5).
+        """
         from shared.db import list_annotations_grouped
         week_ending = self.week_info.get("week_ending", "")
         day = self._current_day_key()
         if not week_ending:
             self.task_annotation_data = {}
+            self.tm_annotation_data   = {}
+            self.card_annotation_data = {}
             return
         try:
             grouped = list_annotations_grouped(week_ending, day)
             # grouped = {target_kind: {target_ref: {annotation_kind: value}}}
-            # We only care about target_kind="task" for this state var.
             self.task_annotation_data = grouped.get("task", {})
+            self.tm_annotation_data   = grouped.get("tm",   {})
+            self.card_annotation_data = _collapse_card_annotations(
+                grouped.get("card", {})
+            )
         except Exception as exc:
             print(f"[ZdsState] _load_task_annotations error: {exc}")
             self.task_annotation_data = {}
+            self.tm_annotation_data   = {}
+            self.card_annotation_data = {}
 
     @rx.event
     def open_task_menu(self, x: int, y: int, task_id: str, task_name: str):
-        """Open the task annotation context menu at the given viewport coords."""
-        self.task_menu_x         = int(x or 0)
-        self.task_menu_y         = int(y or 0)
-        self.task_menu_task_id   = task_id or ""
-        self.task_menu_task_name = task_name or ""
-        self.task_menu_subview   = "root"
+        """Open the task annotation context menu at the given viewport coords.
+
+        JS dispatch signature kept as (x, y, task_id, task_name) to match
+        the existing task_annotation.js dispatch call.
+        Sets menu_target_kind="task" so the menu component routes to the
+        task root subview. 4k.4/4k.5 add open_tm_menu / open_card_menu
+        using the same menu_* state vars with different target_kind values.
+        """
+        self.menu_x           = int(x or 0)
+        self.menu_y           = int(y or 0)
+        self.menu_target_kind = "task"
+        self.menu_target_ref  = task_id or ""
+        self.menu_target_name = task_name or ""
+        self.menu_target_day  = self._current_day_key()
+        self.menu_subview     = "root"
         # Pre-populate note text if an annotation already exists.
-        self.task_menu_note_text = (
+        self.menu_note_text = (
             self.task_annotation_data.get(task_id, {}).get("note", {}).get("text", "")
             if task_id else ""
         )
-        self.task_menu_open = True
+        self.menu_open = True
 
     @rx.event
-    def close_task_menu(self):
-        self.task_menu_open = False
+    def close_menu(self):
+        """Close the annotation context menu (any target_kind)."""
+        self.menu_open = False
 
     @rx.event
-    def set_task_menu_subview(self, subview: str):
-        self.task_menu_subview = subview
+    def set_menu_subview(self, subview: str):
+        self.menu_subview = subview
 
     @rx.event
-    def set_task_menu_note_text(self, val: str):
-        self.task_menu_note_text = val
+    def set_menu_note_text(self, val: str):
+        self.menu_note_text = val
 
     @rx.event
     def set_task_highlight(self, color: str):
         """Toggle a highlight annotation on the current task (same color → clears it)."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_menu_task_id:
-            self.task_menu_open = False
+        if not self.menu_target_ref:
+            self.menu_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("highlight")
+        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("highlight")
         if existing and existing.get("color") == color:
-            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "highlight")
+            delete_annotation(week_ending, day, "task", self.menu_target_ref, "highlight")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "highlight",
+            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "highlight",
                               {"color": color})
         self._load_task_annotations()
-        self.task_menu_open = False
+        self.menu_open = False
 
     @rx.event
-    def set_task_symbol(self, symbol: str):
-        """Toggle a symbol annotation on the current task (same symbol → clears it)."""
+    def set_task_symbol(self, section: str, slug: str):
+        """Toggle a GLCR icon symbol annotation on the current task.
+
+        Same section+slug → clears the annotation (toggle behavior).
+        Stores JSONB {"section": section, "slug": slug} for the PDF renderer
+        to look up via glcr_icon(section, slug).
+        """
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_menu_task_id:
-            self.task_menu_open = False
+        if not self.menu_target_ref:
+            self.menu_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("symbol")
-        if existing and existing.get("char") == symbol:
-            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "symbol")
+        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("symbol")
+        if (existing
+                and existing.get("section") == section
+                and existing.get("slug") == slug):
+            delete_annotation(week_ending, day, "task", self.menu_target_ref, "symbol")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "symbol",
-                              {"char": symbol})
+            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "symbol",
+                              {"section": section, "slug": slug})
         self._load_task_annotations()
-        self.task_menu_open = False
+        self.menu_open = False
 
     @rx.event
     def save_task_note(self):
         """Save (or delete if blank) a note annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_menu_task_id:
-            self.task_menu_open = False
+        if not self.menu_target_ref:
+            self.menu_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        text        = self.task_menu_note_text.strip()
+        text        = self.menu_note_text.strip()
         if text:
-            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "note",
+            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "note",
                               {"text": text})
         else:
-            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "note")
+            delete_annotation(week_ending, day, "task", self.menu_target_ref, "note")
         self._load_task_annotations()
-        self.task_menu_open = False
+        self.menu_open = False
 
     @rx.event
     def toggle_task_skip(self):
         """Toggle the skip-tonight annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_menu_task_id:
-            self.task_menu_open = False
+        if not self.menu_target_ref:
+            self.menu_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_menu_task_id, {}).get("skip")
+        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("skip")
         if existing is not None:
-            delete_annotation(week_ending, day, "task", self.task_menu_task_id, "skip")
+            delete_annotation(week_ending, day, "task", self.menu_target_ref, "skip")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_menu_task_id, "skip",
+            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "skip",
                               {"skipped": True})
         self._load_task_annotations()
-        self.task_menu_open = False
+        self.menu_open = False
 
     @rx.event
     def clear_task_annotation(self):
         """Remove ALL annotations for the current task."""
         from shared.db import list_annotations, delete_annotation
-        if not self.task_menu_task_id:
-            self.task_menu_open = False
+        if not self.menu_target_ref:
+            self.menu_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
         rows = list_annotations(week_ending, day, target_kind="task",
-                                target_ref=self.task_menu_task_id)
+                                target_ref=self.menu_target_ref)
         for row in rows:
             delete_annotation(week_ending, day, "task",
-                              self.task_menu_task_id, row["annotation_kind"])
+                              self.menu_target_ref, row["annotation_kind"])
         self._load_task_annotations()
-        self.task_menu_open = False
+        self.menu_open = False
+
+    # =========================================================================
+    # Phase 4k.4 — TM annotation handlers (pre-shift only)
+    # =========================================================================
+
+    @rx.event
+    def open_tm_menu(self, tm_id: str, tm_name: str, x: int, y: int):
+        """Open the annotation menu targeting a TM name chip.
+
+        JS dispatch signature: (tm_id, tm_name, x, y).
+        Sets menu_target_kind="tm" so task_annotation_menu routes to _menu_tm_root().
+        Pre-populates menu_note_text from any existing pre-shift note.
+        """
+        self.menu_x           = int(x or 0)
+        self.menu_y           = int(y or 0)
+        self.menu_target_kind = "tm"
+        self.menu_target_ref  = tm_id or ""
+        self.menu_target_name = tm_name or ""
+        self.menu_target_day  = self._current_day_key()
+        self.menu_subview     = "root"
+        self.menu_note_text   = (
+            self.tm_annotation_data.get(tm_id, {}).get("note", {}).get("text", "")
+            if tm_id else ""
+        )
+        self.menu_open = True
+
+    @rx.event
+    def save_tm_preshift_note(self):
+        """Save (or delete if blank) a pre-shift note annotation on the current TM.
+
+        The note prints as an italic line below the TM name on the deployment page.
+        """
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        text        = self.menu_note_text.strip()
+        if text:
+            upsert_annotation(week_ending, day, "tm", self.menu_target_ref,
+                              "note", {"text": text})
+        else:
+            delete_annotation(week_ending, day, "tm", self.menu_target_ref, "note")
+        self._load_task_annotations()
+        self.menu_open = False
+
+    @rx.event
+    def log_tm_to_profile(self):
+        """Capture an observation to the GLCR Memory Backend (public.notes table),
+        then mirror a profile_log annotation so the deployment renderer can drop a
+        pin-bookmark marker next to this TM's name without re-querying the backend.
+
+        Uses shared.db.insert_note() — the same Supabase client used everywhere
+        else in this app. tm_id IS the entities.id by convention.
+        """
+        from shared.db import upsert_annotation, insert_note
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        text        = self.menu_note_text.strip()
+        if not text:
+            self.menu_open = False
+            return
+        # Write to the Memory Backend — same pattern as shift capture flows.
+        note_id = insert_note(
+            content      = text,
+            content_type = "observation",
+            sentiment    = "neutral",
+            original_date = str(self.week_info.get("week_ending", "")),
+            author        = "brian",
+            captured_via  = "zds_preshift_log",
+            entity_ids    = [self.menu_target_ref],
+        )
+        # Mirror a profile_log annotation so the renderer can mark this TM.
+        upsert_annotation(
+            week_ending, day, "tm", self.menu_target_ref,
+            "profile_log",
+            {"note_id": note_id or "", "preview": text[:80]},
+        )
+        self._load_task_annotations()
+        self.menu_open = False
+
+    @rx.event
+    def navigate_to_tm_profile(self):
+        """Navigate to the TM's admin profile page."""
+        tm_id = self.menu_target_ref
+        self.menu_open = False
+        if tm_id:
+            return rx.redirect(f"/admin/people/{tm_id}")
+
+    @rx.event
+    def clear_tm_note(self):
+        """Delete the pre-shift note annotation for the current TM."""
+        from shared.db import delete_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        delete_annotation(week_ending, day, "tm", self.menu_target_ref, "note")
+        self._load_task_annotations()
+        self.menu_open = False
+
+    # =========================================================================
+    # Phase 4k.5 — Card annotation handlers (pre-shift only)
+    # =========================================================================
+
+    @rx.event
+    def open_card_menu(self, card_code: str, x: int, y: int):
+        """Open the annotation menu targeting a zone/RR/aux card outer wrapper.
+
+        JS dispatch signature: (card_code, x, y).
+        Sets menu_target_kind="card" so task_annotation_menu routes to
+        _menu_card_root(). Pre-populates menu_note_text from any existing
+        card note.
+        """
+        self.menu_x           = int(x or 0)
+        self.menu_y           = int(y or 0)
+        self.menu_target_kind = "card"
+        self.menu_target_ref  = card_code or ""
+        self.menu_target_name = card_code or ""
+        self.menu_target_day  = self._current_day_key()
+        self.menu_subview     = "root"
+        self.menu_note_text   = (
+            self.card_annotation_data.get(card_code, {}).get("note", {}).get("text", "")
+            if card_code else ""
+        )
+        self.menu_open = True
+
+    @rx.event
+    def add_card_adhoc_task(self):
+        """Save menu_note_text as a new adhoc task annotation on the current card.
+
+        Uses a composite target_ref = "{card_code}:{8-hex}" to allow multiple
+        adhoc tasks per card while satisfying the DB unique constraint.
+        Returns to "card_adhoc_manage" subview after save.
+        """
+        from shared.db import upsert_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        text = self.menu_note_text.strip()
+        if not text:
+            self.menu_subview = "root"
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        task_ref    = f"{self.menu_target_ref}:{uuid.uuid4().hex[:8]}"
+        upsert_annotation(week_ending, day, "card", task_ref, "adhoc", {"name": text})
+        self.menu_note_text = ""
+        self._load_task_annotations()
+        self.menu_subview = "card_adhoc_manage"
+
+    @rx.event
+    def delete_card_adhoc_task(self, task_ref: str):
+        """Delete one adhoc task by composite ref (card_code:hexsuffix)."""
+        from shared.db import delete_annotation
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        delete_annotation(week_ending, day, "card", task_ref, "adhoc")
+        self._load_task_annotations()
+
+    @rx.event
+    def save_card_note(self):
+        """Save (or delete if blank) a note annotation on the current card."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        text = self.menu_note_text.strip()
+        if text:
+            upsert_annotation(week_ending, day, "card", self.menu_target_ref,
+                              "note", {"text": text})
+        else:
+            delete_annotation(week_ending, day, "card", self.menu_target_ref, "note")
+        self._load_task_annotations()
+        self.menu_open = False
+
+    @rx.event
+    def clear_card_note(self):
+        """Delete the note annotation for the current card."""
+        from shared.db import delete_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        delete_annotation(week_ending, day, "card", self.menu_target_ref, "note")
+        self._load_task_annotations()
+        self.menu_open = False
+
+    @rx.event
+    def toggle_card_priority(self):
+        """Toggle the priority annotation on the current card (adds or removes it)."""
+        from shared.db import upsert_annotation, delete_annotation
+        if not self.menu_target_ref:
+            self.menu_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self.menu_target_day or self._current_day_key()
+        existing    = self.card_annotation_data.get(self.menu_target_ref, {}).get("priority")
+        if existing is not None:
+            delete_annotation(week_ending, day, "card", self.menu_target_ref, "priority")
+        else:
+            upsert_annotation(week_ending, day, "card", self.menu_target_ref,
+                              "priority", {"level": "high"})
+        self._load_task_annotations()
+        self.menu_open = False
+
+    @rx.event
+    def print_single_card(self):
+        """Generate and open a single-card print view for the currently targeted card.
+
+        Uses the same print-cache mechanism as open_print_current_night — writes an
+        HTML file to /print_cache/ and opens it in a new tab. No new Reflex route needed.
+        """
+        from .print_renderer import render_single_card_html
+        code     = self.menu_target_ref
+        night_id = self.current_night_id
+        self.menu_open = False
+        if not code or not night_id:
+            return
+        _PRINT_CACHE.mkdir(parents=True, exist_ok=True)
+        try:
+            html  = render_single_card_html(night_id, code)
+            safe  = code.lower().replace(" ", "_").replace("+", "").replace("/", "")
+            fname = f"card_{safe}_{night_id[:8]}.html"
+            (_PRINT_CACHE / fname).write_text(html, encoding="utf-8")
+            url = f"/print_cache/{fname}"
+            return rx.call_script(f"window.open('{url}', '_blank')")
+        except Exception as exc:
+            self.error = f"Print card error: {exc}"
 
     # =========================================================================
     # Private slot-task helpers

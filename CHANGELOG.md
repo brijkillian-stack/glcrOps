@@ -25,6 +25,226 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4k.5: Card right-click annotation menu — zone/RR/aux (Sonnet)
+
+Card outer wrappers now support right-click (desktop) and long-press (touch) to open
+an annotation context menu for pre-shift planning. Feature scope: ad-hoc task lists,
+per-card notes, priority flagging, and single-card print. ZDS remains pre-shift only —
+no break tracking, on-duty, or during-shift concepts introduced.
+
+### Data model
+- `zds_annotations` table reused with `target_kind="card"`.
+- Plain `target_ref = card_code` for notes, priority, and custom tasks.
+- Composite `target_ref = f"{card_code}:{uuid8}"` for ad-hoc tasks (one row per task,
+  supports multiple tasks per card without JSONB array mutation).
+- Card codes match `slot["label"]` values from `ZONE_LABELS`: "Zone 1"–"Zone 10",
+  "RR 1 + 2", "RR 6/7/8/10", "Z9 SR", "Admin", "Trash 1/2", "Support 1/2/3".
+
+### `apps/zds/state.py`
+- Module-level `_collapse_card_annotations(raw)` — flattens raw annotation dict into
+  `{card_code: {note?, priority?, adhoc_tasks: [{ref, name}, ...]}}`, splitting
+  composite adhoc `target_ref`s by the first `:`.
+- `card_annotation_data: dict = {}` state var; populated by `_load_task_annotations()`
+  in the same DB round-trip as task and TM annotations.
+- Three new `@rx.var` computed vars (avoid chained Var subscripts in the menu component):
+  - `card_menu_adhoc_tasks` → list of `{ref, name}` for the currently open card
+  - `card_menu_has_note` → bool
+  - `card_menu_has_priority` → bool
+- `card_badge_classes: @rx.var dict` — `{card_code: "card-priority card-has-note card-has-adhoc"}`
+  for reactive badge CSS on card wrappers.
+- Seven new `@rx.event` handlers (all pre-shift only):
+  - `open_card_menu(card_code, x, y)` — sets `menu_target_kind="card"`, pre-populates
+    `menu_note_text` from any existing note, opens the menu.
+  - `save_card_note()` — upserts/deletes `"note"` annotation for the card.
+  - `toggle_card_priority()` — upserts/deletes `"priority"` annotation.
+  - `add_card_adhoc_task()` — writes a new `"adhoc"` row with composite ref, reloads.
+  - `delete_card_adhoc_task(task_ref)` — deletes the specific composite-ref row.
+  - `clear_card_annotations()` — deletes all annotations for the card code prefix.
+  - `print_single_card()` — renders single-card HTML via `render_single_card_html`,
+    writes to `print_cache/`, opens in new tab via `rx.call_script`.
+
+### `apps/zds/components/task_annotation_menu.py`
+- `_card_adhoc_input_view()` — textarea + "Add task" button for new ad-hoc task entry.
+- `_card_adhoc_manage_view()` — `rx.foreach` list of existing ad-hoc tasks with
+  per-task delete buttons dispatching `delete_card_adhoc_task`.
+- `_menu_card_root()` implemented: header with card code, Add ad-hoc task row,
+  Manage tasks row (conditional on `card_menu_adhoc_tasks.length() > 0`),
+  Add/Edit note row, Toggle priority row (label changes based on `card_menu_has_priority`),
+  Print card row, separator, Clear all annotations row (danger, conditional), Cancel.
+- Three new `rx.match` cases in `task_annotation_menu()`:
+  `"card_adhoc_input"`, `"card_adhoc_manage"`, `"card_note_input"`.
+
+### `assets/task_annotation.js`
+- Phase 4k.5 section: capture-phase `contextmenu` listener for `.card-annot-trigger`
+  wrappers; calls `e.stopPropagation()` to prevent `context_menu.js` bubble-phase
+  handler from also firing.
+- `cardPressState` long-press (500 ms) + `MOVE_TOLERANCE_PX` guard for touch/pen.
+- Dispatches `zds_state.open_card_menu(card_code, x, y)`.
+
+### `apps/zds/components/zone_card.py`
+- Zone, RR, and aux card outer `rx.box` wrappers each gain:
+  - `card-annot-trigger` class appended to all `class_name` cond branches.
+  - `custom_attrs={"data-card-annot-code": slot["label"]}` for JS dispatch.
+  - `ZdsState.card_badge_classes[slot["label"]]` appended to class string
+    (guarded by `.contains()` to avoid KeyError on cards with no annotations).
+
+### `assets/ops_tokens.css`
+- `.card-priority` — 3px gold left border stripe.
+- `.card-has-note::before` — 📝 pseudo-element badge (top-right, `z-index: 3`).
+- `.card-has-adhoc::after` — ✚ pseudo-element badge (top-right, left of note badge).
+- `.card-note` — italic 10px note text block below slot content.
+- `.card-adhoc-task` — 10px task line with `→ ` prefix.
+
+### `apps/zds/print_renderer.py`
+- `_CARD_ANNOTATION_CSS` — print-specific styles: `card-priority-stripe`,
+  `card-note`, `card-adhoc-task`; appended to engine CSS in both
+  `render_night_html` and `render_week_html` paths.
+- `_apply_card_annotations(card_html, card_code, card_annots)` — post-processes
+  card HTML: injects `card-priority-stripe` div at top of card, then uses a
+  depth-counting div walker to find the closing `</div>` of `zone-meta`/`rr-head`/
+  `aux-meta` and injects note + ad-hoc task lines immediately after.
+- All zone/RR/aux card render call sites in `_render_deployment_page` wrapped
+  through `_apply_card_annotations` with correct ZONE_LABELS-derived card codes.
+- Both `HTML_SHELL.format()` calls updated to include `_CARD_ANNOTATION_CSS`.
+- `render_single_card_html(night_id, card_code)` — new function; uses
+  `_fetch_night_data()`, reverse-maps `card_code` via `ZONE_LABELS`, renders the
+  correct card type (zone/RR/aux), applies both TM and card annotations, returns
+  self-contained portrait HTML with `window.onload = () => window.print()`.
+  No new Reflex page or route needed — print_cache pattern used throughout.
+
+---
+
+## 2026-05-08 — Phase 4k.4: TM right-click annotation menu — pre-shift only (Sonnet)
+
+### Step 0 investigation
+- No separate Python GLCR Memory Backend client exists; the backend IS Supabase
+  (`public.notes` + `entities` + `note_entities` tables). `shared.db.insert_note()`
+  is the existing capture pattern — reused as-is.
+- `tm_id` in ZDS (`zone_assignments.tm_id`) is the same UUID as `entities.id` in the
+  Memory Backend — verified in `shared/db.py` lines 608, 1708, 1748.
+- The TM name chip already has a right-click handler via `context_menu.js`
+  (bubble phase, `.ctx-menu-trigger`). Phase 4k.4's TM annotation menu uses a
+  NEW capture-phase listener in `task_annotation.js` for `.tm-annot-trigger`
+  elements, which stops propagation so the two menus don't conflict.
+
+### `apps/zds/state.py`
+- `tm_annotation_data: dict = {}` — parallel to `task_annotation_data`, holds
+  `{tm_id: {annotation_kind: value_dict}}` for the current night.
+- `_load_task_annotations()` extended to also populate `tm_annotation_data` from
+  the same `list_annotations_grouped()` call (single DB round-trip).
+- `tm_badge_classes: @rx.var dict` — computed map `tm_id → "tm-has-note tm-has-profile-log"`;
+  drives badge CSS classes on TM name chips in the live UI.
+- Five new `@rx.event` handlers (all pre-shift only, no break/on-duty concepts):
+  - `open_tm_menu(tm_id, tm_name, x, y)` — sets `menu_target_kind="tm"`, pre-populates
+    `menu_note_text` from any existing note.
+  - `save_tm_preshift_note()` — upserts/deletes `"note"` annotation via
+    `upsert_annotation` / `delete_annotation`.
+  - `log_tm_to_profile()` — writes observation to Memory Backend via
+    `shared.db.insert_note(captured_via="zds_preshift_log")`, then upserts a
+    `"profile_log"` annotation `{note_id, preview}` so the renderer marks the TM
+    without re-querying the backend.
+  - `navigate_to_tm_profile()` — `rx.redirect(f"/admin/people/{tm_id}")`.
+  - `clear_tm_note()` — deletes the `"note"` annotation for the current TM.
+
+### `apps/zds/components/task_annotation_menu.py`
+- `_tm_note_view(save_handler, caption, placeholder)` — reusable note-editor
+  subview (same structure as `_note_view()`); save button fires `save_handler`.
+- `_menu_tm_root()` filled in: 5 rows — Add pre-shift note, Log observation to TM
+  profile, View TM profile, Clear pre-shift note (conditional on note existing,
+  danger style), Cancel. Each row uses GLCR inline SVG icon:
+  `actions/edit-pencil`, `ui/pin-bookmark`, `people/person-user`,
+  `actions/delete-trash`, `ui/close-x`.
+- `task_annotation_menu()` `rx.match` extended with two new cases:
+  - `"tm_preshift_note"` → `_tm_note_view(ZdsState.save_tm_preshift_note, …)`
+  - `"tm_profile_log"`   → `_tm_note_view(ZdsState.log_tm_to_profile, …)`
+
+### `assets/task_annotation.js`
+- Extended (Phase 4k.4 section) with a second capture-phase `contextmenu`
+  listener for `.tm-annot-trigger` elements; calls `e.stopPropagation()` to
+  prevent `context_menu.js` from also firing.
+- Separate long-press (`pointerdown` / `pointermove`) handler for TM chips,
+  mirroring the existing task long-press pattern.
+- Dispatches `zds_state.open_tm_menu(tm_id, tm_name, x, y)`.
+
+### `apps/zds/components/zone_card.py`
+- TM name span gains class `tm-annot-trigger` (filled slots only) and data attrs
+  `data-tm-annot-id` / `data-tm-annot-name` for JS dispatch.
+- Badge classes (`tm-has-note`, `tm-has-profile-log`) appended via
+  `ZdsState.tm_badge_classes[slot["tm_id"]]` computed var lookup.
+
+### `apps/zds/print_renderer.py`
+- `_TM_ANNOTATION_CSS` constant — `.tm-preshift-note` (italic block below TM name)
+  and `.tm-log-marker` (inline pin-bookmark, `opacity: 0.7`); appended to engine
+  CSS at both `render_night_html` and `render_week_html` call sites.
+- `_apply_tm_annotations(card_html, tm_id, tm_name, tm_annots)` — post-processes
+  rendered card HTML by finding `>esc(tm_name)<` in the name div and injecting
+  profile-log SVG + pre-shift note span after the escaped name. Handles zone, RR,
+  and aux card formats (all use `>{esc(name_str)}<` pattern).
+- `_render_deployment_page`: annotation load now retrieves full grouped dict
+  (`_all_annots`) and splits into `task_annots` + `tm_annots`.
+- Zone/RR/aux/support-3 card render calls wrapped through `_apply_tm_annotations`.
+
+### `assets/ops_tokens.css`
+- `.tm-has-note` — `✎` pseudo-element badge (absolute-positioned, right edge).
+- `.tm-has-profile-log` — `📌` pseudo-element badge.
+- `.tm-has-note.tm-has-profile-log` — stacked variant (both badges, wider padding).
+
+---
+
+## 2026-05-08 — Phase 4k.3.1: Annotation system reconciliation pass (Sonnet)
+
+Addressed five spec-compliance deviations before starting Phase 4k.4.
+
+### `apps/zds/components/glcr_icons.py` (new)
+- Reads SVG files from `assets/icons/glcr/{section}/{slug}.svg`; caches via
+  `@lru_cache(maxsize=256)`.
+- `glcr_icon(section, slug, *, size, css_class) -> str` overrides width/height
+  attributes inline and injects an optional CSS class onto the `<svg>` element.
+- Used by both Reflex components (symbol picker) and the PDF renderer.
+
+### `apps/zds/state.py`
+- Renamed all `task_menu_*` / `task_menu_task_*` vars to generic `menu_*` to
+  support reuse across 4k.4 (TM) and 4k.5 (card) target kinds:
+  `menu_open`, `menu_x/y`, `menu_target_ref`, `menu_target_name`,
+  `menu_subview`, `menu_note_text`.
+- Added `menu_target_kind: str` and `menu_target_day: str`.
+- Handler renames: `close_task_menu`→`close_menu`, `set_task_menu_subview`→
+  `set_menu_subview`, `set_task_menu_note_text`→`set_menu_note_text`.
+- `set_task_symbol(section, slug)` — now stores `{"section": ..., "slug": ...}`
+  JSONB (was `{"char": ...}`); toggle guard updated to match on section+slug.
+- `open_task_menu` sets `menu_target_kind = "task"` and captures current day key.
+
+### `apps/zds/components/task_annotation_menu.py` (rewritten)
+- Imports `glcr_icon` from `.glcr_icons`; symbol picker renders 8 inline SVG
+  icons (star-favorite, pin-bookmark, warning, info, clock-pending, alerts,
+  inspection, safety-check) via `rx.html(glcr_icon(...))`.
+- `_HL_COLORS` expanded to 6 (added purple: `var(--c-purple)`).
+- `_SYMBOLS` tuple list replaces bare unicode chars; stores `(section, slug, label)`.
+- `set_task_symbol` dispatch updated to 2-arg `(section, slug)`.
+- Root subview routing via `rx.cond` on `menu_target_kind`: `"task"` →
+  `_menu_task_root()`, `"tm"` → `_menu_tm_root()` (stub), `"card"` →
+  `_menu_card_root()` (stub).
+- All state refs updated to generic `menu_*` names.
+
+### `assets/ops_tokens.css`
+- Added `--c-*` color token `:root` block (yellow, red, pink, blue, brown, green,
+  orange, purple, grey, teal, alert) — theme-independent, mirrors
+  `render_deployment_book.py` constants.
+- Replaced 5 rgba highlight rules with 6 `color-mix(in srgb, var(--c-*) 35%, transparent)`
+  rules (added `.task-hl-purple`; correct CSS `color-mix()` syntax).
+
+### `apps/zds/print_renderer.py`
+- Added `from .components.glcr_icons import glcr_icon as _glcr_icon`.
+- `_apply_task_annotations`: symbol rendering updated — reads `{"section", "slug"}`
+  from annotation value and calls `_glcr_icon(section, slug, size=11,
+  css_class="task-symbol")`; falls back to legacy `{"char": ...}` string prefix for
+  any pre-4k.3.1 rows.
+
+### DB cleanup
+- No legacy `{"char": ...}` symbol rows existed; `DELETE` was a no-op.
+
+---
+
 ## 2026-05-08 — Phase 4k.3: Task right-click annotation menu (Sonnet)
 
 ### `apps/zds/types.py`

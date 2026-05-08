@@ -16,6 +16,17 @@ from __future__ import annotations
 from typing import TypedDict
 
 
+class TaskItem(TypedDict):
+    """One task in a slot's display_tasks list (Phase 4k.3).
+
+    Upgrading from plain str so that annotation handlers have task UUIDs
+    available for writes to `zds_annotations`. Custom tasks (from the
+    custom_tasks JSONB column) and hardcoded fallbacks carry id="".
+    """
+    id:   str   # UUID from zone_tasks; "" for custom / hardcoded tasks
+    name: str   # display label
+
+
 class Week(TypedDict):
     """One row from the `weeks` table."""
     id: str
@@ -105,7 +116,7 @@ class ZoneSlot(TypedDict):
     name_color: str
     name_style: str
     name_size: str
-    display_tasks: list[str]   # custom_tasks from DB, or defaults from TASKS_*
+    display_tasks: list[TaskItem]  # Phase 4k.3: {id, name} dicts; id="" for custom/hardcoded
     is_locked: bool            # position lock — protects TM from accidental clear
     has_duplicate: bool        # True when this TM is also assigned to another slot tonight
     # Phase J — call-off / scheduling warning
@@ -145,7 +156,7 @@ class RRSlot(TypedDict):
     womens_is_locked: bool
     womens_has_duplicate: bool
     womens_group: int          # break group (1/2/3); 0 = none
-    display_tasks: list[str]   # from mens slot (shared for the bank)
+    display_tasks: list[TaskItem]  # Phase 4k.3: from mens slot, {id, name} dicts
     # Phase J — call-off / scheduling warning per side
     mens_warning_status: str   # "ok" | "called_off" | "not_scheduled" | ""
     womens_warning_status: str
