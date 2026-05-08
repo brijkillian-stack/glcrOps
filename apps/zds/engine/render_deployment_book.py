@@ -467,7 +467,7 @@ def join_assigns(tasks) -> str:
 
 _AUX_ORDER = ["z9_sr", "admin", "trash_1_5", "trash_6_10",
               "support_1", "support_2", "support_3"]
-_AUX_COLOR = {"z9_sr": "red", "z9_sr_buddy": "red", "admin": "yellow",  # Phase 4g: purple→yellow
+_AUX_COLOR = {"z9_sr": "red", "z9_sr_buddy": "red", "admin": "purple",  # Admin is purple per Brian
               "trash_1_5": "orange", "trash_6_10": "orange",
               "support_1": "grey", "support_2": "grey", "support_3": "teal"}
 
@@ -1099,7 +1099,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
                         group=BG_AUX.get("z9_sr"),
                         buddy_name=z9sr_buddy,
                         buddy_group=BG_AUX.get("z9_sr_buddy")),
-        render_aux_card("admin",      day["aux"]["admin"],      "yellow",  # Phase 4g: purple→yellow
+        render_aux_card("admin",      day["aux"]["admin"],      "purple",  # Admin is purple per Brian
                         alert=alerts.get("aux_admin", ""),
                         group=BG_AUX.get("admin")),
         render_aux_card("trash_1_5",  day["aux"]["trash_1_5"],  "orange",
@@ -1356,6 +1356,27 @@ CSS = r"""
   --gold-lt: #e8d5b4;
   --hairline: rgba(11,26,42,0.10);
   --hairline-strong: rgba(11,26,42,0.20);
+
+  /* ── Zone / RR / Aux color palette (Phase 4g hotfix) ─────────────────
+     Sometime before Phase 4g these definitions were lost from this file.
+     The .c-yellow / .c-red / etc. classes farther down all reference these
+     vars (e.g. `.c-yellow { --card-color: var(--c-yellow); }`). Without
+     them, --card-color resolved to nothing and the .zone-card::before
+     5px top stripe rendered as transparent — which is exactly what Brian
+     saw: cards with no colored top accents.
+
+     Palette matches what was working in the Week-of-2026-05-07 PDF.    */
+  --c-yellow: #B89708;   /* Z1, Z2, RR 1+2, Admin                 */
+  --c-red:    #E53935;   /* Z3, Z4, Z5, Z9, Z9 SR                 */
+  --c-pink:   #B7679A;   /* Z6, RR 6                              */
+  --c-blue:   #1E88E5;   /* Z7, RR 7                              */
+  --c-brown:  #6B5346;   /* Z8, RR 8                              */
+  --c-green:  #43A047;   /* Z10, RR 10, Support 3                 */
+  --c-orange: #FB8C00;   /* Trash 1, Trash 2                      */
+  --c-purple: #8E24AA;   /* Admin                                 */
+  --c-grey:   #4a5568;   /* Support 1, Support 2                  */
+  --c-teal:   #14b8a6;   /* fallback                              */
+  --c-alert:  #e53935;   /* used by alert dot bg                  */
 
   --font: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
 }

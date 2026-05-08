@@ -547,7 +547,7 @@ def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
     # ── Auxiliary ────────────────────────────────────────────────────────────
     _aux_color_map = {
         "z9 sr":    "red",    "z9sr":    "red",
-        "admin":    "yellow",  # Phase 4g: purple→yellow (matches render_deployment_book)
+        "admin":    "purple", # Admin is purple per Brian (matches render_deployment_book)
         "trash 1":  "orange", "trash 2": "orange",
         "supp 1":   "grey",   "supp 2":  "grey",   "supp 3": "teal",
         "support 1":"grey",   "support 2":"grey",  "support 3":"teal",
