@@ -1131,6 +1131,14 @@ def _lap_fill_constrained_block(day, d, gpool, placed):
                 "tm_name":None,"zone_slot":fb["slot_code"],
                 "detail":fb["reason"]})
 
+    # Phase 4f hotfix #7: surface what LAP actually produced. If `filled` is
+    # 0 across all days, the solver is degrading silently — something deeper
+    # than just "scipy missing" is wrong. If it's 22, LAP is doing its job.
+    _lap_filled = sum(1 for v in assignment.values() if v is not None)
+    _lap_fallbacks = len(fallbacks)
+    print(f"  [LAP] {day}: solver filled {_lap_filled}/{len(specs)} slots, "
+          f"{_lap_fallbacks} fallback(s)")
+
     # Write LAP assignments — then fall back via greedy place() for any None
     for spec in specs:
         slot = spec.slot_code
@@ -1922,6 +1930,11 @@ AUDIT_JSON.write_text(json.dumps({
             "override_load_threshold": _ENGINE_LOAD_THRESHOLD,
         },
         "headcount": TARGET_GRAVE_BY_DAY,
+        # Phase 4f hotfix #7: include placement_method + scipy availability so
+        # the simulator's per-run output can show which method actually ran
+        # and whether LAP had scipy on hand.
+        "placement_method": PLACEMENT_METHOD,
+        "scipy_available":  bool(_LAP_SCIPY_OK),
     },
     "training_schedule":TRAINING_SCHEDULE,
     "placements":placements,"audit_items":_deduped_audit,"unresolved_slots":unresolved,

@@ -769,8 +769,12 @@ def main(argv=None):
                 "config_used": audit_p.get("config_used", {}),
             })
             proposed_results.append(m_p)
+            # Phase 4f hotfix #7: pull placement_method back from the audit's
+            # config_used so the per-run line shows which method actually ran.
+            _p_method = (audit_p.get("config_used") or {}).get("placement_method", "?")
             print(f"  → fill={m_p['fill_rate']:.3f}  crit={m_p['critical']}  "
-                  f"σ={m_p['load_variance']:.3f}  ({elapsed_run:.1f}s)", end="")
+                  f"σ={m_p['load_variance']:.3f}  pm={_p_method}  "
+                  f"({elapsed_run:.1f}s)", end="")
 
             # ── Baseline run (same unavailables, same seed effect) ────────
             if baseline_cfg is not None:
@@ -787,7 +791,8 @@ def main(argv=None):
                     })
                     baseline_results.append(m_b)
                     delta_fill = m_p["fill_rate"] - m_b["fill_rate"]
-                    print(f"  Δfill={delta_fill:+.3f}", end="")
+                    _b_method = (audit_b.get("config_used") or {}).get("placement_method", "?")
+                    print(f"  Δfill={delta_fill:+.3f}  bl_pm={_b_method}", end="")
 
             print()  # newline
 
