@@ -247,22 +247,21 @@ class ZdsState(rx.State):
     task_edit_slot_id: str = ""
     task_edit_text:    str = ""
 
-    # ── Task annotation menu (Phase 4k.3) ────────────────────────────────────
-    # Floating context menu opened on right-click of a task row.
-    # ── Generic annotation context menu (Phase 4k.3.1 refactor) ─────────────
-    # target_kind drives which root subview renders:
-    #   "task"  → task annotation menu (4k.3)
-    #   "tm"    → TM annotation menu   (4k.4, stub for now)
-    #   "card"  → card annotation menu (4k.5, stub for now)
-    menu_open:        bool = False
-    menu_x:           int  = 0
-    menu_y:           int  = 0
-    menu_target_kind: str  = ""     # "task" | "tm" | "card"
-    menu_target_ref:  str  = ""     # task UUID | tm_id | card code
-    menu_target_name: str  = ""     # display label shown in menu header
-    menu_target_day:  str  = ""     # day slug ("fri"…"thu") of the open night
-    menu_subview:     str  = "root" # "root" | "color" | "symbol" | "note"
-    menu_note_text:   str  = ""
+    # ── Task popover (Phase 4k.6) ─────────────────────────────────────────────
+    # Click on a task line opens an inline popover anchored below the row.
+    # Replaces the right-click JS context menu (4k.3–4k.5).
+    task_popover_open:      bool = False
+    task_popover_task_id:   str  = ""   # task UUID (canonical) or adhoc composite ref
+    task_popover_card_code: str  = ""   # card code the task lives in
+    task_popover_view:      str  = "root"  # root | note | edit_text
+    task_popover_note_text: str  = ""   # live text for note/edit-text subviews
+
+    # ── Extended picker state — drawer annotation sections (Phase 4k.6) ──────
+    # Set by open_picker alongside the existing picker_slot_* vars.
+    picker_card_code: str = ""   # card code (= slot label) of the currently open slot
+    picker_tm_id:     str = ""   # tm_id of TM currently assigned to that slot ("" if empty)
+    picker_tm_name:   str = ""   # display name of that TM
+    picker_note_text: str = ""   # shared text input for card note / TM note / profile log
     # Annotation data for current night: {task_uuid: {annotation_kind: value_dict}}
     # Reloaded each time _load_night runs or after any annotation write.
     task_annotation_data: dict = {}
@@ -275,8 +274,8 @@ class ZdsState(rx.State):
     card_annotation_data: dict = {}
 
     @rx.var
-    def card_menu_adhoc_tasks(self) -> list[CardAdhocTask]:
-        """Adhoc task list for the card currently open in the annotation menu.
+    def picker_card_adhoc_tasks(self) -> list[CardAdhocTask]:
+        """Adhoc task list for the card currently open in the picker drawer.
 
         Avoids chained Var subscripts in the component — returns a plain list
         of {ref, name} dicts for the active card_code.
@@ -285,29 +284,81 @@ class ZdsState(rx.State):
         task["name"] / task["ref"] inside rx.foreach lambdas without crashing
         with UntypedVarError.
         """
-        if not self.menu_target_ref:
+        if not self.picker_card_code:
             return []
-        return self.card_annotation_data.get(self.menu_target_ref, {}).get(
+        return self.card_annotation_data.get(self.picker_card_code, {}).get(
             "adhoc_tasks", []
         )
 
     @rx.var
-    def card_menu_has_note(self) -> bool:
-        """True when the currently targeted card has a note annotation this night."""
-        if not self.menu_target_ref:
+    def picker_card_has_note(self) -> bool:
+        """True when the currently open picker card has a note annotation."""
+        if not self.picker_card_code:
             return False
         return bool(
-            self.card_annotation_data.get(self.menu_target_ref, {}).get("note")
+            self.card_annotation_data.get(self.picker_card_code, {}).get("note")
         )
 
     @rx.var
-    def card_menu_has_priority(self) -> bool:
-        """True when the currently targeted card has a priority annotation."""
-        if not self.menu_target_ref:
+    def picker_card_has_priority(self) -> bool:
+        """True when the currently open picker card has a priority annotation."""
+        if not self.picker_card_code:
             return False
         return bool(
-            self.card_annotation_data.get(self.menu_target_ref, {}).get("priority")
+            self.card_annotation_data.get(self.picker_card_code, {}).get("priority")
         )
+
+    @rx.var
+    def picker_tm_has_note(self) -> bool:
+        """True when the TM in the open picker slot has a pre-shift note."""
+        if not self.picker_tm_id:
+            return False
+        return bool(
+            self.tm_annotation_data.get(self.picker_tm_id, {}).get("note")
+        )
+
+    @rx.var
+    def picker_tm_note_text(self) -> str:
+        """Existing pre-shift note text for the TM in the open picker slot."""
+        if not self.picker_tm_id:
+            return ""
+        return (
+            self.tm_annotation_data.get(self.picker_tm_id, {})
+            .get("note", {})
+            .get("text", "")
+        )
+
+    @rx.var
+    def task_popover_is_adhoc(self) -> bool:
+        """True when the open popover is on an adhoc task (composite ref with ':')."""
+        return ":" in self.task_popover_task_id
+
+    @rx.var
+    def task_popover_existing_note(self) -> str:
+        """Existing note text for the task currently open in the popover."""
+        if not self.task_popover_task_id:
+            return ""
+        return (
+            self.task_annotation_data.get(self.task_popover_task_id, {})
+            .get("note", {})
+            .get("text", "")
+        )
+
+    @rx.var
+    def task_popover_existing_highlight(self) -> str:
+        """Existing highlight color for the task open in the popover ('' = none)."""
+        if not self.task_popover_task_id:
+            return ""
+        ann = self.task_annotation_data.get(self.task_popover_task_id, {})
+        return ann.get("highlight", {}).get("color", "")
+
+    @rx.var
+    def task_popover_existing_symbol(self) -> dict:
+        """Existing symbol annotation for the task open in the popover ({} = none)."""
+        if not self.task_popover_task_id:
+            return {}
+        ann = self.task_annotation_data.get(self.task_popover_task_id, {})
+        return ann.get("symbol", {})
 
     @rx.var
     def card_badge_classes(self) -> dict[str, str]:
@@ -1448,6 +1499,44 @@ class ZdsState(rx.State):
         self.picker_rr_side  = rr_side
         self.picker_label    = label
         self.tm_search       = ""
+        self.picker_note_text = ""
+        # Phase 4k.6 — resolve card code (= slot label) and currently-assigned TM.
+        # The card code is the label itself (e.g. "Zone 1", "RR 1 + 2", "Admin").
+        # For RR sides the label is e.g. "RR 1 + 2 M" — strip the side suffix so
+        # it matches the card annotation key from ZONE_LABELS.
+        import re as _re
+        card_code = _re.sub(r"\s+[MWmw]$", "", label).strip()
+        self.picker_card_code = card_code
+        # Look up the TM currently in this slot from loaded slot data.
+        assigned_tm_id   = ""
+        assigned_tm_name = ""
+        for s in self.zone_slots:
+            if s.get("id") == slot_id:
+                assigned_tm_id   = s.get("tm_id", "")
+                assigned_tm_name = s.get("display_name", "")
+                break
+        if not assigned_tm_id:
+            for s in self.aux_slots:
+                if s.get("id") == slot_id:
+                    assigned_tm_id   = s.get("tm_id", "")
+                    assigned_tm_name = s.get("display_name", "")
+                    break
+        if not assigned_tm_id:
+            for rr in self.rr_slots:
+                if rr.get("mens_slot_id") == slot_id:
+                    assigned_tm_id   = rr.get("mens_tm_id", "")
+                    assigned_tm_name = rr.get("mens_name", "")
+                    break
+                if rr.get("womens_slot_id") == slot_id:
+                    assigned_tm_id   = rr.get("womens_tm_id", "")
+                    assigned_tm_name = rr.get("womens_name", "")
+                    break
+        # Filter out placeholder "Unfilled" display names
+        if assigned_tm_name in ("Unfilled", ""):
+            assigned_tm_id   = ""
+            assigned_tm_name = ""
+        self.picker_tm_id   = assigned_tm_id
+        self.picker_tm_name = assigned_tm_name
         # Load canonical tasks for the slot (overlap_tasks table).
         # Non-fatal: zone / RR / aux slots return [] which shows the empty state.
         try:
@@ -1577,9 +1666,13 @@ class ZdsState(rx.State):
 
     def close_picker(self):
         self.show_picker = False
-        self.picker_slot_id = ""
-        self.tm_search = ""
-        self.picker_tasks = []
+        self.picker_slot_id   = ""
+        self.picker_card_code = ""
+        self.picker_tm_id     = ""
+        self.picker_tm_name   = ""
+        self.picker_note_text = ""
+        self.tm_search        = ""
+        self.picker_tasks     = []
 
     def set_tm_search(self, val: str):
         self.tm_search = val
@@ -2212,60 +2305,58 @@ class ZdsState(rx.State):
             self.tm_annotation_data   = {}
             self.card_annotation_data = {}
 
-    @rx.event
-    def open_task_menu(self, x: int, y: int, task_id: str, task_name: str):
-        """Open the task annotation context menu at the given viewport coords.
+    # =========================================================================
+    # Phase 4k.6 — Task popover handlers (click-based, replaces right-click)
+    # =========================================================================
 
-        JS dispatch signature kept as (x, y, task_id, task_name) to match
-        the existing task_annotation.js dispatch call.
-        Sets menu_target_kind="task" so the menu component routes to the
-        task root subview. 4k.4/4k.5 add open_tm_menu / open_card_menu
-        using the same menu_* state vars with different target_kind values.
-        """
-        self.menu_x           = int(x or 0)
-        self.menu_y           = int(y or 0)
-        self.menu_target_kind = "task"
-        self.menu_target_ref  = task_id or ""
-        self.menu_target_name = task_name or ""
-        self.menu_target_day  = self._current_day_key()
-        self.menu_subview     = "root"
-        # Pre-populate note text if an annotation already exists.
-        self.menu_note_text = (
+    @rx.event
+    def open_task_popover(self, task_id: str, card_code: str):
+        """Open the inline task popover when a task line is clicked."""
+        self.task_popover_task_id   = task_id or ""
+        self.task_popover_card_code = card_code or ""
+        self.task_popover_view      = "root"
+        self.task_popover_note_text = (
             self.task_annotation_data.get(task_id, {}).get("note", {}).get("text", "")
             if task_id else ""
         )
-        self.menu_open = True
+        self.task_popover_open = True
 
     @rx.event
-    def close_menu(self):
-        """Close the annotation context menu (any target_kind)."""
-        self.menu_open = False
+    def close_task_popover(self):
+        """Dismiss the task popover (also fired by the overlay click)."""
+        self.task_popover_open      = False
+        self.task_popover_view      = "root"
+        self.task_popover_note_text = ""
 
     @rx.event
-    def set_menu_subview(self, subview: str):
-        self.menu_subview = subview
+    def set_task_popover_view(self, view: str):
+        self.task_popover_view = view
 
     @rx.event
-    def set_menu_note_text(self, val: str):
-        self.menu_note_text = val
+    def set_task_popover_note_text(self, val: str):
+        self.task_popover_note_text = val
+
+    @rx.event
+    def set_picker_note_text(self, val: str):
+        """Live update for the note/log text input inside the picker drawer."""
+        self.picker_note_text = val
 
     @rx.event
     def set_task_highlight(self, color: str):
         """Toggle a highlight annotation on the current task (same color → clears it)."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.task_popover_task_id:
+            self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("highlight")
+        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("highlight")
         if existing and existing.get("color") == color:
-            delete_annotation(week_ending, day, "task", self.menu_target_ref, "highlight")
+            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "highlight")
         else:
-            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "highlight",
+            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "highlight",
                               {"color": color})
         self._load_task_annotations()
-        self.menu_open = False
 
     @rx.event
     def set_task_symbol(self, section: str, slug: str):
@@ -2276,299 +2367,279 @@ class ZdsState(rx.State):
         to look up via glcr_icon(section, slug).
         """
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.task_popover_task_id:
+            self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("symbol")
+        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("symbol")
         if (existing
                 and existing.get("section") == section
                 and existing.get("slug") == slug):
-            delete_annotation(week_ending, day, "task", self.menu_target_ref, "symbol")
+            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "symbol")
         else:
-            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "symbol",
+            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "symbol",
                               {"section": section, "slug": slug})
         self._load_task_annotations()
-        self.menu_open = False
 
     @rx.event
     def save_task_note(self):
         """Save (or delete if blank) a note annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.task_popover_task_id:
+            self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        text        = self.menu_note_text.strip()
+        text        = self.task_popover_note_text.strip()
         if text:
-            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "note",
+            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "note",
                               {"text": text})
         else:
-            delete_annotation(week_ending, day, "task", self.menu_target_ref, "note")
+            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "note")
         self._load_task_annotations()
-        self.menu_open = False
+        self.task_popover_view = "root"
 
     @rx.event
     def toggle_task_skip(self):
         """Toggle the skip-tonight annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.task_popover_task_id:
+            self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.menu_target_ref, {}).get("skip")
+        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("skip")
         if existing is not None:
-            delete_annotation(week_ending, day, "task", self.menu_target_ref, "skip")
+            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "skip")
         else:
-            upsert_annotation(week_ending, day, "task", self.menu_target_ref, "skip",
+            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "skip",
                               {"skipped": True})
         self._load_task_annotations()
-        self.menu_open = False
 
     @rx.event
     def clear_task_annotation(self):
         """Remove ALL annotations for the current task."""
         from shared.db import list_annotations, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.task_popover_task_id:
+            self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
         rows = list_annotations(week_ending, day, target_kind="task",
-                                target_ref=self.menu_target_ref)
+                                target_ref=self.task_popover_task_id)
         for row in rows:
             delete_annotation(week_ending, day, "task",
-                              self.menu_target_ref, row["annotation_kind"])
+                              self.task_popover_task_id, row["annotation_kind"])
         self._load_task_annotations()
-        self.menu_open = False
-
-    # =========================================================================
-    # Phase 4k.4 — TM annotation handlers (pre-shift only)
-    # =========================================================================
+        self.task_popover_open = False
 
     @rx.event
-    def open_tm_menu(self, tm_id: str, tm_name: str, x: int, y: int):
-        """Open the annotation menu targeting a TM name chip.
+    def edit_task_text(self, form_data: dict):
+        """Update a task's display text.
 
-        JS dispatch signature: (tm_id, tm_name, x, y).
-        Sets menu_target_kind="tm" so task_annotation_menu routes to _menu_tm_root().
-        Pre-populates menu_note_text from any existing pre-shift note.
+        For canonical tasks (UUID in zone_tasks), calls upsert_task to update
+        the zone_tasks row — this is a canonical change that carries to all weeks.
+        For adhoc tasks (composite ref with ':'), updates the annotation's name field.
         """
-        self.menu_x           = int(x or 0)
-        self.menu_y           = int(y or 0)
-        self.menu_target_kind = "tm"
-        self.menu_target_ref  = tm_id or ""
-        self.menu_target_name = tm_name or ""
-        self.menu_target_day  = self._current_day_key()
-        self.menu_subview     = "root"
-        self.menu_note_text   = (
-            self.tm_annotation_data.get(tm_id, {}).get("note", {}).get("text", "")
-            if tm_id else ""
-        )
-        self.menu_open = True
+        from shared.db import upsert_annotation, get_task_by_id
+        new_text = (form_data.get("text") or "").strip()
+        if not new_text or not self.task_popover_task_id:
+            self.task_popover_view = "root"
+            return
+        task_id     = self.task_popover_task_id
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        if ":" in task_id:
+            # Adhoc composite ref — update the annotation value only (this week)
+            upsert_annotation(week_ending, day, "card", task_id, "adhoc", {"name": new_text})
+        else:
+            # Canonical zone_tasks row — update the name for all weeks
+            try:
+                from shared.db import upsert_task
+                upsert_task({"id": task_id, "name": new_text})
+            except Exception as exc:
+                self.error = f"Edit task error: {exc}"
+        self._load_task_annotations()
+        # Force a night reload so the task name refreshes in display_tasks
+        try:
+            self._load_night()
+        except Exception:
+            pass
+        self.task_popover_view = "root"
+
+    @rx.event
+    def delete_adhoc_task_from_popover(self):
+        """Delete an adhoc task that is currently open in the task popover."""
+        from shared.db import delete_annotation
+        task_id = self.task_popover_task_id
+        if ":" not in task_id:
+            self.task_popover_open = False
+            return
+        week_ending = self.week_info.get("week_ending", "")
+        day         = self._current_day_key()
+        delete_annotation(week_ending, day, "card", task_id, "adhoc")
+        self._load_task_annotations()
+        self.task_popover_open = False
+
+    # =========================================================================
+    # Phase 4k.6 — TM annotation handlers (now read from picker_tm_id)
+    # =========================================================================
 
     @rx.event
     def save_tm_preshift_note(self):
-        """Save (or delete if blank) a pre-shift note annotation on the current TM.
-
-        The note prints as an italic line below the TM name on the deployment page.
-        """
+        """Save (or delete if blank) a pre-shift note annotation on the TM open
+        in the picker drawer. The note prints as an italic line below the TM name."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_tm_id:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        text        = self.menu_note_text.strip()
+        day         = self._current_day_key()
+        text        = self.picker_note_text.strip()
         if text:
-            upsert_annotation(week_ending, day, "tm", self.menu_target_ref,
+            upsert_annotation(week_ending, day, "tm", self.picker_tm_id,
                               "note", {"text": text})
         else:
-            delete_annotation(week_ending, day, "tm", self.menu_target_ref, "note")
+            delete_annotation(week_ending, day, "tm", self.picker_tm_id, "note")
         self._load_task_annotations()
-        self.menu_open = False
+        self.picker_note_text = ""
 
     @rx.event
     def log_tm_to_profile(self):
         """Capture an observation to the GLCR Memory Backend (public.notes table),
         then mirror a profile_log annotation so the deployment renderer can drop a
         pin-bookmark marker next to this TM's name without re-querying the backend.
-
-        Uses shared.db.insert_note() — the same Supabase client used everywhere
-        else in this app. tm_id IS the entities.id by convention.
         """
         from shared.db import upsert_annotation, insert_note
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_tm_id:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        text        = self.menu_note_text.strip()
+        day         = self._current_day_key()
+        text        = self.picker_note_text.strip()
         if not text:
-            self.menu_open = False
             return
-        # Write to the Memory Backend — same pattern as shift capture flows.
         note_id = insert_note(
-            content      = text,
-            content_type = "observation",
-            sentiment    = "neutral",
+            content       = text,
+            content_type  = "observation",
+            sentiment     = "neutral",
             original_date = str(self.week_info.get("week_ending", "")),
             author        = "brian",
             captured_via  = "zds_preshift_log",
-            entity_ids    = [self.menu_target_ref],
+            entity_ids    = [self.picker_tm_id],
         )
-        # Mirror a profile_log annotation so the renderer can mark this TM.
         upsert_annotation(
-            week_ending, day, "tm", self.menu_target_ref,
+            week_ending, day, "tm", self.picker_tm_id,
             "profile_log",
             {"note_id": note_id or "", "preview": text[:80]},
         )
         self._load_task_annotations()
-        self.menu_open = False
+        self.picker_note_text = ""
 
     @rx.event
     def navigate_to_tm_profile(self):
-        """Navigate to the TM's admin profile page."""
-        tm_id = self.menu_target_ref
-        self.menu_open = False
+        """Navigate to the TM's admin profile page (uses picker_tm_id)."""
+        tm_id = self.picker_tm_id
         if tm_id:
             return rx.redirect(f"/admin/people/{tm_id}")
 
     @rx.event
     def clear_tm_note(self):
-        """Delete the pre-shift note annotation for the current TM."""
+        """Delete the pre-shift note annotation for the TM open in the picker."""
         from shared.db import delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_tm_id:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        delete_annotation(week_ending, day, "tm", self.menu_target_ref, "note")
+        day         = self._current_day_key()
+        delete_annotation(week_ending, day, "tm", self.picker_tm_id, "note")
         self._load_task_annotations()
-        self.menu_open = False
 
     # =========================================================================
-    # Phase 4k.5 — Card annotation handlers (pre-shift only)
+    # Phase 4k.6 — Card annotation handlers (now read from picker_card_code)
     # =========================================================================
-
-    @rx.event
-    def open_card_menu(self, card_code: str, x: int, y: int):
-        """Open the annotation menu targeting a zone/RR/aux card outer wrapper.
-
-        JS dispatch signature: (card_code, x, y).
-        Sets menu_target_kind="card" so task_annotation_menu routes to
-        _menu_card_root(). Pre-populates menu_note_text from any existing
-        card note.
-        """
-        self.menu_x           = int(x or 0)
-        self.menu_y           = int(y or 0)
-        self.menu_target_kind = "card"
-        self.menu_target_ref  = card_code or ""
-        self.menu_target_name = card_code or ""
-        self.menu_target_day  = self._current_day_key()
-        self.menu_subview     = "root"
-        self.menu_note_text   = (
-            self.card_annotation_data.get(card_code, {}).get("note", {}).get("text", "")
-            if card_code else ""
-        )
-        self.menu_open = True
 
     @rx.event
     def add_card_adhoc_task(self):
-        """Save menu_note_text as a new adhoc task annotation on the current card.
+        """Save picker_note_text as a new adhoc task annotation on the open card.
 
         Uses a composite target_ref = "{card_code}:{8-hex}" to allow multiple
         adhoc tasks per card while satisfying the DB unique constraint.
-        Returns to "card_adhoc_manage" subview after save.
         """
         from shared.db import upsert_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_card_code:
             return
-        text = self.menu_note_text.strip()
+        text = self.picker_note_text.strip()
         if not text:
-            self.menu_subview = "root"
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        task_ref    = f"{self.menu_target_ref}:{uuid.uuid4().hex[:8]}"
+        day         = self._current_day_key()
+        task_ref    = f"{self.picker_card_code}:{uuid.uuid4().hex[:8]}"
         upsert_annotation(week_ending, day, "card", task_ref, "adhoc", {"name": text})
-        self.menu_note_text = ""
+        self.picker_note_text = ""
         self._load_task_annotations()
-        self.menu_subview = "card_adhoc_manage"
 
     @rx.event
     def delete_card_adhoc_task(self, task_ref: str):
         """Delete one adhoc task by composite ref (card_code:hexsuffix)."""
         from shared.db import delete_annotation
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
+        day         = self._current_day_key()
         delete_annotation(week_ending, day, "card", task_ref, "adhoc")
         self._load_task_annotations()
 
     @rx.event
     def save_card_note(self):
-        """Save (or delete if blank) a note annotation on the current card."""
+        """Save (or delete if blank) a note annotation on the currently open card."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_card_code:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        text = self.menu_note_text.strip()
+        day         = self._current_day_key()
+        text        = self.picker_note_text.strip()
         if text:
-            upsert_annotation(week_ending, day, "card", self.menu_target_ref,
+            upsert_annotation(week_ending, day, "card", self.picker_card_code,
                               "note", {"text": text})
         else:
-            delete_annotation(week_ending, day, "card", self.menu_target_ref, "note")
+            delete_annotation(week_ending, day, "card", self.picker_card_code, "note")
         self._load_task_annotations()
-        self.menu_open = False
+        self.picker_note_text = ""
 
     @rx.event
     def clear_card_note(self):
-        """Delete the note annotation for the current card."""
+        """Delete the note annotation for the currently open card."""
         from shared.db import delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_card_code:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        delete_annotation(week_ending, day, "card", self.menu_target_ref, "note")
+        day         = self._current_day_key()
+        delete_annotation(week_ending, day, "card", self.picker_card_code, "note")
         self._load_task_annotations()
-        self.menu_open = False
 
     @rx.event
     def toggle_card_priority(self):
-        """Toggle the priority annotation on the current card (adds or removes it)."""
+        """Toggle the priority annotation on the currently open card."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.menu_target_ref:
-            self.menu_open = False
+        if not self.picker_card_code:
             return
         week_ending = self.week_info.get("week_ending", "")
-        day         = self.menu_target_day or self._current_day_key()
-        existing    = self.card_annotation_data.get(self.menu_target_ref, {}).get("priority")
+        day         = self._current_day_key()
+        existing    = self.card_annotation_data.get(self.picker_card_code, {}).get("priority")
         if existing is not None:
-            delete_annotation(week_ending, day, "card", self.menu_target_ref, "priority")
+            delete_annotation(week_ending, day, "card", self.picker_card_code, "priority")
         else:
-            upsert_annotation(week_ending, day, "card", self.menu_target_ref,
+            upsert_annotation(week_ending, day, "card", self.picker_card_code,
                               "priority", {"level": "high"})
         self._load_task_annotations()
-        self.menu_open = False
 
     @rx.event
     def print_single_card(self):
-        """Generate and open a single-card print view for the currently targeted card.
+        """Generate and open a single-card print view for the currently open card.
 
-        Uses the same print-cache mechanism as open_print_current_night — writes an
-        HTML file to /print_cache/ and opens it in a new tab. No new Reflex route needed.
+        Uses the print-cache mechanism — writes HTML to /print_cache/ and opens
+        in a new tab. No new Reflex route needed.
         """
         from .print_renderer import render_single_card_html
-        code     = self.menu_target_ref
+        code     = self.picker_card_code
         night_id = self.current_night_id
-        self.menu_open = False
         if not code or not night_id:
             return
         _PRINT_CACHE.mkdir(parents=True, exist_ok=True)

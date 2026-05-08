@@ -457,11 +457,6 @@ details > summary::-webkit-details-marker {
    Applied to task rows on the deployment grid and in the PDF print output.
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* Right-click cursor affordance for annotatable task text spans */
-.task-ctx-trigger {
-  cursor: context-menu;
-}
-
 /* Highlight tints — applied as background on the task row in PDF/print.
    color-mix() ties tints to the canonical --c-* card color tokens so they
    track any palette update automatically.
@@ -581,4 +576,71 @@ details > summary::-webkit-details-marker {
 .card-adhoc-task::before {
   content: "→ ";
   color: var(--ink3, #6b7280);
+}
+
+/* ── Phase 4k.6 — Task popover (click-based annotation surface) ────────────── */
+
+/* Full-page transparent overlay — shown when a popover is open.
+   Clicking it fires close_task_popover. z-index below the popover (200). */
+.task-popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: transparent;
+}
+
+/* Container <li> for each task row — relative so the popover anchors to it. */
+.task-line-li {
+  position: relative;
+  width: 100%;
+}
+
+/* The popover panel itself — absolutely positioned below the task row. */
+.task-popover {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: -4px;
+  z-index: 200;
+  min-width: 220px;
+  background: white;
+  border: 1px solid var(--c-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  font-family: var(--font, sans-serif);
+  /* Guard against parent overflow:hidden clipping */
+  overflow: visible;
+}
+
+/* Clickable task text — hover affordance */
+.task-line-clickable {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 3px;
+  transition: background 0.1s;
+  display: inline;
+}
+.task-line-clickable:hover {
+  background: color-mix(in srgb, var(--c-blue, #2563eb) 10%, transparent);
+}
+
+/* ── Phase 4k.6 — Picker drawer annotation sections ────────────────────────── */
+
+.drawer-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-border, #e5e7eb);
+  width: 100%;
+}
+
+.drawer-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-500, #6b7280);
+  margin-bottom: 6px;
 }

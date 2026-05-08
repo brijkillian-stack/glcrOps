@@ -202,8 +202,6 @@ app = rx.App(
         # ── Highlight toolbar (left-click highlight chips on TM spans) ────
         rx.el.link(rel="stylesheet", href="/highlight_toolbar.css"),
         rx.el.script(src="/highlight_toolbar.js"),
-        # ── Task annotation menu (right-click tasks, Phase 4k.3) ─────────
-        rx.el.script(src="/task_annotation.js"),
         # ── Undo toast (5-second auto-dismiss + manual Undo / × buttons) ──
         rx.el.link(rel="stylesheet", href="/undo_toast.css"),
         rx.el.script(src="/undo_toast.js"),

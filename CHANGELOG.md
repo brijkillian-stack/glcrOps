@@ -25,6 +25,77 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4k.6: Pivot annotation UX from right-click to click-based (Sonnet)
+
+Replaces the right-click JS shim (unreliable event binding on prod) with two
+discoverable click-based surfaces. Data model unchanged — only the input surface changes.
+
+### Task popover — `apps/zds/components/task_popover.py` (new)
+- Click any task line → inline popover anchored below the row.
+- Views: root (color swatches + symbol pills + action rows), note (textarea), edit_text (input).
+- 6 color highlight swatches; 8 GLCR symbol pills — same set as before.
+- New: "Edit text" mode — canonical tasks update the `zone_tasks` row (all weeks);
+  adhoc tasks update only the annotation's value this week.
+- New: "Delete" row visible only for adhoc tasks.
+- Outside-click dismiss via `task_popover_overlay()` (fixed transparent overlay).
+- `task_popover_overlay()` mounted in `deployment.py`, replaces `task_annotation_menu()`.
+
+### State — `apps/zds/state.py`
+- **Removed** state vars: `menu_open`, `menu_x/y`, `menu_target_kind/ref/name/day`,
+  `menu_subview`, `menu_note_text`.
+- **Removed** handlers: `open_task_menu`, `open_tm_menu`, `open_card_menu`,
+  `close_menu`, `set_menu_subview`, `set_menu_note_text`.
+- **Added** task popover vars: `task_popover_open`, `task_popover_task_id`,
+  `task_popover_card_code`, `task_popover_view`, `task_popover_note_text`.
+- **Added** popover computed vars: `task_popover_is_adhoc`, `task_popover_existing_note`,
+  `task_popover_existing_highlight`, `task_popover_existing_symbol`.
+- **Added** popover handlers: `open_task_popover`, `close_task_popover`,
+  `set_task_popover_view`, `set_task_popover_note_text`, `edit_task_text`,
+  `delete_adhoc_task_from_popover`.
+- **Added** picker vars: `picker_card_code`, `picker_tm_id`, `picker_tm_name`,
+  `picker_note_text`.
+- **Added** picker computed vars: `picker_card_adhoc_tasks`, `picker_card_has_note`,
+  `picker_card_has_priority`, `picker_tm_has_note`, `picker_tm_note_text`.
+- **Renamed** `card_menu_adhoc_tasks/has_note/has_priority` → `picker_card_*`.
+- **Updated** `open_picker` to resolve `picker_card_code` (strips M/W RR suffix) and
+  `picker_tm_id/name` from zone/aux/rr slot data; `close_picker` clears all new vars.
+- **Updated** all setter handlers (`set_task_highlight`, `set_task_symbol`,
+  `save_task_note`, `toggle_task_skip`, `clear_task_annotation`) to read from
+  `task_popover_task_id` instead of `menu_target_ref`.
+- **Updated** TM handlers (`save_tm_preshift_note`, `log_tm_to_profile`,
+  `navigate_to_tm_profile`, `clear_tm_note`) to read from `picker_tm_id/picker_note_text`.
+- **Updated** card handlers (`save_card_note`, `toggle_card_priority`, `add_card_adhoc_task`,
+  `delete_card_adhoc_task`, `clear_card_note`, `print_single_card`) to read from
+  `picker_card_code/picker_note_text`.
+- Added `set_picker_note_text` handler for the drawer's shared text input.
+
+### Picker drawer — `apps/zds/components/tm_picker.py`
+- Added `_card_options_section()`: card note textarea, priority toggle, ad-hoc task list
+  + add input, "Print just this card" — visible whenever picker is open.
+- Added `_tm_options_section()`: pre-shift note, "Log to profile", "View profile" —
+  visible only when picker is open on a filled slot (`picker_tm_id != ""`).
+- Both sections rendered in right panel below canonical task list, in a `scroll_area`.
+
+### Cleanup — `apps/zds/components/zone_card.py`
+- `_task_section` now takes `card_label` arg; task rows use `on_click=open_task_popover`
+  instead of `.task-ctx-trigger` class + data attrs.
+- Each task row wrapped in `rx.box(class_name="task-line-li")` with `task_popover()`
+  rendered inline as an absolute-positioned sibling.
+- Removed `.tm-annot-trigger`, `.card-annot-trigger` classes from all card wrappers.
+- Removed `data-tm-annot-id/name`, `data-card-annot-code` custom attrs.
+
+### Deleted (manual step required)
+- `assets/task_annotation.js` — entire right-click shim removed.
+- `apps/zds/components/task_annotation_menu.py` — replaced by `task_popover.py`.
+- `<script src="/task_annotation.js">` removed from `brijkillian_stack.py`.
+
+### CSS — `assets/ops_tokens.css`
+- Removed `.task-ctx-trigger { cursor: context-menu }` (dead rule).
+- Added `.task-popover-overlay`, `.task-line-li`, `.task-popover`, `.task-line-clickable`.
+- Added `.drawer-section`, `.drawer-section-header`.
+
+---
+
 ## 2026-05-08 — Phase 4k.5: Card right-click annotation menu — zone/RR/aux (Sonnet)
 
 Card outer wrappers now support right-click (desktop) and long-press (touch) to open

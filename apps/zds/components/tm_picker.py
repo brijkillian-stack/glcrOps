@@ -18,6 +18,7 @@ The right-pane task list is read-only (v1). Editing tasks inline is v2.
 
 import reflex as rx
 from ..state import ZdsState
+from .glcr_icons import glcr_icon
 
 _LOCK_GOLD = "#b45309"
 
@@ -265,6 +266,214 @@ def _right_tasks_pane() -> rx.Component:
     )
 
 
+# ── Card options section ──────────────────────────────────────────────────────
+
+def _card_options_section() -> rx.Component:
+    """Annotation controls for the card that is currently open in the picker.
+
+    Always visible when the picker is open (picker_card_code is set).
+    Shows: card note, priority toggle, ad-hoc task list + add input, print card.
+    """
+    return rx.cond(
+        ZdsState.picker_card_code != "",
+        rx.vstack(
+            # Section header
+            rx.hstack(
+                rx.html(glcr_icon("ui", "menu-hamburger", size=12)),
+                rx.text("Card options", size="1", weight="bold",
+                        text_transform="uppercase", letter_spacing="0.08em",
+                        color="#6b7280"),
+                class_name="drawer-section-header",
+                gap="6px", align="center",
+            ),
+            # ── Card note ────────────────────────────────────────────────
+            rx.vstack(
+                rx.text("Card note", size="1", color="#374151", weight="medium"),
+                rx.text_area(
+                    value=rx.cond(
+                        ZdsState.picker_note_text != "",
+                        ZdsState.picker_note_text,
+                        rx.cond(
+                            ZdsState.picker_card_has_note,
+                            ZdsState.card_annotation_data[ZdsState.picker_card_code]["note"]["text"],
+                            "",
+                        ),
+                    ),
+                    on_change=ZdsState.set_picker_note_text,
+                    placeholder="Note about this card tonight…",
+                    rows="2",
+                    width="100%",
+                    size="1",
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Save note",
+                        size="1", color_scheme="blue", variant="soft",
+                        on_click=ZdsState.save_card_note,
+                    ),
+                    rx.cond(
+                        ZdsState.picker_card_has_note,
+                        rx.button(
+                            "Clear",
+                            size="1", variant="ghost", color_scheme="red",
+                            on_click=ZdsState.clear_card_note,
+                        ),
+                        rx.fragment(),
+                    ),
+                    gap="6px",
+                ),
+                gap="4px", width="100%",
+            ),
+            # ── Priority toggle ───────────────────────────────────────────
+            rx.button(
+                rx.icon(
+                    rx.cond(ZdsState.picker_card_has_priority, "flag", "flag-off"),
+                    size=13,
+                ),
+                rx.text(
+                    rx.cond(ZdsState.picker_card_has_priority,
+                            "Priority watch: ON", "Priority watch: OFF"),
+                    size="1",
+                ),
+                size="1",
+                variant=rx.cond(ZdsState.picker_card_has_priority, "soft", "ghost"),
+                color_scheme=rx.cond(ZdsState.picker_card_has_priority, "amber", "gray"),
+                on_click=ZdsState.toggle_card_priority,
+                width="100%",
+            ),
+            # ── Ad-hoc tasks ──────────────────────────────────────────────
+            rx.vstack(
+                rx.text("Ad-hoc tasks", size="1", color="#374151", weight="medium"),
+                rx.foreach(
+                    ZdsState.picker_card_adhoc_tasks,
+                    lambda t: rx.hstack(
+                        rx.text("→ " + t["name"], size="1", flex="1"),
+                        rx.text(
+                            "×",
+                            size="1", color="#c4c4c4",
+                            cursor="pointer",
+                            _hover={"color": "#ef4444"},
+                            on_click=ZdsState.delete_card_adhoc_task(t["ref"]),
+                        ),
+                        width="100%", align="center", gap="4px",
+                    ),
+                ),
+                rx.hstack(
+                    rx.input(
+                        value=rx.cond(
+                            ZdsState.picker_card_adhoc_tasks.length() == 0,
+                            ZdsState.picker_note_text,
+                            ZdsState.picker_note_text,
+                        ),
+                        on_change=ZdsState.set_picker_note_text,
+                        placeholder="Add a task…",
+                        size="1",
+                        flex="1",
+                    ),
+                    rx.icon_button(
+                        rx.icon("plus", size=12),
+                        size="1", variant="soft", color_scheme="blue",
+                        on_click=ZdsState.add_card_adhoc_task,
+                    ),
+                    gap="4px", width="100%",
+                ),
+                gap="4px", width="100%",
+            ),
+            # ── Print card ────────────────────────────────────────────────
+            rx.button(
+                rx.icon("printer", size=13),
+                rx.text("Print just this card", size="1"),
+                size="1", variant="ghost", color_scheme="gray",
+                width="100%",
+                on_click=ZdsState.print_single_card,
+            ),
+            class_name="drawer-section",
+            gap="8px", width="100%",
+        ),
+        rx.fragment(),
+    )
+
+
+# ── TM options section ────────────────────────────────────────────────────────
+
+def _tm_options_section() -> rx.Component:
+    """Pre-shift annotation controls for the TM currently assigned to the open slot.
+
+    Only visible when the picker is open on a filled slot (picker_tm_id is set).
+    Shows: pre-shift note, log observation to profile, view profile.
+    """
+    return rx.cond(
+        ZdsState.picker_tm_id != "",
+        rx.vstack(
+            # Section header
+            rx.hstack(
+                rx.html(glcr_icon("people", "person-user", size=12)),
+                rx.text(
+                    "Pre-shift: " + ZdsState.picker_tm_name,
+                    size="1", weight="bold",
+                    text_transform="uppercase", letter_spacing="0.08em",
+                    color="#6b7280",
+                ),
+                class_name="drawer-section-header",
+                gap="6px", align="center",
+            ),
+            # ── Pre-shift note ────────────────────────────────────────────
+            rx.vstack(
+                rx.text_area(
+                    value=rx.cond(
+                        ZdsState.picker_note_text != "",
+                        ZdsState.picker_note_text,
+                        ZdsState.picker_tm_note_text,
+                    ),
+                    on_change=ZdsState.set_picker_note_text,
+                    placeholder=rx.cond(
+                        ZdsState.picker_tm_has_note,
+                        "Update pre-shift note…",
+                        "Add pre-shift note…",
+                    ),
+                    rows="2",
+                    width="100%",
+                    size="1",
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Save note",
+                        size="1", color_scheme="blue", variant="soft",
+                        on_click=ZdsState.save_tm_preshift_note,
+                    ),
+                    rx.button(
+                        "Log to profile",
+                        size="1", variant="soft", color_scheme="violet",
+                        on_click=ZdsState.log_tm_to_profile,
+                    ),
+                    rx.cond(
+                        ZdsState.picker_tm_has_note,
+                        rx.button(
+                            "Clear",
+                            size="1", variant="ghost", color_scheme="red",
+                            on_click=ZdsState.clear_tm_note,
+                        ),
+                        rx.fragment(),
+                    ),
+                    gap="6px", flex_wrap="wrap",
+                ),
+                gap="4px", width="100%",
+            ),
+            # ── View profile ──────────────────────────────────────────────
+            rx.button(
+                rx.icon("user", size=13),
+                rx.text("View " + ZdsState.picker_tm_name + "'s profile", size="1"),
+                size="1", variant="ghost", color_scheme="gray",
+                width="100%",
+                on_click=ZdsState.navigate_to_tm_profile,
+            ),
+            class_name="drawer-section",
+            gap="8px", width="100%",
+        ),
+        rx.fragment(),
+    )
+
+
 # ── Main drawer ───────────────────────────────────────────────────────────────
 
 def tm_picker_drawer() -> rx.Component:
@@ -290,10 +499,30 @@ def tm_picker_drawer() -> rx.Component:
                     border_bottom="1px solid #e5e7eb",
                     flex_shrink="0",
                 ),
-                # ── Body: left TM list + right tasks panel ───────────────
+                # ── Body: left TM list + right panel ────────────────────
                 rx.hstack(
                     _left_pool_pane(),
-                    _right_tasks_pane(),
+                    # Right panel: canonical tasks + annotation sections
+                    rx.vstack(
+                        _right_tasks_pane(),
+                        rx.scroll_area(
+                            rx.vstack(
+                                _card_options_section(),
+                                _tm_options_section(),
+                                gap="0", width="100%",
+                                padding="0 16px 16px",
+                            ),
+                            width="220px",
+                            flex_shrink="0",
+                            overflow_y="auto",
+                        ),
+                        flex_shrink="0",
+                        width="220px",
+                        gap="0",
+                        align="start",
+                        overflow="hidden",
+                        border_left="1px solid #e5e7eb",
+                    ),
                     flex="1",
                     overflow="hidden",
                     align="stretch",

@@ -7,7 +7,7 @@ import reflex as rx
 from ..state import ZdsState
 from ..components import zone_card, rr_card, aux_card, tm_picker_drawer, night_tab_bar, save_banner
 from ..components.engine_result_dialog import engine_result_dialog
-from ..components.task_annotation_menu import task_annotation_menu
+from ..components.task_popover import task_popover_overlay
 from shared.components.section_head import section_head
 
 
@@ -771,8 +771,8 @@ def deployment() -> rx.Component:
     night = ZdsState.current_night
 
     return rx.box(
-        # Phase 4k.3 — task annotation context menu (global, position:fixed)
-        task_annotation_menu(),
+        # Phase 4k.6 — task popover dismiss overlay (transparent, fixed)
+        task_popover_overlay(),
         # Top nav
         rx.hstack(
             rx.link(
