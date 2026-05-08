@@ -48,8 +48,13 @@
     var trigger = e.target && e.target.closest && e.target.closest(".task-ctx-trigger");
     if (!trigger) return;
     e.preventDefault();
-    // Prevent context_menu.js from also firing for the same click.
+    // stopPropagation blocks bubble (context_menu.js).
+    // stopImmediatePropagation blocks our OWN later capture listeners
+    // (.tm-annot-trigger and .card-annot-trigger), which would otherwise
+    // also match because closest() walks up to ancestors. Task is the
+    // most specific match — it wins.
     e.stopPropagation();
+    e.stopImmediatePropagation();
     var ctx = readContext(trigger);
     dispatchOpen(e.clientX, e.clientY, ctx.taskId, ctx.taskName);
   }, true);  // capture phase so we run before context_menu.js bubble handler
@@ -124,7 +129,11 @@
     var trigger = e.target && e.target.closest && e.target.closest(".tm-annot-trigger");
     if (!trigger) return;
     e.preventDefault();
-    e.stopPropagation(); // prevent context_menu.js from also firing
+    // See stopImmediatePropagation note on the .task-ctx-trigger handler above —
+    // blocks our OWN later card-annot-trigger listener since the TM chip is
+    // inside a card-annot-trigger ancestor.
+    e.stopPropagation();
+    e.stopImmediatePropagation();
     var ctx = readTmContext(trigger);
     dispatchOpenTmMenu(e.clientX, e.clientY, ctx.tmId, ctx.tmName);
   }, true);  // capture phase
@@ -198,7 +207,13 @@
     var trigger = e.target && e.target.closest && e.target.closest(".card-annot-trigger");
     if (!trigger) return;
     e.preventDefault();
+    // Card is the LEAST specific match (registered last). If task or tm
+    // listeners ahead of this one matched first, they already called
+    // stopImmediatePropagation and we never run. Calling it here too as
+    // defense-in-depth + to block any future capture listener registered
+    // on the same node.
     e.stopPropagation();
+    e.stopImmediatePropagation();
     var ctx = readCardContext(trigger);
     dispatchOpenCardMenu(e.clientX, e.clientY, ctx.cardCode);
   }, true);  // capture phase
