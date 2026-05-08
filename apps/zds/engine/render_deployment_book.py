@@ -65,7 +65,8 @@ from shared.db import (
     get_training_schedule_from_db,
     get_engine_roster_from_db,
     get_engine_profiles_from_db,
-    get_zone_tasks_for_engine,
+    get_zone_tasks_for_engine,   # Phase 4i compat — still used by database.py
+    list_tasks,                  # Phase 4k.1 — primary source for renderer
 )
 
 # --------------------------------------------------------------------------
@@ -97,9 +98,10 @@ BG_RR_W = {1:3, 6:1, 7:2, 8:3, 10:1}
 BG_AUX  = {"z9_sr":2, "z9_sr_buddy":1, "admin":2, "trash_1_5":2, "trash_6_10":1,
            "support_1":1, "support_2":3, "support_3":2}
 
-# Canonical zone tasks. Sweeper duties are NOT canonical to any zone — they
-# are auto-assigned by assign_sweepers() per Brian's priority rule.
-TASKS_ZONE = {
+# DEPRECATED — Phase 4k.1: these hardcoded dicts are no longer the source of
+# truth. TASKS_ZONE and TASKS_RR are rebuilt at render time from the zone_tasks
+# DB table via _load_tasks_from_db(). Kept as emergency fallback only.
+TASKS_ZONE: dict[int, list[str]] = {
     1:  ["Outdoor Smoking Area", "Elevators & Stairwells", "Family Restroom"],
     2:  ["Lobby Trash Pull", "Lobby Restrooms"],
     3:  [],
@@ -111,14 +113,16 @@ TASKS_ZONE = {
     9:  ["Assist with Smoking Room", "Social Bar Tables"],
     10: ["High Limit Slots", "East Door Glass", "Outdoor Smoking Area", "Pit 4"],
 }
-TASKS_RR = {
+TASKS_RR: dict[int, list[str]] = {
     1:  ["Buffet RR", "Family RR"],
     6:  ["131 Restroom"],
     7:  ["Assist with Smoking Room"],
     8:  ["Family Restroom", "TDR Restroom", "TMBR Locker Room"],
     10: ["CBK Kitchen"],
 }
-TASKS_AUX = {
+# TASKS_AUX retains its tuple (label, description) structure — aux slots use
+# a compound display format the zone_tasks table does not yet model natively.
+TASKS_AUX: dict[str, tuple[str, str]] = {
     "trash_1_5":    ("Trash 1",        "Zones 1–5, plus Annex after 5am"),
     "trash_6_10":   ("Trash 2",        "Zones 6–10"),
     "admin":        ("Admin",          ""),
@@ -147,29 +151,49 @@ _OVERLAP_DEFAULT_AM = [
     "Trash",
 ]
 
-def _refresh_tasks_from_db() -> None:
-    """Phase 4i.2 — Overwrite module-level TASKS_ZONE and TASKS_RR with live
-    data from the zone_tasks table. Hardcoded values remain as fallback when
-    the DB returns nothing for a given slot key."""
+def _load_tasks_from_db() -> None:
+    """Phase 4k.1 — Rebuild module-level TASKS_ZONE and TASKS_RR from the
+    zone_tasks table via list_tasks(). Tasks are sorted by display_order ASC
+    then name ASC (handled by list_tasks). Hardcoded fallbacks remain when the
+    DB is unavailable.
+
+    TASKS_AUX is intentionally left as hardcoded — its (label, description)
+    tuple structure does not map directly to zone_tasks rows.
+    """
     try:
-        db_tasks = get_zone_tasks_for_engine()   # {slot_key: [{id, name, category}]}
+        rows = list_tasks(active_only=True, include_overlap=False)
     except Exception:
         return  # silently keep hardcoded defaults
-    # Update TASKS_ZONE (keyed by int zone number)
+
+    # Partition rows by category and default_zone slot key
+    zone_buckets: dict[int, list[str]] = {}
+    rr_buckets: dict[int, list[str]] = {}
+
+    for row in rows:
+        dz = row.get("default_zone", "")
+        name = row.get("name", "")
+        cat = row.get("category", "")
+        if cat == "zone" and dz.startswith("zone_"):
+            try:
+                z = int(dz.split("_", 1)[1])
+                zone_buckets.setdefault(z, []).append(name)
+            except (ValueError, IndexError):
+                pass
+        elif cat == "rr" and dz.startswith("rr_"):
+            try:
+                z = int(dz.split("_", 1)[1])
+                rr_buckets.setdefault(z, []).append(name)
+            except (ValueError, IndexError):
+                pass
+        # aux tasks: TASKS_AUX stays hardcoded; skip here
+
+    # Write back to module-level dicts (fallback kept for empty buckets)
     for z in range(1, 11):
-        key = f"zone_{z}"
-        rows = db_tasks.get(key)
-        if rows:
-            TASKS_ZONE[z] = [r["name"] for r in rows]
-    # Update TASKS_RR (keyed by int zone number)
+        if z in zone_buckets:
+            TASKS_ZONE[z] = zone_buckets[z]
     for z in (1, 6, 7, 8, 10):
-        key = f"rr_{z}"
-        rows = db_tasks.get(key)
-        if rows:
-            TASKS_RR[z] = [r["name"] for r in rows]
-    # TASKS_AUX has a different structure (tuple: label, description) so we
-    # intentionally leave it alone — aux task descriptions are rendered as a
-    # single summary string, not as editable task-list rows.
+        if z in rr_buckets:
+            TASKS_RR[z] = rr_buckets[z]
 
 
 def load_overlap_tasks() -> tuple[list[str], list[str], dict]:
@@ -2519,9 +2543,9 @@ def main(argv):
     global TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES
     TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES = load_overlap_tasks()
 
-    # Phase 4i.2: refresh zone/RR task lists from DB (hardcoded dicts stay as
-    # fallback when DB returns nothing for a slot).
-    _refresh_tasks_from_db()
+    # Phase 4k.1: rebuild zone/RR task lists from DB via list_tasks().
+    # Hardcoded dicts stay as fallback when DB returns nothing for a slot.
+    _load_tasks_from_db()
 
     males, females, no_sweeper = load_gender_info()
 

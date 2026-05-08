@@ -4,6 +4,73 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4k.2: zds_annotations table + accessors (Sonnet)
+
+### Schema — `zds_annotations`
+- New table: `(week_ending date, day text, target_kind text, target_ref text,
+  annotation_kind text, value jsonb, created_by text, timestamps)`.
+- UNIQUE(week_ending, day, target_kind, target_ref, annotation_kind) — one of each
+  kind per target per day. `card.adhoc_task` repeats via `:uuid` suffix in target_ref.
+- Indexes: `(week_ending, day)`, `(target_kind, target_ref)`, `(annotation_kind)`.
+- `updated_at` trigger: `trigger_set_zds_annotations_updated_at`.
+- Migration: `20260508_000002_phase_4k2_zds_annotations.sql`.
+
+### `shared/db.py` — 5 new accessors
+- `list_annotations(week_ending, day, target_kind?, target_ref?)` — filtered SELECT.
+- `get_annotation(week_ending, day, target_kind, target_ref, annotation_kind)` — single row.
+- `upsert_annotation(...)` — fetch-then-insert/update on unique key.
+- `delete_annotation(...)` — targeted DELETE by unique key.
+- `list_annotations_grouped(week_ending, day)` — ONE SELECT → nested dict
+  `{target_kind: {target_ref: {annotation_kind: value}}}` for renderer hot path.
+
+### Smoke test — `apps/zds/engine/test_annotations.py`
+- Round-trips write / grouped-read / filtered-read / update / delete / cleanup
+  against far-future week 2099-12-31. Prints "OK — annotations round-trip clean".
+  All assertions pass, zero leftover rows after run.
+
+Foundation for Phase 4k.3 (task right-click) + 4k.4/4k.5 (TM/card menus).
+
+---
+
+## 2026-05-08 — Phase 4k.1: Tasks table foundation + admin CRUD UI (Sonnet)
+
+### Schema
+- Extended `zone_tasks` with `code TEXT`, `target_codes TEXT[] DEFAULT '{}'`,
+  `days_active TEXT[] DEFAULT ARRAY['fri'..'thu']`, `display_order INT DEFAULT 100`.
+  Applied via `20260508_000001_phase_4k1_extend_zone_tasks.sql`.
+- Backfilled `target_codes` from `default_zone` for all 34 existing Phase 4i rows.
+- New `task_day_overrides` table: `(task_id→zone_tasks, override_date date, description text)`
+  UNIQUE(task_id, override_date). Replaces `_per_day_overrides` in `Rules/Overlap Tasks.json`.
+- New indexes: `zone_tasks_code_uniq` (partial unique), `zone_tasks_target_codes_gin` (GIN),
+  `zone_tasks_kind_idx` (partial WHERE active).
+
+### Seed — `migrate_tasks_phase_4k.py`
+- `migrate_tasks_to_db.py` renamed → `migrate_tasks_phase_4i.py` (archived).
+- New idempotent seed: **Source A** backfills 34 Phase 4i rows with `code` + `display_order`
+  (`Z1_OUTDOOR_SMOKE`, `RR8_FAMILY`, `AUX_TRASH1`, etc.). **Source B** inserts 12 overlap tasks
+  from `Rules/Overlap Tasks.json` (PMOL1–6 as `overlap_pm`, AMOL1–6 as `overlap_am`, codes
+  `OL_PM1`–`OL_AM6`) and seeds 2 `task_day_overrides` rows from `_per_day_overrides`.
+  **Source C/D**: no rotation/sweeper text constants found — `BACKTOBACK_SLOTS` is a placement
+  constraint; sweeper strings computed at runtime. Nothing to migrate.
+- Final state: 46 zone_tasks (all coded), 2 task_day_overrides.
+
+### `shared/db.py` — 8 new accessor functions
+`list_tasks`, `get_task`, `get_task_by_code`, `upsert_task`, `deactivate_task`,
+`list_task_overrides_for_date`, `upsert_task_override`, `delete_task_override`.
+
+### Renderer cutover — `render_deployment_book.py`
+- `_refresh_tasks_from_db()` → `_load_tasks_from_db()` using `list_tasks()`.
+- TASKS_ZONE / TASKS_RR retained as `# DEPRECATED` hardcoded fallbacks.
+
+### Admin CRUD UI rebuild — `apps/admin/tasks_state.py` + `apps/admin/pages/tasks.py`
+- `load_tasks()` now calls `list_tasks()` (all 5 categories including overlap kinds).
+- Filter bar: name/code search + category dropdown + archived toggle. GLCR icons wired.
+- Task table: `Code` column added (indigo badge); category badges colorized per kind.
+- Edit drawer: `Code` field, overlap categories in selector, per-day overrides section
+  (list + add + delete). GLCR action icons throughout.
+
+---
+
 ## 2026-05-08 — Phase 4j: Kill card watermarks, soften scatter (Sonnet)
 
 ### 4j.1 — Remove `.card-watermark` divs and all CSS rules

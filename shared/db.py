@@ -2758,6 +2758,433 @@ def get_zone_tasks_for_engine() -> dict[str, list[dict]]:
         return {}
 
 
+# ---------------------------------------------------------------------------
+# Phase 4k.1 — zone_tasks CRUD accessors
+# ---------------------------------------------------------------------------
+
+_TASK_SELECT = (
+    "id,name,code,description,default_zone,category,active,"
+    "target_codes,days_active,display_order,archived_at,"
+    "estimated_duration_min,notes,created_at,updated_at"
+)
+
+
+def list_tasks(
+    category: "str | None" = None,
+    active_only: bool = True,
+    include_overlap: bool = True,
+) -> list[dict]:
+    """
+    Return all zone_tasks rows, optionally filtered by category and active flag.
+
+    Args:
+        category:       If set, only return rows with matching category.
+        active_only:    If True (default), exclude rows where active=False.
+        include_overlap: If False, skip 'overlap_pm' and 'overlap_am' categories.
+
+    Returns a list of dicts with all zone_tasks columns.
+    Sorted by display_order ASC, name ASC.
+    Falls back to empty list on error.
+    """
+    try:
+        sb = get_client()
+        q = sb.table("zone_tasks").select(_TASK_SELECT)
+        if active_only:
+            q = q.eq("active", True).is_("archived_at", "null")
+        if category:
+            q = q.eq("category", category)
+        if not include_overlap:
+            q = q.not_.in_("category", ["overlap_pm", "overlap_am"])
+        res = q.order("display_order").order("name").execute()
+        return res.data or []
+    except Exception:
+        print(f"[db] list_tasks error:\n{traceback.format_exc()}")
+        return []
+
+
+def get_task(task_id: str) -> "dict | None":
+    """Return a single zone_tasks row by UUID, or None if not found."""
+    try:
+        sb = get_client()
+        res = (
+            sb.table("zone_tasks")
+            .select(_TASK_SELECT)
+            .eq("id", task_id)
+            .maybe_single()
+            .execute()
+        )
+        return res.data
+    except Exception:
+        print(f"[db] get_task error:\n{traceback.format_exc()}")
+        return None
+
+
+def get_task_by_code(code: str) -> "dict | None":
+    """Return a single zone_tasks row by stable code, or None if not found."""
+    try:
+        sb = get_client()
+        res = (
+            sb.table("zone_tasks")
+            .select(_TASK_SELECT)
+            .eq("code", code)
+            .maybe_single()
+            .execute()
+        )
+        return res.data
+    except Exception:
+        print(f"[db] get_task_by_code error:\n{traceback.format_exc()}")
+        return None
+
+
+def upsert_task(data: dict) -> "dict | None":
+    """
+    Insert or update a zone_tasks row.
+
+    If data contains 'id', updates that row directly.
+    If data contains 'code' (and no 'id'), upserts on the code partial unique index
+    by doing a fetch-then-insert/update.
+
+    Returns the resulting row dict, or None on error.
+    """
+    try:
+        sb = get_client()
+        if "id" in data:
+            data.setdefault("updated_at", "now()")
+            res = (
+                sb.table("zone_tasks")
+                .update(data)
+                .eq("id", data["id"])
+                .execute()
+            )
+            rows = res.data or []
+            return rows[0] if rows else None
+        elif "code" in data and data["code"]:
+            existing = get_task_by_code(data["code"])
+            if existing:
+                data["updated_at"] = "now()"
+                res = (
+                    sb.table("zone_tasks")
+                    .update(data)
+                    .eq("id", existing["id"])
+                    .execute()
+                )
+                rows = res.data or []
+                return rows[0] if rows else existing
+            else:
+                res = sb.table("zone_tasks").insert(data).execute()
+                rows = res.data or []
+                return rows[0] if rows else None
+        else:
+            res = sb.table("zone_tasks").insert(data).execute()
+            rows = res.data or []
+            return rows[0] if rows else None
+    except Exception:
+        print(f"[db] upsert_task error:\n{traceback.format_exc()}")
+        return None
+
+
+def deactivate_task(task_id: str) -> bool:
+    """
+    Soft-delete a zone_tasks row by setting active=False and archived_at=now().
+    Returns True on success, False on error.
+    """
+    try:
+        sb = get_client()
+        sb.table("zone_tasks").update({
+            "active": False,
+            "archived_at": "now()",
+        }).eq("id", task_id).execute()
+        return True
+    except Exception:
+        print(f"[db] deactivate_task error:\n{traceback.format_exc()}")
+        return False
+
+
+def list_task_overrides_for_date(override_date: str) -> list[dict]:
+    """
+    Return all task_day_overrides rows for a given ISO date (YYYY-MM-DD).
+
+    Each row includes the joined zone_tasks fields: code, default_zone, category.
+    Returns [] on error or if no overrides exist for that date.
+    """
+    try:
+        sb = get_client()
+        res = (
+            sb.table("task_day_overrides")
+            .select("id,task_id,override_date,description,notes,created_at,"
+                    "zone_tasks(code,default_zone,category,name)")
+            .eq("override_date", override_date)
+            .execute()
+        )
+        return res.data or []
+    except Exception:
+        print(f"[db] list_task_overrides_for_date error:\n{traceback.format_exc()}")
+        return []
+
+
+def upsert_task_override(
+    task_id: str,
+    override_date: str,
+    description: str,
+    notes: "str | None" = None,
+) -> "dict | None":
+    """
+    Insert or update a task_day_overrides row for (task_id, override_date).
+    Returns the resulting row dict, or None on error.
+    """
+    try:
+        sb = get_client()
+        # Check for existing row (UNIQUE constraint on task_id + override_date)
+        existing_resp = (
+            sb.table("task_day_overrides")
+            .select("id")
+            .eq("task_id", task_id)
+            .eq("override_date", override_date)
+            .execute()
+        )
+        existing = existing_resp.data or []
+        payload: dict = {"description": description}
+        if notes is not None:
+            payload["notes"] = notes
+        if existing:
+            res = (
+                sb.table("task_day_overrides")
+                .update(payload)
+                .eq("id", existing[0]["id"])
+                .execute()
+            )
+            rows = res.data or []
+            return rows[0] if rows else None
+        else:
+            payload.update({"task_id": task_id, "override_date": override_date})
+            res = sb.table("task_day_overrides").insert(payload).execute()
+            rows = res.data or []
+            return rows[0] if rows else None
+    except Exception:
+        print(f"[db] upsert_task_override error:\n{traceback.format_exc()}")
+        return None
+
+
+def delete_task_override(task_id: str, override_date: str) -> bool:
+    """
+    Delete the task_day_overrides row for (task_id, override_date).
+    Returns True on success, False on error (including not found).
+    """
+    try:
+        sb = get_client()
+        sb.table("task_day_overrides").delete().eq(
+            "task_id", task_id
+        ).eq("override_date", override_date).execute()
+        return True
+    except Exception:
+        print(f"[db] delete_task_override error:\n{traceback.format_exc()}")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# End Phase 4k.1 accessors
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Phase 4k.2 — zds_annotations CRUD accessors
+# ---------------------------------------------------------------------------
+
+from datetime import date as _date   # already imported at top; re-import for local use is fine
+
+
+def list_annotations(
+    week_ending: "_date",
+    day: str,
+    target_kind: "str | None" = None,
+    target_ref:  "str | None" = None,
+) -> list[dict]:
+    """
+    Return all zds_annotations rows for a given (week_ending, day), optionally
+    filtered by target_kind and/or target_ref.
+
+    Args:
+        week_ending: The Thursday end-date of the deployment week.
+        day:         Day-of-week slug ('fri'..'thu').
+        target_kind: Optional — 'task', 'tm', or 'card'.
+        target_ref:  Optional — task UUID, tm_id, or card code.
+
+    Returns list of raw row dicts. Falls back to [] on error.
+    """
+    try:
+        sb = get_client()
+        q = (
+            sb.table("zds_annotations")
+            .select("*")
+            .eq("week_ending", week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending))
+            .eq("day", day)
+        )
+        if target_kind is not None:
+            q = q.eq("target_kind", target_kind)
+        if target_ref is not None:
+            q = q.eq("target_ref", target_ref)
+        res = q.execute()
+        return res.data or []
+    except Exception:
+        print(f"[db] list_annotations error:\n{traceback.format_exc()}")
+        return []
+
+
+def get_annotation(
+    week_ending: "_date",
+    day: str,
+    target_kind: str,
+    target_ref: str,
+    annotation_kind: str,
+) -> "dict | None":
+    """
+    Return a single annotation row by its unique key, or None if not found.
+    Key: (week_ending, day, target_kind, target_ref, annotation_kind).
+    """
+    try:
+        sb = get_client()
+        week_iso = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+        res = (
+            sb.table("zds_annotations")
+            .select("*")
+            .eq("week_ending", week_iso)
+            .eq("day", day)
+            .eq("target_kind", target_kind)
+            .eq("target_ref", target_ref)
+            .eq("annotation_kind", annotation_kind)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:
+        print(f"[db] get_annotation error:\n{traceback.format_exc()}")
+        return None
+
+
+def upsert_annotation(
+    week_ending: "_date",
+    day: str,
+    target_kind: str,
+    target_ref: str,
+    annotation_kind: str,
+    value: dict,
+    created_by: "str | None" = None,
+) -> "dict | None":
+    """
+    Insert or update a zds_annotations row.
+    Uses the unique constraint (week_ending, day, target_kind, target_ref, annotation_kind)
+    to determine insert-vs-update.
+
+    Returns the resulting row dict, or None on error.
+    """
+    try:
+        sb = get_client()
+        week_iso = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+
+        existing = get_annotation(week_ending, day, target_kind, target_ref, annotation_kind)
+        if existing:
+            payload: dict = {"value": value, "updated_at": "now()"}
+            if created_by is not None:
+                payload["created_by"] = created_by
+            res = (
+                sb.table("zds_annotations")
+                .update(payload)
+                .eq("id", existing["id"])
+                .execute()
+            )
+            rows = res.data or []
+            return rows[0] if rows else existing
+        else:
+            payload = {
+                "week_ending":     week_iso,
+                "day":             day,
+                "target_kind":     target_kind,
+                "target_ref":      target_ref,
+                "annotation_kind": annotation_kind,
+                "value":           value,
+            }
+            if created_by is not None:
+                payload["created_by"] = created_by
+            res = sb.table("zds_annotations").insert(payload).execute()
+            rows = res.data or []
+            return rows[0] if rows else None
+    except Exception:
+        print(f"[db] upsert_annotation error:\n{traceback.format_exc()}")
+        return None
+
+
+def delete_annotation(
+    week_ending: "_date",
+    day: str,
+    target_kind: str,
+    target_ref: str,
+    annotation_kind: str,
+) -> bool:
+    """
+    Delete a single annotation by its unique key.
+    Returns True on success, False on error.
+    """
+    try:
+        sb = get_client()
+        week_iso = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+        (
+            sb.table("zds_annotations")
+            .delete()
+            .eq("week_ending", week_iso)
+            .eq("day", day)
+            .eq("target_kind", target_kind)
+            .eq("target_ref", target_ref)
+            .eq("annotation_kind", annotation_kind)
+            .execute()
+        )
+        return True
+    except Exception:
+        print(f"[db] delete_annotation error:\n{traceback.format_exc()}")
+        return False
+
+
+def list_annotations_grouped(
+    week_ending: "_date",
+    day: str,
+) -> dict:
+    """
+    Hot path for the renderer. Returns all annotations for (week_ending, day)
+    shaped as:
+        {
+          target_kind: {
+            target_ref: {
+              annotation_kind: <value dict>
+            }
+          }
+        }
+
+    Example:
+        grouped["task"]["<uuid>"]["highlight"]["color"]  == "yellow"
+        grouped["card"]["Z1"]["adhoc_task"]              == {"text": "…", "order": 1}
+
+    Exactly ONE SELECT — no N+1. Falls back to {} on error.
+    """
+    try:
+        rows = list_annotations(week_ending, day)
+        result: dict = {}
+        for row in rows:
+            tk  = row["target_kind"]
+            ref = row["target_ref"]
+            ak  = row["annotation_kind"]
+            v   = row.get("value") or {}
+            result.setdefault(tk, {}).setdefault(ref, {})[ak] = v
+        return result
+    except Exception:
+        print(f"[db] list_annotations_grouped error:\n{traceback.format_exc()}")
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# End Phase 4k.2 accessors
+# ---------------------------------------------------------------------------
+
+
 def get_training_schedule_from_db() -> dict:
     """
     Replace Training Config.json read in fill_engine.py.
