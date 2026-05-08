@@ -291,8 +291,11 @@ def _tasks_tab() -> rx.Component:
 # ── Neglect ranking tab ──────────────────────────────────────────────────────
 
 def _neglect_row(r: dict) -> rx.Component:
-    many_days = r["days_idle"] > 14
-    never     = r["days_idle"] == 9999
+    # Phase 4i hotfix: dict-Var lookups in Reflex 0.9 return an
+    # `ObjectItemOperation` that can't be compared to a Python int directly.
+    # Cast with .to(int) so the resulting condition is a proper Var<bool>.
+    many_days = r["days_idle"].to(int) > 14
+    never     = r["days_idle"].to(int) == 9999
     idle_color = rx.cond(never, "#ef4444", rx.cond(many_days, "#d97706", "#16a34a"))
     idle_label = rx.cond(never, "Never assigned", rx.el.span(r["days_idle"].to_string() + " days ago"))
     return rx.el.tr(
