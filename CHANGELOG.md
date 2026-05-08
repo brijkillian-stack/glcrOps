@@ -4,6 +4,31 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4j: Kill card watermarks, soften scatter (Sonnet)
+
+### 4j.1 — Remove `.card-watermark` divs and all CSS rules
+- Deleted `<div class="card-watermark">` from `render_zone_card()` (zone numeral)
+  and `render_rr_card()` (RR numeral + `watermark_text` variable).
+- Removed the full `.card-watermark { … }` base rule and all variants:
+  `.zone-card .card-watermark`, `.rr-card .card-watermark`,
+  `.rr-card.c-yellow .card-watermark`, `.zone-card.is-crowded .card-watermark`,
+  `.zone-card.is-extra-crowded .card-watermark`,
+  `.zone-card/rr-card/aux-card.is-empty .card-watermark`.
+- Removed the crowded-card task-text background hack (`.zone-card.is-crowded .zone-tasks li`
+  background: rgba…) — it only existed to prevent watermark bleed-through.
+- Simplified three `:not(.card-watermark)` z-index rules to plain `> * { position:
+  relative; z-index: 1 }`. Zero residual `card-watermark` or `watermark_text` references.
+
+### 4j.2 — Soften casino scatter background
+- Added `opacity: 0.7` to `.page::before` — dials the whole SVG scatter to 70%
+  of its per-shape baked levels uniformly. Single knob to adjust if print feedback
+  calls for a different level.
+
+Both changes are render-only (`render_deployment_book.py`). No DB, no engine logic,
+no grid structure touched. Per independent Opus + Grok review.
+
+---
+
 ## 2026-05-08 — Phase 4i: Zone Task DB tracking — migrate, surface, assign (Sonnet)
 
 ### 4i.1 — DB migration + seed

@@ -884,7 +884,6 @@ def render_zone_card(num, name_str, color, tasks, alert="", group=None,
         crowded_cls = " is-crowded"
     alert_html = alert_strip(alert)
     return f"""<div class="zone-card c-{color}{empty_cls}{alert_cls}{train_cls}{crowded_cls}">
-        <div class="card-watermark" aria-hidden="true">{num}</div>
         <div class="zone-meta"><span class="zone-num"><svg class="zone-shape" aria-hidden="true"><use href="#sh-{num}"/></svg>Zone {num}</span>{pill}</div>
         {name_html}
         {trainee_html}
@@ -1003,10 +1002,7 @@ def render_rr_card(rr_num, mens, womens, color, extra_tasks=None, alert="",
     empty_cls = "" if (mens or womens) else " is-empty"
     alert_cls = " has-alert" if alert else ""
     alert_html = alert_strip(alert)
-    # Watermark text mirrors the canonical RR identifier (e.g. "1+2" for RR 1+2)
-    watermark_text = "1+2" if rr_num == 1 else str(rr_num)
     return f"""<div class="rr-card c-{color}{empty_cls}{alert_cls}">
-        <div class="card-watermark" aria-hidden="true">{watermark_text}</div>
         <div class="rr-head"><span><svg class="zone-shape" aria-hidden="true"><use href="#sh-{rr_num}"/></svg>{label}</span></div>
         <div class="rr-split">
           {side(mens, "Men's", mens_group, mens_training)}
@@ -1460,6 +1456,7 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
   content: "";
   position: absolute;
   inset: 0;
+  opacity: 0.7;  /* Phase 4j: dial scatter to 70% of baked levels — adjust this one knob */
   background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDU2IDgxNiIgd2lkdGg9IjEwNTYiIGhlaWdodD0iODE2Ij4KICA8ZGVmcz4KICAgIAogICAgPHBhdGggaWQ9ImhlYXJ0IiBkPSJNMCwtMTAgQzAsLTE4IC0xMiwtMjAgLTEyLC0xMCBDLTEyLDAgMCwxMCAwLDEwIEMwLDEwIDEyLDAgMTIsLTEwIEMxMiwtMjAgMCwtMTggMCwtMTB6Ij48L3BhdGg+CiAgICAKICAgIDxwYXRoIGlkPSJkaWFtb25kIiBkPSJNMCwtMTQgTDEwLDAgTDAsMTQgTC0xMCwweiI+PC9wYXRoPgogICAgCiAgICA8cGF0aCBpZD0iY2x1YiIgZD0iTTAsMTIgTC01LDEyIEwtMyw2IEMtOCw1IC0xMCwwIC03LC00IEMtNCwtOCAyLC04IDQsLTUgQzQsLTkgNywtMTIgMTAsLTEwIEMxMywtOCAxMywtMyAxMCwwIEMxMywzIDEzLDggMTAsMTAgQzcsMTIgMywxMCAyLDcgQzEsMTAgLTEsMTIgMCwxMnogTS02LDEyIEw2LDEyIj48L3BhdGg+CiAgICAKICAgIDxwYXRoIGlkPSJzcGFkZSIgZD0iTTAsLTEyIEMtOCwtNCAtMTIsNCAtOCw4IEMtNSwxMSAtMiwxMCAwLDggQy0xLDExIC0zLDEzIC01LDEzIEw1LDEzIEMzLDEzIDEsMTEgMCw4IEMyLDEwIDUsMTEgOCw4IEMxMiw0IDgsLTQgMCwtMTJ6Ij48L3BhdGg+CiAgPC9kZWZzPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTgsNzIwKSByb3RhdGUoLTE1KSI+CiAgICA8cGF0aCBkPSJNMCwtMjIgTDE2LDAgTDAsMjIgTC0xNiwweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4zNSI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzgsODEwKSByb3RhdGUoMTApIHNjYWxlKDAuNikiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjOTRhMmIxIiBvcGFjaXR5PSIwLjI1Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNjgsNzYwKSByb3RhdGUoLTMpIj4KICAgIDxyZWN0IHg9Ii0yNiIgeT0iLTM2IiB3aWR0aD0iNTIiIGhlaWdodD0iNzIiIHJ4PSI1IiByeT0iNSIgZmlsbD0id2hpdGUiIHN0cm9rZT0iIzMwYjJmZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG9wYWNpdHk9IjAuNTUiPjwvcmVjdD4KICAgIDx0ZXh0IHg9Ii0yMCIgeT0iLTIyIiBmb250LWZhbWlseT0iQmFybG93LHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuNTUiPkE8L3RleHQ+CiAgICA8cGF0aCBkPSJNMCwtNCBDLTUsLTQgLTYsMCAtMywzIEMtMSw1IDEsNSAzLDMgQzYsMCA1LC00IDAsLTR6IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsMTYpIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyOTgsNzkzKSByb3RhdGUoNSkgc2NhbGUoMC44KSI+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTYiIHI9IjYiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuMjUiPjwvY2lyY2xlPgogICAgPGNpcmNsZSBjeD0iLTYiIGN5PSIwIiByPSI1IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9IjYiIGN5PSIwIiByPSI1IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L2NpcmNsZT4KICAgIDxyZWN0IHg9Ii0yIiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI4IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L3JlY3Q+CiAgICA8cmVjdCB4PSItNiIgeT0iMTEiIHdpZHRoPSIxMiIgaGVpZ2h0PSIyIiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L3JlY3Q+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NjAsNzYwKSByb3RhdGUoMikiPgogICAgPHJlY3QgeD0iLTIyIiB5PSItMzIiIHdpZHRoPSI0NCIgaGVpZ2h0PSI2NCIgcng9IjUiIHJ5PSI1IiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSIjOTRhMmIxIiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC40MCI+PC9yZWN0PgogICAgPHRleHQgeD0iLTE1IiB5PSItMTgiIGZvbnQtZmFtaWx5PSJCYXJsb3csc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC40MCI+QTwvdGV4dD4KICA8L2c+CgogIAoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0MzAsNzAwKSByb3RhdGUoLTgpIHNjYWxlKDIuOCkiPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9Ii04IiByPSI4IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE4Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9Ii04IiBjeT0iMCIgcj0iNyIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSI4IiBjeT0iMCIgcj0iNyIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9jaXJjbGU+CiAgICA8cmVjdCB4PSItMyIgeT0iNyIgd2lkdGg9IjYiIGhlaWdodD0iMTAiIGZpbGw9IiNlMGNiYjYiIG9wYWNpdHk9IjAuMTgiPjwvcmVjdD4KICAgIDxyZWN0IHg9Ii04IiB5PSIxNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjIuNSIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9yZWN0PgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzQ4LDc2MCkgcm90YXRlKC0yMCkgc2NhbGUoMS42KSI+CiAgICA8cGF0aCBkPSJNMCwxMiBDMCwxMiAtMTQsMiAtMTQsLTYgQy0xNCwtMTIgLTgsLTE0IDAsLTggQzgsLTE0IDE0LC0xMiAxNCwtNiBDMTQsMiAwLDEyIDAsMTJ6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIyIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1MTAsNzU2KSByb3RhdGUoMTIpIHNjYWxlKDEuMikiPgogICAgPHBhdGggZD0iTTAsMTAgQzAsMTAgLTEyLDEgLTEyLC01IEMtMTIsLTEwIC02LC0xMiAwLC03IEM2LC0xMiAxMiwtMTAgMTIsLTUgQzEyLDEgMCwxMCAwLDEweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4yMCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjAyLDY0MCkgcm90YXRlKDIyKSBzY2FsZSgwLjkpIj4KICAgIDxwYXRoIGQ9Ik0wLC0xNiBMMTIsMCBMMCwxNiBMLTEyLDB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIyIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1NjYsNzEyKSByb3RhdGUoOCkgc2NhbGUoMS40KSI+CiAgICA8cGF0aCBkPSJNMCwtMTQgQy05LC01IC0xNCw0IC05LDkgQy02LDEyIC0yLDExIDAsOSBDLTEsMTIgLTMsMTQgLTYsMTQgTDYsMTQgQzMsMTQgMSwxMiAwLDkgQzIsMTEgNiwxMiA5LDkgQzE0LDQgOSwtNSAwLC0xNHoiIGZpbGw9IiM5NGEyYjEiIG9wYWNpdHk9IjAuMjIiPjwvcGF0aD4KICA8L2c+CgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDU4NCw3ODgpIHJvdGF0ZSgtNSkgc2NhbGUoMS4zKSI+CiAgICA8cGF0aCBkPSJNMCwxMCBDMCwxMCAtMTIsMSAtMTIsLTUgQy0xMiwtMTAgLTYsLTEyIDAsLTcgQzYsLTEyIDEyLC0xMCAxMiwtNSBDMTIsMSAwLDEwIDAsMTB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE4Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1MTIsNjY4KSI+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iMCIgcj0iMjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzk0YTJiMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtZGFzaGFycmF5PSI2IDUiIG9wYWNpdHk9IjAuMTgiPjwvY2lyY2xlPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9IjAiIHI9IjE4IiBmaWxsPSJub25lIiBzdHJva2U9IiM5NGEyYjEiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC4xNCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iMCIgcj0iOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTRhMmIxIiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC4xNCI+PC9jaXJjbGU+CiAgPC9nPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzU2LDY4MCkgcm90YXRlKDE4KSI+CiAgICA8cmVjdCB4PSItNDQiIHk9Ii02MCIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjEyMCIgcng9IjgiIHJ5PSI4IiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSIjMzBiMmZmIiBzdHJva2Utd2lkdGg9IjIuNSIgb3BhY2l0eT0iMC40NSI+PC9yZWN0PgogICAgPHRleHQgeD0iLTM0IiB5PSItNDAiIGZvbnQtZmFtaWx5PSJCYXJsb3csc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC40NSI+QTwvdGV4dD4KICAgIAogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOCwgMTApIiBvcGFjaXR5PSIwLjQiPgogICAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTgiIHI9IjgiIGZpbGw9IiMzMGIyZmYiPjwvY2lyY2xlPgogICAgICA8Y2lyY2xlIGN4PSItOCIgY3k9IjAiIHI9IjciIGZpbGw9IiMzMGIyZmYiPjwvY2lyY2xlPgogICAgICA8Y2lyY2xlIGN4PSI4IiBjeT0iMCIgcj0iNyIgZmlsbD0iIzMwYjJmZiI+PC9jaXJjbGU+CiAgICAgIDxyZWN0IHg9Ii0zIiB5PSI3IiB3aWR0aD0iNiIgaGVpZ2h0PSI5IiBmaWxsPSIjMzBiMmZmIj48L3JlY3Q+CiAgICAgIDxyZWN0IHg9Ii03IiB5PSIxNSIgd2lkdGg9IjE0IiBoZWlnaHQ9IjIuNSIgZmlsbD0iIzMwYjJmZiI+PC9yZWN0PgogICAgPC9nPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzA2LDY5MCkgcm90YXRlKC0xMikiPgogICAgPHJlY3QgeD0iLTQ0IiB5PSItNjAiIHdpZHRoPSI4OCIgaGVpZ2h0PSIxMjAiIHJ4PSI4IiByeT0iOCIgZmlsbD0id2hpdGUiIHN0cm9rZT0iIzMwYjJmZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG9wYWNpdHk9IjAuNTUiPjwvcmVjdD4KICAgIDx0ZXh0IHg9Ii0zNCIgeT0iLTQwIiBmb250LWZhbWlseT0iQmFybG93LHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuNTUiPkE8L3RleHQ+CiAgICA8dGV4dCB4PSItMzQiIHk9Ii0yMiIgZm9udC1mYW1pbHk9IkJhcmxvdyxzYW5zLXNlcmlmIiBmb250LXNpemU9IjExIiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjU1Ij7imaM8L3RleHQ+CiAgICAKICAgIDxwYXRoIGQ9Ik0wLC0yMiBMMTYsMCBMMCwyMiBMLTE2LDB6IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjMwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDE0KSI+PC9wYXRoPgogIDwvZz4KCiAgCgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDg0MCw2NjApIHJvdGF0ZSgtMTApIHNjYWxlKDEuNSkiPgogICAgPHBhdGggZD0iTTAsMTIgQzAsMTIgLTE0LDIgLTE0LC02IEMtMTQsLTEyIC04LC0xNCAwLC04IEM4LC0xNCAxNCwtMTIgMTQsLTYgQzE0LDIgMCwxMiAwLDEyeiIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4zMCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOTIwLDY3MCkgcm90YXRlKDgpIHNjYWxlKDEuMikiPgogICAgPHBhdGggZD0iTTAsLTE4IEwxNCwwIEwwLDE4IEwtMTQsMHoiIGZpbGw9IiNlMGNiYjYiIG9wYWNpdHk9IjAuMjgiPjwvcGF0aD4KICA8L2c+CgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDkyMCw3NDgpIHJvdGF0ZSgtNSkgc2NhbGUoMS4xKSI+CiAgICA8cGF0aCBkPSJNMCwtMTYgTDEyLDAgTDAsMTYgTC0xMiwweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4yOCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTAxMCw3OTApIHNjYWxlKDIuMikiPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9Ii05IiByPSI5IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI4Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9Ii05IiBjeT0iMCIgcj0iOCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSI5IiBjeT0iMCIgcj0iOCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9jaXJjbGU+CiAgICA8cmVjdCB4PSItMy41IiB5PSI4IiB3aWR0aD0iNyIgaGVpZ2h0PSIxMSIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iLTkiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMyIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9yZWN0PgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTA0MCw3MTApIHJvdGF0ZSgtMjApIHNjYWxlKDAuOSkiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjI1Ij48L3BhdGg+CiAgPC9nPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjY4LDU5Nikgcm90YXRlKDI1KSBzY2FsZSgwLjkpIj4KICAgIDxwYXRoIGQ9Ik0wLDEwIEMwLDEwIC0xMSwyIC0xMSwtNCBDLTExLC05IC01LC0xMSAwLC02IEM1LC0xMSAxMSwtOSAxMSwtNCBDMTEsMiAwLDEwIDAsMTB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIwIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MzAsNTk4KSByb3RhdGUoLTMwKSBzY2FsZSgwLjgpIj4KICAgIDxwYXRoIGQ9Ik0wLC0xNCBMMTAsMCBMMCwxNCBMLTEwLDB6IiBmaWxsPSIjOTRhMmIxIiBvcGFjaXR5PSIwLjE4Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNzYsNjU2KSByb3RhdGUoMTUpIHNjYWxlKDEuMSkiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE2Ij48L3BhdGg+CiAgPC9nPgoKPC9zdmc+") no-repeat center / cover;
   pointer-events: none;
   z-index: 0;
@@ -2106,61 +2103,13 @@ li.sweeper-task .sweeper-route {
    color so it reinforces the zone/RR color identity at a glance.
    Sits at z-index 0 (behind all content); cards have overflow:hidden so the
    number is clipped by card bounds. */
-.card-watermark {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  color: var(--card-color);
-  opacity: 0.07;  /* Phase 4g: 0.10→0.07 */
-  pointer-events: none;
-  user-select: none;
-  z-index: 0;
-  line-height: 0.85;
-  /* Push the number down slightly so it sits centered behind the name area
-     rather than fighting the small meta label up top. */
-  padding-top: 8px;
-}
-.zone-card .card-watermark { font-size: 90px; }  /* Phase 4g: 130px→90px */
-.rr-card   .card-watermark { font-size: 95px; }
-/* When a card has only a digit (e.g. "1", "6"), kick the size up a touch. */
-.rr-card.c-yellow .card-watermark { font-size: 78px; letter-spacing: -0.08em; }
-/* Ensure interactive content layers above the watermark */
-.zone-card > *:not(.card-watermark) { position: relative; z-index: 1; }
-.rr-card   > *:not(.card-watermark) { position: relative; z-index: 1; }
-.aux-card  > *:not(.card-watermark) { position: relative; z-index: 1; }
-
-/* Crowded zone cards (5/3/26 #58 fix): shrink + dim the watermark so the
-   giant number doesn't bleed through behind the small task text. Without
-   this, Z10 with 5 tasks at 9.5px font shows visual "overlap" because the
-   130px green "10" is the same area as the tiny task lines. */
-.zone-card.is-crowded .card-watermark       { opacity: 0.07; font-size: 110px; }
-.zone-card.is-extra-crowded .card-watermark { opacity: 0.05; font-size: 95px; }
-
-/* Tasks need a near-opaque background under text on crowded cards so the
-   watermark can't bleed through and create the "overlapping tasks" illusion. */
-.zone-card.is-crowded .zone-tasks li,
-.zone-card.is-extra-crowded .zone-tasks li {
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 2px;
-  padding: 0 2px;
-}
-.zone-card.is-crowded .zone-tasks li.sweeper-task,
-.zone-card.is-extra-crowded .zone-tasks li.sweeper-task {
-  background: rgba(255, 255, 255, 0.92);
-}
-
-/* Empty cards lift the watermark significantly so the zone identity reads
-   from across the floor even when nobody's assigned. The is-empty opacity
-   on the parent already dims the chrome to 0.55 — the watermark has to
-   work harder to stay legible. */
-.zone-card.is-empty .card-watermark { opacity: 0.22; }
-.rr-card.is-empty   .card-watermark { opacity: 0.22; }
-.aux-card.is-empty  .card-watermark { opacity: 0.22; }
+/* Phase 4j: .card-watermark removed entirely — ghost numerals ghosted on
+   B&W copies and muddied card edges. Color stripe + zone-shape SVG icon
+   carry zone identity without the visual noise. */
+/* Ensure interactive content layers above card background */
+.zone-card > * { position: relative; z-index: 1; }
+.rr-card   > * { position: relative; z-index: 1; }
+.aux-card  > * { position: relative; z-index: 1; }
 
 /* === BOTTOM-STRIP ALERT BANNER (v2.4) ===
    Coverage callout that reads from the floor. Sits flush at the bottom of any
