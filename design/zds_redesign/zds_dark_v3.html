@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ZDS — Zone Deployment System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Barlow', -apple-system, sans-serif;
+  background: #080e14;
+  color: #e8edf2;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum";
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(48,178,255,0.2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(48,178,255,0.4); }
+
+/* Lucide icon fix */
+[data-lucide] { display: inline-block; vertical-align: middle; }
+
+/* Casino background pattern */
+.casino-bg {
+  position: relative;
+  background: #080e14;
+}
+.casino-bg::before {
+  content: '';
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 60vh;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDU2IDgxNiIgd2lkdGg9IjEwNTYiIGhlaWdodD0iODE2Ij4KICA8ZGVmcz4KICAgIAogICAgPHBhdGggaWQ9ImhlYXJ0IiBkPSJNMCwtMTAgQzAsLTE4IC0xMiwtMjAgLTEyLC0xMCBDLTEyLDAgMCwxMCAwLDEwIEMwLDEwIDEyLDAgMTIsLTEwIEMxMiwtMjAgMCwtMTggMCwtMTB6Ij48L3BhdGg+CiAgICAKICAgIDxwYXRoIGlkPSJkaWFtb25kIiBkPSJNMCwtMTQgTDEwLDAgTDAsMTQgTC0xMCwweiI+PC9wYXRoPgogICAgCiAgICA8cGF0aCBpZD0iY2x1YiIgZD0iTTAsMTIgTC01LDEyIEwtMyw2IEMtOCw1IC0xMCwwIC03LC00IEMtNCwtOCAyLC04IDQsLTUgQzQsLTkgNywtMTIgMTAsLTEwIEMxMywtOCAxMywtMyAxMCwwIEMxMywzIDEzLDggMTAsMTAgQzcsMTIgMywxMCAyLDcgQzEsMTAgLTEsMTIgMCwxMnogTS02LDEyIEw2LDEyIj48L3BhdGg+CiAgICAKICAgIDxwYXRoIGlkPSJzcGFkZSIgZD0iTTAsLTEyIEMtOCwtNCAtMTIsNCAtOCw4IEMtNSwxMSAtMiwxMCAwLDggQy0xLDExIC0zLDEzIC01LDEzIEw1LDEzIEMzLDEzIDEsMTEgMCw4IEMyLDEwIDUsMTEgOCw4IEMxMiw0IDgsLTQgMCwtMTJ6Ij48L3BhdGg+CiAgPC9kZWZzPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTgsNzIwKSByb3RhdGUoLTE1KSI+CiAgICA8cGF0aCBkPSJNMCwtMjIgTDE2LDAgTDAsMjIgTC0xNiwweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4zNSI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzgsODEwKSByb3RhdGUoMTApIHNjYWxlKDAuNikiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjOTRhMmIxIiBvcGFjaXR5PSIwLjI1Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNjgsNzYwKSByb3RhdGUoLTMpIj4KICAgIDxyZWN0IHg9Ii0yNiIgeT0iLTM2IiB3aWR0aD0iNTIiIGhlaWdodD0iNzIiIHJ4PSI1IiByeT0iNSIgZmlsbD0id2hpdGUiIHN0cm9rZT0iIzMwYjJmZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG9wYWNpdHk9IjAuNTUiPjwvcmVjdD4KICAgIDx0ZXh0IHg9Ii0yMCIgeT0iLTIyIiBmb250LWZhbWlseT0iQmFybG93LHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuNTUiPkE8L3RleHQ+CiAgICA8cGF0aCBkPSJNMCwtNCBDLTUsLTQgLTYsMCAtMywzIEMtMSw1IDEsNSAzLDMgQzYsMCA1LC00IDAsLTR6IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsMTYpIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyOTgsNzkzKSByb3RhdGUoNSkgc2NhbGUoMC44KSI+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTYiIHI9IjYiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuMjUiPjwvY2lyY2xlPgogICAgPGNpcmNsZSBjeD0iLTYiIGN5PSIwIiByPSI1IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9IjYiIGN5PSIwIiByPSI1IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L2NpcmNsZT4KICAgIDxyZWN0IHg9Ii0yIiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI4IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L3JlY3Q+CiAgICA8cmVjdCB4PSItNiIgeT0iMTEiIHdpZHRoPSIxMiIgaGVpZ2h0PSIyIiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI1Ij48L3JlY3Q+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NjAsNzYwKSByb3RhdGUoMikiPgogICAgPHJlY3QgeD0iLTIyIiB5PSItMzIiIHdpZHRoPSI0NCIgaGVpZ2h0PSI2NCIgcng9IjUiIHJ5PSI1IiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSIjOTRhMmIxIiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC40MCI+PC9yZWN0PgogICAgPHRleHQgeD0iLTE1IiB5PSItMTgiIGZvbnQtZmFtaWx5PSJCYXJsb3csc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC40MCI+QTwvdGV4dD4KICA8L2c+CgogIAoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0MzAsNzAwKSByb3RhdGUoLTgpIHNjYWxlKDIuOCkiPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9Ii04IiByPSI4IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE4Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9Ii04IiBjeT0iMCIgcj0iNyIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSI4IiBjeT0iMCIgcj0iNyIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9jaXJjbGU+CiAgICA8cmVjdCB4PSItMyIgeT0iNyIgd2lkdGg9IjYiIGhlaWdodD0iMTAiIGZpbGw9IiNlMGNiYjYiIG9wYWNpdHk9IjAuMTgiPjwvcmVjdD4KICAgIDxyZWN0IHg9Ii04IiB5PSIxNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjIuNSIgZmlsbD0iI2UwY2JiNiIgb3BhY2l0eT0iMC4xOCI+PC9yZWN0PgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzQ4LDc2MCkgcm90YXRlKC0yMCkgc2NhbGUoMS42KSI+CiAgICA8cGF0aCBkPSJNMCwxMiBDMCwxMiAtMTQsMiAtMTQsLTYgQy0xNCwtMTIgLTgsLTE0IDAsLTggQzgsLTE0IDE0LC0xMiAxNCwtNiBDMTQsMiAwLDEyIDAsMTJ6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIyIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1MTAsNzU2KSByb3RhdGUoMTIpIHNjYWxlKDEuMikiPgogICAgPHBhdGggZD0iTTAsMTAgQzAsMTAgLTEyLDEgLTEyLC01IEMtMTIsLTEwIC02LC0xMiAwLC03IEM2LC0xMiAxMiwtMTAgMTIsLTUgQzEyLDEgMCwxMCAwLDEweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4yMCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjAyLDY0MCkgcm90YXRlKDIyKSBzY2FsZSgwLjkpIj4KICAgIDxwYXRoIGQ9Ik0wLC0xNiBMMTIsMCBMMCwxNiBMLTEyLDB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIyIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1NjYsNzEyKSByb3RhdGUoOCkgc2NhbGUoMS40KSI+CiAgICA8cGF0aCBkPSJNMCwtMTQgQy05LC01IC0xNCw0IC05LDkgQy02LDEyIC0yLDExIDAsOSBDLTEsMTIgLTMsMTQgLTYsMTQgTDYsMTQgQzMsMTQgMSwxMiAwLDkgQzIsMTEgNiwxMiA5LDkgQzE0LDQgOSwtNSAwLC0xNHoiIGZpbGw9IiM5NGEyYjEiIG9wYWNpdHk9IjAuMjIiPjwvcGF0aD4KICA8L2c+CgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDU4NCw3ODgpIHJvdGF0ZSgtNSkgc2NhbGUoMS4zKSI+CiAgICA8cGF0aCBkPSJNMCwxMCBDMCwxMCAtMTIsMSAtMTIsLTUgQy0xMiwtMTAgLTYsLTEyIDAsLTcgQzYsLTEyIDEyLC0xMCAxMiwtNSBDMTIsMSAwLDEwIDAsMTB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE4Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1MTIsNjY4KSI+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iMCIgcj0iMjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzk0YTJiMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtZGFzaGFycmF5PSI2IDUiIG9wYWNpdHk9IjAuMTgiPjwvY2lyY2xlPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9IjAiIHI9IjE4IiBmaWxsPSJub25lIiBzdHJva2U9IiM5NGEyYjEiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC4xNCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iMCIgcj0iOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTRhMmIxIiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC4xNCI+PC9jaXJjbGU+CiAgPC9nPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzU2LDY4MCkgcm90YXRlKDE4KSI+CiAgICA8cmVjdCB4PSItNDQiIHk9Ii02MCIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjEyMCIgcng9IjgiIHJ5PSI4IiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSIjMzBiMmZmIiBzdHJva2Utd2lkdGg9IjIuNSIgb3BhY2l0eT0iMC40NSI+PC9yZWN0PgogICAgPHRleHQgeD0iLTM0IiB5PSItNDAiIGZvbnQtZmFtaWx5PSJCYXJsb3csc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC40NSI+QTwvdGV4dD4KICAgIAogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOCwgMTApIiBvcGFjaXR5PSIwLjQiPgogICAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTgiIHI9IjgiIGZpbGw9IiMzMGIyZmYiPjwvY2lyY2xlPgogICAgICA8Y2lyY2xlIGN4PSItOCIgY3k9IjAiIHI9IjciIGZpbGw9IiMzMGIyZmYiPjwvY2lyY2xlPgogICAgICA8Y2lyY2xlIGN4PSI4IiBjeT0iMCIgcj0iNyIgZmlsbD0iIzMwYjJmZiI+PC9jaXJjbGU+CiAgICAgIDxyZWN0IHg9Ii0zIiB5PSI3IiB3aWR0aD0iNiIgaGVpZ2h0PSI5IiBmaWxsPSIjMzBiMmZmIj48L3JlY3Q+CiAgICAgIDxyZWN0IHg9Ii03IiB5PSIxNSIgd2lkdGg9IjE0IiBoZWlnaHQ9IjIuNSIgZmlsbD0iIzMwYjJmZiI+PC9yZWN0PgogICAgPC9nPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzA2LDY5MCkgcm90YXRlKC0xMikiPgogICAgPHJlY3QgeD0iLTQ0IiB5PSItNjAiIHdpZHRoPSI4OCIgaGVpZ2h0PSIxMjAiIHJ4PSI4IiByeT0iOCIgZmlsbD0id2hpdGUiIHN0cm9rZT0iIzMwYjJmZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG9wYWNpdHk9IjAuNTUiPjwvcmVjdD4KICAgIDx0ZXh0IHg9Ii0zNCIgeT0iLTQwIiBmb250LWZhbWlseT0iQmFybG93LHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiMzMGIyZmYiIG9wYWNpdHk9IjAuNTUiPkE8L3RleHQ+CiAgICA8dGV4dCB4PSItMzQiIHk9Ii0yMiIgZm9udC1mYW1pbHk9IkJhcmxvdyxzYW5zLXNlcmlmIiBmb250LXNpemU9IjExIiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjU1Ij7imaM8L3RleHQ+CiAgICAKICAgIDxwYXRoIGQ9Ik0wLC0yMiBMMTYsMCBMMCwyMiBMLTE2LDB6IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjMwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDE0KSI+PC9wYXRoPgogIDwvZz4KCiAgCgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDg0MCw2NjApIHJvdGF0ZSgtMTApIHNjYWxlKDEuNSkiPgogICAgPHBhdGggZD0iTTAsMTIgQzAsMTIgLTE0LDIgLTE0LC02IEMtMTQsLTEyIC04LC0xNCAwLC04IEM4LC0xNCAxNCwtMTIgMTQsLTYgQzE0LDIgMCwxMiAwLDEyeiIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4zMCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOTIwLDY3MCkgcm90YXRlKDgpIHNjYWxlKDEuMikiPgogICAgPHBhdGggZD0iTTAsLTE4IEwxNCwwIEwwLDE4IEwtMTQsMHoiIGZpbGw9IiNlMGNiYjYiIG9wYWNpdHk9IjAuMjgiPjwvcGF0aD4KICA8L2c+CgogIAogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDkyMCw3NDgpIHJvdGF0ZSgtNSkgc2NhbGUoMS4xKSI+CiAgICA8cGF0aCBkPSJNMCwtMTYgTDEyLDAgTDAsMTYgTC0xMiwweiIgZmlsbD0iIzk0YTJiMSIgb3BhY2l0eT0iMC4yOCI+PC9wYXRoPgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTAxMCw3OTApIHNjYWxlKDIuMikiPgogICAgPGNpcmNsZSBjeD0iMCIgY3k9Ii05IiByPSI5IiBmaWxsPSIjMzBiMmZmIiBvcGFjaXR5PSIwLjI4Ij48L2NpcmNsZT4KICAgIDxjaXJjbGUgY3g9Ii05IiBjeT0iMCIgcj0iOCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9jaXJjbGU+CiAgICA8Y2lyY2xlIGN4PSI5IiBjeT0iMCIgcj0iOCIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9jaXJjbGU+CiAgICA8cmVjdCB4PSItMy41IiB5PSI4IiB3aWR0aD0iNyIgaGVpZ2h0PSIxMSIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9yZWN0PgogICAgPHJlY3QgeD0iLTkiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMyIgZmlsbD0iIzMwYjJmZiIgb3BhY2l0eT0iMC4yOCI+PC9yZWN0PgogIDwvZz4KCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTA0MCw3MTApIHJvdGF0ZSgtMjApIHNjYWxlKDAuOSkiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjI1Ij48L3BhdGg+CiAgPC9nPgoKICAKCiAgCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjY4LDU5Nikgcm90YXRlKDI1KSBzY2FsZSgwLjkpIj4KICAgIDxwYXRoIGQ9Ik0wLDEwIEMwLDEwIC0xMSwyIC0xMSwtNCBDLTExLC05IC01LC0xMSAwLC02IEM1LC0xMSAxMSwtOSAxMSwtNCBDMTEsMiAwLDEwIDAsMTB6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjIwIj48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MzAsNTk4KSByb3RhdGUoLTMwKSBzY2FsZSgwLjgpIj4KICAgIDxwYXRoIGQ9Ik0wLC0xNCBMMTAsMCBMMCwxNCBMLTEwLDB6IiBmaWxsPSIjOTRhMmIxIiBvcGFjaXR5PSIwLjE4Ij48L3BhdGg+CiAgPC9nPgoKICAKICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNzYsNjU2KSByb3RhdGUoMTUpIHNjYWxlKDEuMSkiPgogICAgPHBhdGggZD0iTTAsLTE0IEMtOSwtNSAtMTQsNCAtOSw5IEMtNiwxMiAtMiwxMSAwLDkgQy0xLDEyIC0zLDE0IC02LDE0IEw2LDE0IEMzLDE0IDEsMTIgMCw5IEMyLDExIDYsMTIgOSw5IEMxNCw0IDksLTUgMCwtMTR6IiBmaWxsPSIjZTBjYmI2IiBvcGFjaXR5PSIwLjE2Ij48L3BhdGg+CiAgPC9nPgoKPC9zdmc+");
+  background-size: 100% auto;
+  background-position: bottom left;
+  background-repeat: no-repeat;
+  opacity: 0.30;
+  mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+}
+
+/* Chip ring pattern for header */
+.chip-header {
+  position: relative;
+  overflow: hidden;
+}
+.chip-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Ccircle cx='30' cy='30' r='22' fill='none' stroke='%2330b2ff' stroke-width='1.5' stroke-dasharray='6 4'/%3E%3Ccircle cx='30' cy='30' r='14' fill='none' stroke='%2330b2ff' stroke-width='0.75'/%3E%3Ccircle cx='30' cy='30' r='6' fill='none' stroke='%2330b2ff' stroke-width='1'/%3E%3Ccircle cx='90' cy='30' r='22' fill='none' stroke='%23e0cbb6' stroke-width='1.5' stroke-dasharray='6 4'/%3E%3Ccircle cx='90' cy='30' r='14' fill='none' stroke='%23e0cbb6' stroke-width='0.75'/%3E%3Ccircle cx='90' cy='30' r='6' fill='none' stroke='%23e0cbb6' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 120px 60px;
+  background-repeat: repeat;
+}
+
+/* Zone card glow on hover */
+.zone-card-filled:hover {
+  box-shadow: 0 0 0 1px rgba(48,178,255,0.35), 0 4px 20px rgba(48,178,255,0.12);
+}
+.zone-card-empty:hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+}
+.zone-card-locked {
+  box-shadow: inset 0 0 0 1px rgba(224,203,182,0.18);
+}
+
+/* Section gold rule */
+.section-gold-rule {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(224,203,182,0.4) 0%, rgba(224,203,182,0.1) 60%, transparent 100%);
+  margin-bottom: 10px;
+}
+
+/* Night scoreboard */
+.night-scoreboard {
+  background: linear-gradient(180deg, #0d1824 0%, #080e14 100%);
+  position: relative;
+  overflow: hidden;
+}
+.night-scoreboard::before {
+  content: '';
+  position: absolute;
+  right: -60px; top: -60px;
+  width: 280px; height: 280px;
+  border-radius: 50%;
+  border: 40px solid rgba(48,178,255,0.03);
+  pointer-events: none;
+}
+.night-scoreboard::after {
+  content: '';
+  position: absolute;
+  right: 20px; top: -40px;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  border: 1px solid rgba(48,178,255,0.06);
+  pointer-events: none;
+}
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+
+// ─────────────────────────────────────────────
+// TOKENS
+// ─────────────────────────────────────────────
+const T = {
+  // Backgrounds
+  bg0:     '#040a10',   // page
+  bg1:     '#080e14',   // base
+  bg2:     '#0d1520',   // card
+  bg3:     '#111d2b',   // card hover / elevated
+  bg4:     '#162236',   // input
+  bgBlue:  'rgba(48,178,255,0.07)',
+  bgAmber: 'rgba(224,203,182,0.07)',
+
+  // Borders
+  border:  'rgba(48,178,255,0.10)',
+  borderHover: 'rgba(48,178,255,0.28)',
+  borderGold: 'rgba(224,203,182,0.20)',
+  borderSubtle: 'rgba(255,255,255,0.05)',
+
+  // Text
+  t1: '#f0f4f8',
+  t2: '#8ba4be',
+  t3: '#4d6a82',
+  t4: '#2e4357',
+
+  // Brand
+  blue:    '#30b2ff',
+  blueDim: '#1a9be8',
+  blueMuted: 'rgba(48,178,255,0.15)',
+  gold:    '#e0cbb6',
+  goldDim: '#c9b094',
+
+  // Status
+  red:     '#f87171',
+  redBg:   'rgba(248,113,113,0.12)',
+  amber:   '#fbbf24',
+  amberBg: 'rgba(251,191,36,0.12)',
+  green:   '#34d399',
+  greenBg: 'rgba(52,211,153,0.10)',
+  violet:  '#a78bfa',
+  violetBg:'rgba(167,139,250,0.12)',
+};
+
+const ZONE_COLORS = {
+  // Zones
+  z1:'#d97706',   // amber/yellow  (Zone 1)
+  z2:'#d97706',   // amber/yellow  (Zone 2)
+  z3:'#dc2626',   // red           (Zone 3)
+  z4:'#dc2626',   // red           (Zone 4)
+  z5:'#dc2626',   // red           (Zone 5)
+  z6:'#2563eb',   // blue          (Zone 6)
+  z7:'#ec4899',   // pink          (Zone 7)
+  z8:'#92400e',   // pale brown    (Zone 8)
+  z9:'#dc2626',   // red           (Zone 9)
+  z10:'#16a34a',  // green         (Zone 10)
+  // Restrooms — match their zone
+  rr12:'#d97706', // yellow (RR 1+2 → Zones 1+2)
+  rr6:'#2563eb',  // blue   (RR 6  → Zone 6)
+  rr7:'#ec4899',  // pink   (RR 7  → Zone 7)
+  rr8:'#92400e',  // brown  (RR 8  → Zone 8)
+  rr10:'#16a34a', // green  (RR 10 → Zone 10)
+};
+
+const GRP_COLORS = { 1: T.blue, 2: T.green, 3: T.violet };
+
+const ZONES = [
+  { key:'z1',  label:'Zone 1',  name:'Nikki',   group:1, locked:false, tasks:['Outdoor Smoking','Elevators','Family RR'] },
+  { key:'z2',  label:'Zone 2',  name:'Gary',    group:2, locked:true,  tasks:['Lobby Trash Pull','Lobby Restrooms'] },
+  { key:'z3',  label:'Zone 3',  name:'',        group:3, locked:false, tasks:[] },
+  { key:'z4',  label:'Zone 4',  name:'Amanda',  group:1, locked:false, tasks:['Poker Drink Trays'] },
+  { key:'z5',  label:'Zone 5',  name:'Carter',  group:2, locked:true,  tasks:['High Limit Tables','TM Smoking Room'] },
+  { key:'z6',  label:'Zone 6',  name:'Jessica', group:3, locked:false, tasks:['Outdoor Smoking'], warning:'called_off' },
+  { key:'z7',  label:'Zone 7',  name:'Kaiden',  group:1, locked:false, tasks:['Smoking Room','Pit 1 & 2','S. Door Glass'] },
+  { key:'z8',  label:'Zone 8',  name:'Drew',    group:2, locked:false, tasks:['Restrooms','Pit 3'] },
+  { key:'z9',  label:'Zone 9',  name:'Peter',   group:3, locked:false, tasks:['Smoking Rm assist','Social Bar Tables'] },
+  { key:'z10', label:'Zone 10', name:'Jeff',    group:2, locked:true,  tasks:['HL Slots','E. Door Glass','Outdoor Smoking','Pit 4'] },
+];
+
+const RR_SLOTS = [
+  { key:'rr12', label:'RR 1+2', mens:'Mike S', womens:'Abby',   tasks:['Buffet RR','Family RR'] },
+  { key:'rr6',  label:'RR 6',   mens:'Jack',   womens:'Sherry', tasks:['131 Restroom'] },
+  { key:'rr7',  label:'RR 7',   mens:'Jared',  womens:'Jamie',  tasks:['Smoking Rm assist'] },
+  { key:'rr8',  label:'RR 8',   mens:'Alec',   womens:'Joy',    tasks:['Family RR','TDR','TMBR Locker'] },
+  { key:'rr10', label:'RR 10',  mens:'Steve',  womens:'Tawnya', tasks:['CBK Kitchen'] },
+];
+
+const AUX_SLOTS = [
+  { key:'z9sr',  label:'Z9 SR',    name:'Silvia',   color:'#dc2626' }, // red (Z9 family)
+  { key:'admin', label:'Admin',    name:'Sam',      color:'#7c3aed' }, // purple
+  { key:'tr1',   label:'Trash 1',  name:'Robby',    color:'#ea580c' }, // orange
+  { key:'tr2',   label:'Trash 2',  name:'Mike W',   color:'#ea580c' }, // orange
+  { key:'mp1',   label:'MP 1',     name:'Trenidee', color:'#64748b' }, // neutral
+  { key:'mp2',   label:'MP 2',     name:'',         color:'#64748b' }, // neutral (unfilled → no color shown)
+];
+
+const NIGHTS = [
+  { label:'Friday',    short:'Fri', date:'May 1',  filled:21, total:27, color:'#ef4444' },
+  { label:'Saturday',  short:'Sat', date:'May 2',  filled:0,  total:27, color:'#8b5cf6' },
+  { label:'Sunday',    short:'Sun', date:'May 3',  filled:0,  total:27, color:'#3b82f6' },
+  { label:'Monday',    short:'Mon', date:'May 4',  filled:14, total:27, color:'#10b981' },
+  { label:'Tuesday',   short:'Tue', date:'May 5',  filled:15, total:27, color:'#f59e0b', calloff:1 },
+  { label:'Wednesday', short:'Wed', date:'May 6',  filled:0,  total:27, color:'#f97316' },
+  { label:'Thursday',  short:'Thu', date:'May 7',  filled:0,  total:27, color:'#ec4899' },
+];
+
+const WEEKS = [
+  { label:'Week of 2026-05-07', range:'Fri May 1 – Thu May 7',     file:'IM Schedule 05-01-26.xlsx',  status:'draft' },
+  { label:'Week ending 2026-04-30', range:'Fri Apr 24 – Thu Apr 30', file:'Weekly TM EOW 4-30.xlsx', status:'draft' },
+];
+
+const FILES = [
+  { name:'IM Schedule 05-01-26.xlsx',  linked:'Week of 2026-05-07',      size:'34,423 B' },
+  { name:'Weekly TM EOW 4-30.xlsx',    linked:'Week ending 2026-04-30',   size:'31,456 B' },
+];
+
+// ─────────────────────────────────────────────
+// SHARED PRIMITIVES
+// ─────────────────────────────────────────────
+
+function Icon({ name, size=14, color, style={} }) {
+  return <i data-lucide={name} style={{ width:size, height:size, color: color || 'currentColor', display:'inline-block', verticalAlign:'middle', flexShrink:0, ...style }} />;
+}
+
+function Eyebrow({ children, color }) {
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: color || T.t3,
+    }}>{children}</span>
+  );
+}
+
+function Chip({ children, color, bg, border }) {
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:4,
+      fontSize:10, fontWeight:700, letterSpacing:'0.05em',
+      padding:'2px 8px', borderRadius:999,
+      color: color || T.t2,
+      background: bg || T.bg3,
+      border: `1px solid ${border || T.border}`,
+      whiteSpace:'nowrap',
+    }}>{children}</span>
+  );
+}
+
+// Main button
+function Btn({ label, icon, variant='default', onClick, small }) {
+  const variants = {
+    default: { bg: T.bg3, color: T.t2, border: T.border },
+    primary: { bg: T.blue, color: '#000', border: 'transparent' },
+    engine:  { bg: T.amberBg, color: T.amber, border: 'rgba(251,191,36,0.25)' },
+    waves:   { bg: T.violetBg, color: T.violet, border: 'rgba(167,139,250,0.25)' },
+    ghost:   { bg: 'transparent', color: T.t3, border: 'transparent' },
+    danger:  { bg: T.redBg, color: T.red, border: 'rgba(248,113,113,0.25)' },
+  };
+  const v = variants[variant] || variants.default;
+  return (
+    <button onClick={onClick} style={{
+      display:'inline-flex', alignItems:'center', gap: small ? 4 : 5,
+      padding: small ? '3px 8px' : '5px 12px',
+      background: v.bg, color: v.color,
+      border: `1px solid ${v.border}`,
+      borderRadius: 6, fontSize: small ? 11 : 12, fontWeight: 600,
+      letterSpacing: '0.04em', cursor: 'pointer',
+      fontFamily: 'Barlow, sans-serif',
+      whiteSpace:'nowrap',
+      transition: 'all 0.15s',
+    }}>{icon && <Icon name={icon} size={small?11:13} />}{label}</button>
+  );
+}
+
+// Section header
+function SectionHead({ icon, label, count }) {
+  return (
+    <div style={{ paddingTop:16, marginBottom:10 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+        <Icon name={icon} size={11} color={T.gold} />
+        <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color:T.gold }}>{label}</span>
+        {count && <span style={{ marginLeft:'auto', fontSize:10, color:T.t4, fontVariantNumeric:'tabular-nums' }}>{count}</span>}
+      </div>
+      <div className="section-gold-rule" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TOP NAV
+// ─────────────────────────────────────────────
+function TopNav({ title, subtitle, back, children }) {
+  return (
+    <div className="chip-header" style={{
+      background: 'linear-gradient(180deg, #0d1824 0%, #080e14 100%)',
+      borderBottom: `1px solid ${T.border}`,
+      padding: '0 20px',
+      display: 'flex', alignItems: 'center', gap: 12,
+      height: 52,
+      position: 'sticky', top: 0, zIndex: 100,
+    }}>
+      {/* App switcher */}
+      <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+        <div style={{
+          background: T.blue, color: '#000',
+          fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
+          padding: '3px 9px', borderRadius: 4,
+        }}>GLCR</div>
+        <div style={{
+          background: T.bg3, color: T.t3,
+          fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
+          padding: '3px 9px', borderRadius: 4,
+          border: `1px solid ${T.border}`,
+        }}>ZDS</div>
+      </div>
+
+      {back && (
+        <div style={{ color: T.t3, cursor:'pointer', display:'flex', padding:'4px' }}>
+          <Icon name="arrow-left" size={15} />
+        </div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:1, minWidth:0, overflow:'hidden' }}>
+        <span style={{ fontSize:14, fontWeight:700, color:T.t1, letterSpacing:'-0.01em', lineHeight:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{title}</span>
+        {subtitle && <span style={{ fontSize:10, color:T.t3, letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{subtitle}</span>}
+      </div>
+
+      <div style={{ flex:1 }}></div>
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ZONE CARD — enhanced dark casino style
+// ─────────────────────────────────────────────
+function ZoneCard({ zone }) {
+  const [hov, setHov] = React.useState(false);
+  const color = ZONE_COLORS[zone.key];
+  const unfilled = !zone.name;
+  const gColor = GRP_COLORS[zone.group];
+  const isCalledOff = zone.warning === 'called_off';
+  const cardClass = unfilled ? 'zone-card-empty' : zone.locked ? 'zone-card-locked' : 'zone-card-filled';
+
+  return (
+    <div
+      className={cardClass}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={() => window.dispatchEvent(new CustomEvent('zds:openPicker', { detail: zone.label }))}
+      style={{
+        background: hov && !unfilled ? T.bg3 : T.bg2,
+        border: `1px solid ${
+          zone.locked ? 'rgba(224,203,182,0.22)' :
+          hov && !unfilled ? T.borderHover :
+          T.border
+        }`,
+        borderRadius: 8,
+        overflow: 'hidden',
+        position: 'relative',
+        cursor: 'pointer',
+        transition: 'all 0.18s ease',
+        minHeight: 108,
+        display: 'flex', flexDirection: 'column',
+      }}>
+
+      {/* Color bar — thicker when filled, with a subtle glow */}
+      <div style={{
+        height: unfilled ? 2 : 3,
+        background: unfilled ? T.t4 : color,
+        flexShrink: 0,
+        boxShadow: unfilled ? 'none' : `0 1px 8px ${color}55`,
+      }} />
+
+      <div style={{ padding: '8px 10px 9px', flex:1, display:'flex', flexDirection:'column' }}>
+        {/* Header row */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:5 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: unfilled ? T.t4 : color,
+          }}>{zone.label}</span>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            {!unfilled && (
+              <div style={{
+                width: 16, height: 16, borderRadius: 3,
+                background: `${gColor}18`,
+                border: `1px solid ${gColor}35`,
+                color: gColor,
+                fontSize: 9, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                letterSpacing: 0,
+              }}>{zone.group}</div>
+            )}
+            <div style={{ color: zone.locked ? T.gold : T.t4, opacity: zone.locked ? 1 : 0.5 }}>
+              <Icon name={zone.locked ? 'lock' : 'lock-open'} size={10} />
+            </div>
+          </div>
+        </div>
+
+        {/* Name — large and dramatic when filled */}
+        <div style={{
+          fontSize: unfilled ? 16 : 23,
+          fontWeight: unfilled ? 400 : 700,
+          lineHeight: 1,
+          color: unfilled ? T.t4 : isCalledOff ? T.red : T.t1,
+          fontStyle: unfilled ? 'italic' : 'normal',
+          letterSpacing: unfilled ? '0.02em' : '-0.025em',
+          marginBottom: unfilled ? 0 : 3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          textShadow: (!unfilled && !isCalledOff && hov) ? `0 0 20px ${color}44` : 'none',
+          transition: 'text-shadow 0.2s',
+        }} data-ctx-target={zone.label}>
+          {zone.name || 'Unfilled'}
+        </div>
+
+        {/* Call-off badge */}
+        {isCalledOff && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            background: T.redBg,
+            border: `1px solid rgba(248,113,113,0.28)`,
+            borderRadius: 3, padding: '1px 6px', marginBottom: 4,
+          }}>
+            <Icon name="octagon-x" size={9} color={T.red} />
+            <span style={{ fontSize: 9, fontWeight: 800, color: T.red, letterSpacing: '0.08em' }}>CALLED OFF</span>
+          </div>
+        )}
+
+        {/* Tasks */}
+        {zone.tasks.length > 0 && (
+          <div style={{
+            marginTop: 'auto', paddingTop: 6,
+            borderTop: `1px solid ${T.borderSubtle}`,
+            overflow: 'hidden',
+          }}>
+            {zone.tasks.slice(0,4).map((t, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:4, padding:'1px 0' }}>
+                <span style={{ color: color, flexShrink:0, fontSize:9, marginTop:1, opacity:0.7 }}>·</span>
+                <span style={{ fontSize:9.5, color:T.t3, lineHeight:1.25, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t}</span>
+              </div>
+            ))}
+            {zone.tasks.length > 4 && <span style={{ fontSize:9, color:T.t4 }}>+{zone.tasks.length-4} more</span>}
+          </div>
+        )}
+        {zone.tasks.length === 0 && !unfilled && (
+          <div style={{ marginTop:'auto', paddingTop:5 }}>
+            <span style={{ fontSize:10, color:T.t4, fontStyle:'italic' }}>As needed</span>
+          </div>
+        )}
+      </div>
+
+      {/* Gold shimmer overlay for locked cards */}
+      {zone.locked && (
+        <div style={{
+          position:'absolute', inset:0, pointerEvents:'none',
+          background: 'linear-gradient(135deg, rgba(224,203,182,0.04) 0%, transparent 50%)',
+          borderRadius: 8,
+        }} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// RR CARD
+// ─────────────────────────────────────────────
+function RRCard({ rr }) {
+  const [hov, setHov] = React.useState(false);
+  const color = ZONE_COLORS[rr.key];
+  return (
+    <div
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      onClick={() => window.dispatchEvent(new CustomEvent('zds:openPicker', { detail: rr.label }))}
+      style={{
+        background: hov ? T.bg3 : T.bg2,
+        border: `1px solid ${hov ? T.borderHover : T.border}`,
+        borderRadius: 8, overflow:'hidden', cursor:'pointer',
+        transition:'all 0.15s',
+      }}>
+      <div style={{ height:2, background:color }} />
+      <div style={{ padding:'8px 10px 9px' }}>
+        <Eyebrow color={color}>{rr.label}</Eyebrow>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:5, marginBottom:6 }}>
+          {[['Men\'s', rr.mens],['Women\'s', rr.womens]].map(([side,name])=>(
+            <div key={side}>
+              <div style={{ fontSize:9, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:T.t4, marginBottom:2 }}>{side}</div>
+              <div style={{ fontSize:16, fontWeight:700, color:name?T.t1:T.t4, fontStyle:name?'normal':'italic', lineHeight:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name || 'Unfilled'}</div>
+            </div>
+          ))}
+        </div>
+        {rr.tasks.length > 0 && (
+          <div style={{ borderTop:`1px solid ${T.borderSubtle}`, paddingTop:5 }}>
+            {rr.tasks.map((t,i)=>(
+              <div key={i} style={{ fontSize:9.5, color:T.t3, padding:'1px 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>· {t}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// AUX CARD
+// ─────────────────────────────────────────────
+function AuxCard({ aux }) {
+  const [hov, setHov] = React.useState(false);
+  const unfilled = !aux.name;
+  return (
+    <div
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      onClick={() => window.dispatchEvent(new CustomEvent('zds:openPicker', { detail: aux.label }))}
+      style={{
+        background: hov ? T.bg3 : T.bg2,
+        border: `1px solid ${hov ? T.borderHover : T.border}`,
+        borderRadius:8, overflow:'hidden', cursor:'pointer',
+        minHeight:58, transition:'all 0.15s',
+      }}>
+      <div style={{ height:2, background:aux.color }} />
+      <div style={{ padding:'7px 9px' }}>
+        <Eyebrow color={aux.color}>{aux.label}</Eyebrow>
+        <div style={{ fontSize:14, fontWeight:700, color:unfilled?T.t4:T.t1, fontStyle:unfilled?'italic':'normal', marginTop:4, lineHeight:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {aux.name || 'Unfilled'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// FILL BAR — enhanced
+// ─────────────────────────────────────────────
+function FillBar({ filled, total, calloff=0 }) {
+  const pct = total > 0 ? Math.round(filled/total*100) : 0;
+  const barColor = pct >= 100 ? T.green : pct >= 75 ? T.blue : pct >= 50 ? T.amber : T.red;
+  const barLabel = pct >= 100 ? 'Full' : pct >= 75 ? 'Nearly Full' : pct >= 50 ? 'Halfway' : 'Low Coverage';
+  return (
+    <div style={{
+      background: 'rgba(13,21,32,0.8)',
+      borderBottom: `1px solid ${T.border}`,
+      padding: '10px 20px',
+      display: 'flex', alignItems: 'center', gap: 20,
+      backdropFilter: 'blur(8px)',
+    }}>
+      {/* Fill progress */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, flex:1 }}>
+        {/* Count */}
+        <div style={{ display:'flex', alignItems:'baseline', gap:4, whiteSpace:'nowrap', flexShrink:0 }}>
+          <span style={{ fontSize:18, fontWeight:800, color:T.t1, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{filled}</span>
+          <span style={{ fontSize:11, color:T.t3, fontVariantNumeric:'tabular-nums' }}>/ {total}</span>
+          <span style={{ fontSize:9, fontWeight:600, color:T.t4, letterSpacing:'0.10em', textTransform:'uppercase' }}>filled</span>
+        </div>
+        {/* Bar + inline label */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, flex:1 }}>
+          <div style={{ flex:1, maxWidth:220, height:5, background:T.bg4, borderRadius:999, overflow:'hidden' }}>
+            <div style={{
+              width:`${pct}%`, height:'100%',
+              background: `linear-gradient(90deg, ${barColor}bb, ${barColor})`,
+              borderRadius:999,
+              transition:'width 0.5s ease',
+              boxShadow: `0 0 10px ${barColor}55`,
+            }}/>
+          </div>
+          <span style={{ fontSize:9, fontWeight:700, color:barColor, letterSpacing:'0.10em', textTransform:'uppercase', whiteSpace:'nowrap', flexShrink:0 }}>{barLabel} · {pct}%</span>
+        </div>
+      </div>
+      {/* Status chips */}
+      <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
+        {(total-filled) > 0 && (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:5, background:T.bg3, border:`1px solid ${T.border}`, fontSize:11, fontWeight:600, color:T.t3, whiteSpace:'nowrap' }}>
+            <Icon name="circle-dashed" size={11} color={T.t4} />{total-filled} open
+          </div>
+        )}
+        {calloff > 0 && (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:5, background:T.redBg, border:`1px solid rgba(248,113,113,0.25)`, fontSize:11, fontWeight:600, color:T.red, whiteSpace:'nowrap' }}>
+            <Icon name="octagon-x" size={11} color={T.red} />{calloff} call-off
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// NIGHT TABS
+// ─────────────────────────────────────────────
+function NightTabs({ active=0, onSelect }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, #0a1420 0%, #080e14 100%)',
+      borderBottom: `1px solid ${T.border}`,
+      padding: '0 20px',
+      display: 'flex', gap: 0,
+      overflowX: 'auto',
+    }}>
+      {NIGHTS.map((n,i) => {
+        const isActive = i === active;
+        const pct = Math.round(n.filled/n.total*100);
+        const hasData = n.filled > 0;
+        return (
+          <div
+            key={i}
+            onClick={() => onSelect && onSelect(i)}
+            style={{
+              padding: '8px 16px 0',
+              cursor: 'pointer',
+              display: 'flex', flexDirection:'column', alignItems:'center', gap:4,
+              borderBottom: isActive ? `2px solid ${n.color}` : '2px solid transparent',
+              transition: 'all 0.15s',
+              minWidth: 60,
+              background: isActive ? `${n.color}08` : 'transparent',
+            }}>
+            <span style={{
+              fontSize: 11, fontWeight: isActive ? 700 : 500,
+              color: isActive ? n.color : T.t3,
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+            }}>{n.short}</span>
+            {/* Mini fill dot */}
+            <div style={{
+              width: 28, height: 3, borderRadius:999,
+              background: T.bg4, overflow:'hidden', marginBottom:6,
+            }}>
+              {hasData && <div style={{
+                width:`${pct}%`, height:'100%',
+                background: isActive ? n.color : `${n.color}66`,
+                borderRadius:999,
+              }}/>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TAB SWITCHER
+// ─────────────────────────────────────────────
+function TabSwitcher({ tabs, active, onSelect }) {
+  return (
+    <div style={{
+      display:'flex', background: T.bg2,
+      border: `1px solid ${T.border}`,
+      borderRadius: 7, padding: 3, gap: 2,
+    }}>
+      {tabs.map(t => {
+        const isActive = active === t.key;
+        return (
+          <div key={t.key} onClick={()=>onSelect(t.key)} style={{
+            padding: '4px 14px', borderRadius: 5,
+            fontSize:12, fontWeight:600, letterSpacing:'0.03em',
+            background: isActive ? T.bg3 : 'transparent',
+            color: isActive ? T.t1 : T.t3,
+            cursor: 'pointer', whiteSpace:'nowrap',
+            boxShadow: isActive ? `0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)` : 'none',
+            border: isActive ? `1px solid ${T.border}` : '1px solid transparent',
+            transition: 'all 0.15s',
+          }}>{t.label}</div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// WEEK CARD (overview)
+// ─────────────────────────────────────────────
+function NightCard({ night, onEdit }) {
+  const [hov, setHov] = React.useState(false);
+  const pct = Math.round(night.filled/night.total*100);
+  return (
+    <div
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{
+        background: hov ? T.bg3 : T.bg2,
+        border: `1px solid ${hov ? T.borderHover : T.border}`,
+        borderTop: `3px solid ${night.color}`,
+        borderRadius: 10, padding: '14px 16px',
+        transition: 'all 0.15s', cursor: 'pointer',
+      }}>
+      {/* Day + date */}
+      <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:6 }}>
+        <span style={{ fontSize:16, fontWeight:700, color:T.t1, letterSpacing:'-0.01em' }}>{night.label}</span>
+        <span style={{ fontSize:11, color:T.t3, fontVariantNumeric:'tabular-nums' }}>{night.date}</span>
+      </div>
+
+      {/* Stats */}
+      <div style={{ fontSize:11, color:T.t3, marginBottom:10 }}>
+        10 in rotation&nbsp;&nbsp;·&nbsp;&nbsp;Breaks: 0 / 0 / 0
+      </div>
+
+      {/* Fill bar */}
+      <div style={{ marginBottom:8 }}>
+        <div style={{ width:'100%', height:4, background:T.bg4, borderRadius:999, overflow:'hidden', marginBottom:5 }}>
+          <div style={{
+            width:`${pct}%`, height:'100%', background:night.color,
+            borderRadius:999, boxShadow:`0 0 6px ${night.color}88`,
+            transition:'width 0.3s',
+          }}/>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, flexWrap:'nowrap' }}>
+          <span style={{ fontWeight:600, color:T.t2, fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>{night.filled}&nbsp;/&nbsp;{night.total} filled</span>
+          {(night.total-night.filled) > 0 && <span style={{ color:T.t4, whiteSpace:'nowrap' }}>&nbsp;&middot; {night.total-night.filled} open</span>}
+          {night.calloff > 0 && <span style={{ color:T.red, fontWeight:600, whiteSpace:'nowrap' }}>&nbsp;&middot; {night.calloff} call-off</span>}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:10 }}>
+        <Btn label="Edit" icon="pencil" variant="primary" small onClick={onEdit} />
+        <Btn label="Print" icon="printer" variant="default" small />
+        <Btn label="Engine" icon="cpu" variant="engine" small />
+        <Btn label="Breaks" icon="waves" variant="waves" small />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE: INDEX
+// ─────────────────────────────────────────────
+function IndexPage({ onOpen }) {
+  return (
+    <div className="casino-bg" style={{ minHeight:'100vh' }}>
+      <TopNav title="GLCR · Grave Deployment" subtitle="Zone Deployment System">
+        <Btn label="New Week" icon="plus" variant="primary" />
+      </TopNav>
+
+      <div style={{ maxWidth:700, margin:'0 auto', padding:'28px 20px', display:'flex', flexDirection:'column', gap:14 }}>
+
+        {/* Upload card */}
+        <div style={{
+          background:T.bg2, border:`1px solid ${T.border}`, borderRadius:10,
+          padding:'14px 18px', display:'flex', alignItems:'center', gap:12,
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flex:1 }}>
+            <Icon name="calendar-check" size={16} color={T.t3} />
+            <span style={{ fontSize:13, fontWeight:600, color:T.t1 }}>Weekly Schedule</span>
+            <span style={{ fontSize:12, color:T.t4, fontStyle:'italic' }}>— none loaded</span>
+          </div>
+          <Btn label="Upload" icon="upload" variant="primary" />
+        </div>
+
+        {/* Schedules in storage */}
+        <div style={{ background:T.bg2, border:`1px solid ${T.border}`, borderRadius:10, overflow:'hidden' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px', borderBottom:`1px solid ${T.borderSubtle}` }}>
+            <Icon name="layers" size={14} color={T.t3} />
+            <span style={{ fontSize:12, fontWeight:700, color:T.t2, letterSpacing:'0.04em' }}>Schedules in Storage</span>
+            <div style={{ marginLeft:'auto', background:T.bg4, color:T.t3, fontSize:10, fontWeight:700, padding:'1px 8px', borderRadius:999, border:`1px solid ${T.border}` }}>2</div>
+          </div>
+          {FILES.map((f,i)=>(
+            <div key={i} style={{
+              display:'flex', alignItems:'center', gap:10,
+              padding:'10px 16px',
+              borderBottom: i<FILES.length-1 ? `1px solid ${T.borderSubtle}` : 'none',
+              background: i%2===0 ? T.bg2 : T.bg1,
+            }}>
+              <Icon name="file-spreadsheet" size={15} color={T.blue} />
+              <div style={{ flex:1, minWidth:0, overflow:'hidden' }}>
+                <div style={{ fontSize:13, fontWeight:600, color:T.t1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.name}</div>
+                <div style={{ fontSize:11, color:T.t3, marginTop:1 }}>
+                  <Icon name="link-2" size={10} color={T.green} style={{ marginRight:4 }} />
+                  <span style={{ color:T.blue }}>{f.linked}</span>
+                  <span style={{ color:T.t4 }}> · {f.size}</span>
+                </div>
+              </div>
+              <Btn label="Replace" icon="upload" variant="engine" small />
+              <Btn label="Unlink" icon="unlink" variant="ghost" small />
+              <div style={{ color:T.t4, cursor:'pointer' }}><Icon name="trash-2" size={13} /></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Week list */}
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {WEEKS.map((w,i)=>(
+            <div key={i} style={{
+              background:T.bg2, border:`1px solid ${T.border}`, borderRadius:10,
+              padding:'12px 16px', display:'flex', alignItems:'center', gap:12,
+              cursor:'pointer', transition:'all 0.15s',
+            }}>
+              <Icon name="calendar-days" size={16} color={T.blue} />
+              <div style={{ flex:1, minWidth:0, overflow:'hidden' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3, overflow:'hidden' }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:T.t1, whiteSpace:'nowrap' }}>{w.label}</span>
+                  <span style={{
+                    fontSize:9, fontWeight:700, padding:'1px 7px', borderRadius:999,
+                    background:T.amberBg, color:T.amber, border:'1px solid rgba(251,191,36,0.25)',
+                    textTransform:'uppercase', letterSpacing:'0.06em',
+                  }}>{w.status}</span>
+                </div>
+                <div style={{ fontSize:11, color:T.t3, display:'flex', alignItems:'center', gap:6, flexWrap:'nowrap', overflow:'hidden' }}>
+                  <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{w.range}</span>
+                  <span style={{ color:T.t4 }}>·</span>
+                  <Icon name="link-2" size={10} color={T.green} />
+                  <span style={{ color:T.blue, fontFamily:'monospace', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:1 }}>{w.file}</span>
+                </div>
+              </div>
+              <Btn label="Open" icon="layout-dashboard" variant="primary" onClick={onOpen} />
+              <div style={{ color:T.t3, cursor:'pointer' }}><Icon name="ellipsis-vertical" size={14} /></div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE: WEEK OVERVIEW
+// ─────────────────────────────────────────────
+function WeekOverviewPage({ onEdit, onBack }) {
+  return (
+    <div className="casino-bg" style={{ minHeight:'100vh' }}>
+      <TopNav title="Zone Deployment" subtitle="GLCR · Grave · 11PM – 7AM" back>
+        <Btn label="View Schedule" icon="calendar-days" variant="default" />
+        <Btn label="Print Week" icon="printer" variant="default" />
+        <Btn label="Run Engine" icon="cpu" variant="engine" />
+      </TopNav>
+
+      {/* Week label */}
+      <div style={{ padding:'18px 20px 6px', display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap' }}>
+        <Icon name="calendar-days" size={14} color={T.t3} style={{ flexShrink:0 }} />
+        <span style={{ fontSize:13, fontWeight:500, color:T.t2, whiteSpace:'nowrap' }}>Week of 2026-05-07</span>
+        <span style={{ fontSize:11, color:T.t4, whiteSpace:'nowrap' }}>· Fri May 1 – Thu May 7</span>
+      </div>
+
+      {/* Night cards grid */}
+      <div style={{
+        display:'grid',
+        gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',
+        gap:10, padding:'12px 20px 40px',
+      }}>
+        {NIGHTS.map((n,i)=>(
+          <NightCard key={i} night={n} onEdit={onEdit} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE: DEPLOYMENT
+// ─────────────────────────────────────────────
+function DeploymentPage({ onBack }) {
+  const [activeNight, setActiveNight] = React.useState(0);
+  const [activeTab, setActiveTab] = React.useState('deployment');
+  const [pickerSlot, setPickerSlot] = React.useState(null);
+  const [isLocked, setIsLocked] = React.useState(false);
+  const [lockedMeta, setLockedMeta] = React.useState({ by:'KS', at:'11:42pm' });
+  const [notices, setNotices] = React.useState({});
+  const [ctxMenu, setCtxMenu] = React.useState(null);
+  const [undoStack, setUndoStack] = React.useState(null);
+  const [assignments, setAssignments] = React.useState({});
+
+  // Context menu global right-click handler
+  React.useEffect(() => {
+    const handler = (e) => {
+      const trigger = e.target.closest('[data-ctx-target]');
+      if (trigger) {
+        e.preventDefault();
+        setCtxMenu({ x: e.clientX, y: e.clientY, target: trigger.getAttribute('data-ctx-target') });
+      }
+    };
+    window.addEventListener('contextmenu', handler);
+    return () => window.removeEventListener('contextmenu', handler);
+  }, []);
+
+  const handleLock = (locked) => {
+    setIsLocked(locked);
+    if (locked) setLockedMeta({ by:'KS', at: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).toLowerCase() });
+  };
+
+  const addNotice = (target, type) => {
+    setNotices(prev => ({ ...prev, [target]: [...(prev[target]||[]), { type, text: { alert:'Needs attention', info:'FYI note', training:'In training', meeting:'In a meeting' }[type] || 'Note', by:'KS', time: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).toLowerCase() }] }));
+  };
+
+  const handleTMSelect = (tm, slotLabel) => {
+    setUndoStack({ slotLabel, prev: assignments[slotLabel] || null, message: `Assigned ${tm.name} to ${slotLabel}` });
+    setAssignments(prev => ({ ...prev, [slotLabel]: tm.name }));
+    setPickerSlot(null);
+  };
+
+  const handleUndo = () => {
+    if (undoStack) {
+      setAssignments(prev => ({ ...prev, [undoStack.slotLabel]: undoStack.prev }));
+      setUndoStack(null);
+    }
+  };
+
+  // Listen for open-picker custom events from child cards
+  React.useEffect(() => {
+    const handler = (e) => setPickerSlot(e.detail);
+    window.addEventListener('zds:openPicker', handler);
+    return () => window.removeEventListener('zds:openPicker', handler);
+  }, []);
+  const night = NIGHTS[activeNight];
+  const pct = Math.round(night.filled/night.total*100);
+
+  return (
+    <div className="casino-bg" style={{ minHeight:'100vh' }}>
+      {/* Top nav — chip pattern header */}
+      <div className="chip-header" style={{
+        background: 'linear-gradient(180deg, #0d1824 0%, #080e14 100%)',
+        borderBottom: `1px solid ${T.border}`,
+        padding: '0 20px',
+        display: 'flex', alignItems: 'center', gap: 10,
+        height: 52,
+        position: 'sticky', top: 0, zIndex: 100,
+      }}>
+        <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+          <div style={{ background:T.blue, color:'#000', fontSize:10, fontWeight:800, letterSpacing:'0.12em', padding:'3px 9px', borderRadius:4 }}>GLCR</div>
+          <div style={{ background:T.bg3, color:T.t3, fontSize:10, fontWeight:800, letterSpacing:'0.12em', padding:'3px 9px', borderRadius:4, border:`1px solid ${T.border}` }}>ZDS</div>
+        </div>
+        <div onClick={onBack} style={{ color:T.t3, cursor:'pointer', padding:'4px', display:'flex', flexShrink:0 }}>
+          <Icon name="arrow-left" size={15} />
+        </div>
+        <div style={{ flexShrink:0 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:T.t1, lineHeight:1 }}>Zone Deployment</div>
+          <div style={{ fontSize:10, color:T.t3, letterSpacing:'0.06em', marginTop:1 }}>GLCR · Grave · 11PM – 7AM</div>
+        </div>
+        <div style={{ flex:1 }} />
+        {/* Primary: Run Engine */}
+        <Btn label="Run Engine" icon="cpu" variant="engine" />
+        {/* Secondary: Print */}
+        <Btn label="Print Day" icon="printer" variant="default" />
+        {/* More menu */}
+        <Btn label="More" icon="ellipsis-horizontal" variant="ghost" />
+        {/* Tab switcher */}
+        <TabSwitcher
+          tabs={[{key:'deployment',label:'Deployment'},{key:'break',label:'Break Sheet'},{key:'schedule',label:'Schedule'}]}
+          active={activeTab}
+          onSelect={setActiveTab}
+        />
+      </div>
+
+      {/* Night tabs */}
+      <NightTabs active={activeNight} onSelect={setActiveNight} />
+
+      {/* Night scoreboard header */}
+      <div className="night-scoreboard" style={{
+        padding:'14px 20px 12px',
+        borderBottom:`1px solid ${T.border}`,
+        position:'relative',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:0, position:'relative', zIndex:1, flexWrap:'nowrap' }}>
+          {/* Big day name */}
+          <div style={{ minWidth:0, flexShrink:1 }}>
+            <div style={{
+              fontSize:36, fontWeight:800, color:night.color,
+              letterSpacing:'-0.04em', lineHeight:1,
+              textShadow:`0 0 40px ${night.color}44, 0 0 80px ${night.color}22`,
+              whiteSpace:'nowrap',
+            }}>{night.label}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:3, flexWrap:'nowrap' }}>
+              <span style={{ fontSize:11, color:T.t3, fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>{night.date}</span>
+              <span style={{ color:T.t4, fontSize:10 }}>·</span>
+              <span style={{ fontSize:11, color:T.t3, whiteSpace:'nowrap' }}>Grave · 11PM–7AM</span>
+            </div>
+          </div>
+
+          {/* Right stats cluster */}
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:16, flexShrink:0 }}>
+            {/* Rotation count */}
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:28, fontWeight:800, color:T.t1, lineHeight:1, letterSpacing:'-0.03em', fontVariantNumeric:'tabular-nums' }}>10</div>
+              <div style={{ fontSize:9, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase', color:T.t3, marginTop:2 }}>In Rotation</div>
+            </div>
+            <div style={{ width:1, height:36, background:T.border }} />
+            {/* Break waves */}
+            <div style={{ textAlign:'center' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                {[{n:7,c:T.blue},{n:8,c:T.green},{n:6,c:T.violet}].map((b,i)=>(
+                  <div key={i} style={{
+                    width:26, height:26, borderRadius:4,
+                    background:`${b.c}18`,
+                    border:`1px solid ${b.c}35`,
+                    color:b.c,
+                    fontSize:12, fontWeight:800,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontVariantNumeric:'tabular-nums',
+                  }}>{b.n}</div>
+                ))}
+              </div>
+              <div style={{ fontSize:9, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase', color:T.t3, marginTop:3, textAlign:'center' }}>Break Waves</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fill bar + slot grid */}
+      <div style={{ background:'rgba(13,21,32,0.8)', borderBottom:`1px solid ${T.border}`, padding:'10px 20px', display:'flex', alignItems:'center', gap:16, backdropFilter:'blur(8px)' }}>
+        {/* Fill stat */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+            <span style={{ fontSize:18, fontWeight:800, color:T.t1, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{night.filled}</span>
+            <span style={{ fontSize:11, color:T.t3 }}>/ {night.total}</span>
+            <span style={{ fontSize:9, fontWeight:600, color:T.t4, letterSpacing:'0.10em', textTransform:'uppercase' }}>filled</span>
+          </div>
+          <div style={{ width:120, height:5, background:T.bg4, borderRadius:999, overflow:'hidden' }}>
+            <div style={{ width:`${Math.round(night.filled/night.total*100)}%`, height:'100%', background:T.blue, borderRadius:999, boxShadow:`0 0 10px ${T.blue}55` }}/>
+          </div>
+        </div>
+        {/* Slot grid */}
+        <SlotGrid zones={ZONES} rr={RR_SLOTS} aux={AUX_SLOTS} />
+        {/* Lock badge */}
+        <div style={{ marginLeft:'auto', flexShrink:0 }}>
+          <LockBadge locked={isLocked} lockedBy={lockedMeta.by} lockedAt={lockedMeta.at} onToggle={handleLock} />
+        </div>
+      </div>
+
+      {/* Unplaced TMs banner */}
+      <div style={{
+        margin:'10px 20px 0',
+        padding:'8px 14px',
+        background: 'linear-gradient(90deg, rgba(48,178,255,0.08) 0%, rgba(48,178,255,0.04) 100%)',
+        border:`1px solid rgba(48,178,255,0.20)`,
+        borderLeft:`3px solid ${T.blue}`,
+        borderRadius:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap',
+      }}>
+        <Icon name="user-round-search" size={13} color={T.blue} />
+        <span style={{ fontSize:11, fontWeight:700, color:T.blue, letterSpacing:'0.02em' }}>3 scheduled · not yet placed</span>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+          {['Missy','Polly','Becca'].map(n=>(
+            <span key={n} style={{
+              fontSize:11, color:T.t1, fontWeight:600,
+              background:'rgba(48,178,255,0.12)',
+              border:`1px solid rgba(48,178,255,0.22)`,
+              borderRadius:4, padding:'2px 9px',
+              letterSpacing:'0.02em',
+            }}>{n}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Content — read-only when locked */}
+      <div style={{ position:'relative', pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.75 : 1, transition:'opacity 0.3s' }}>
+        {activeTab === 'break' ? <BreakSheetBody /> :
+         activeTab === 'schedule' ? (
+          <div style={{ padding:'40px', textAlign:'center', color:T.t3 }}>
+            <Icon name="calendar-off" size={36} color={T.t4} />
+            <div style={{ marginTop:12, fontSize:14, color:T.t4 }}>Schedule view coming soon</div>
+          </div>
+        ) : (
+        <div style={{ padding:'16px 20px 40px', pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.75 : 1, transition:'opacity 0.3s' }}>
+        <SectionHead icon="map-pin" label="Zones" count="10 / 10 staffed" />
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:7, marginBottom:22 }}>
+          {ZONES.map(z=><ZoneCard key={z.key} zone={z} />)}
+        </div>
+
+        <SectionHead icon="door-open" label="Restrooms" count="10 / 10 staffed" />
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:7, marginBottom:22 }}>
+          {RR_SLOTS.map(r=><RRCard key={r.key} rr={r} />)}
+        </div>
+
+        <SectionHead icon="star" label="Auxiliary" count="5 / 6 staffed" />
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:7 }}>
+          {AUX_SLOTS.map(a=><AuxCard key={a.key} aux={a} />)}
+        </div>
+        </div>
+        )}
+      </div>
+
+      {/* TM Picker Drawer */}
+      {pickerSlot && (
+        <TMPicker
+          slotLabel={pickerSlot}
+          onClose={() => setPickerSlot(null)}
+          onSelect={(tm) => handleTMSelect(tm, pickerSlot)}
+        />
+      )}
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x} y={ctxMenu.y} target={ctxMenu.target}
+          onClose={() => setCtxMenu(null)}
+          onNotice={(type) => addNotice(ctxMenu.target, type)}
+          onClearSlot={() => { setAssignments(prev => ({ ...prev, [ctxMenu.target]: null })); }}
+          onLockSlot={() => {}}
+        />
+      )}
+
+      {/* Undo toast */}
+      {undoStack && (
+        <UndoToast
+          message={undoStack.message}
+          onUndo={handleUndo}
+          onDismiss={() => setUndoStack(null)}
+        />
+      )}
+
+      {/* Audit strip */}
+      <AuditStrip
+        lastSaved="11:42pm" lastBy="KS"
+        locked={isLocked} lockedBy={lockedMeta.by} lockedAt={lockedMeta.at}
+      />
+
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// BREAK SHEET DATA
+// ─────────────────────────────────────────────
+const BREAK_WAVES = {
+  1: {
+    zones: [
+      { name:'Nikki',   slot:'Zone 1',  color:'#d97706', tasks:'Outdoor Smoking · Elevators · Family RR' },
+      { name:'Amanda',  slot:'Zone 4',  color:'#dc2626', tasks:'Poker Drink Trays' },
+      { name:'Kaiden',  slot:'Zone 7',  color:'#ec4899', tasks:'Smoking Rm · Pit 1&2 · S. Door Glass' },
+    ],
+    restrooms: [
+      { name:'Sherry',  slot:'RR 6',    color:'#ec4899', tasks:"Women's · 131 RR" },
+      { name:'Alec',    slot:'RR 8',    color:'#64748b', tasks:"Men's · Family · TDR · TMBR" },
+      { name:'Tawnya',  slot:'RR 10',   color:'#10b981', tasks:"Women's · CBK Kitchen" },
+    ],
+    auxiliary: [
+      { name:'Mike W',  slot:'Trash 2', color:'#ea580c', tasks:'Zones 6–10' },
+      { name:'Trenidee',slot:'MP 1',    color:'#64748b', tasks:'' },
+    ],
+  },
+  2: {
+    zones: [
+      { name:'Gary',    slot:'Zone 2',  color:'#d97706', tasks:'Lobby Trash · Lobby RR' },
+      { name:'Carter',  slot:'Zone 5',  color:'#dc2626', tasks:'High Limit Tables · TM Smoking' },
+      { name:'Drew',    slot:'Zone 8',  color:'#92400e', tasks:'Restrooms · Pit 3' },
+      { name:'Jeff',    slot:'Zone 10', color:'#16a34a', tasks:'HL Slots · E. Door Glass · Outdoor · Pit 4' },
+    ],
+    restrooms: [
+      { name:'Mike S',  slot:'RR 1+2',  color:'#d97706', tasks:"Men's · Buffet · Family" },
+      { name:'Jack',    slot:'RR 6',    color:'#2563eb', tasks:"Men's · 131 RR" },
+      { name:'Jamie',   slot:'RR 7',    color:'#ec4899', tasks:"Women's · Smoking assist" },
+    ],
+    auxiliary: [
+      { name:'Silvia',  slot:'Z9 SR',   color:'#dc2626', tasks:'Smoking Room' },
+      { name:'Sam',     slot:'Admin',   color:'#7c3aed', tasks:'' },
+      { name:'Robby',   slot:'Trash 1', color:'#ea580c', tasks:'Zones 1–5 · Annex · Sweeper' },
+    ],
+  },
+  3: {
+    zones: [
+      { name:'Liz',     slot:'Zone 3',  color:'#dc2626', tasks:'Support as needed' },
+      { name:'Jessica', slot:'Zone 6',  color:'#2563eb', tasks:'Outdoor Smoking', calloff:true },
+      { name:'Peter',   slot:'Zone 9',  color:'#dc2626', tasks:'Smoking assist · Social Bar Tables' },
+    ],
+    restrooms: [
+      { name:'Abby',    slot:'RR 1+2',  color:'#d97706', tasks:"Women's · Buffet · Family" },
+      { name:'Jared',   slot:'RR 7',    color:'#3b82f6', tasks:"Men's · Smoking assist" },
+      { name:'Joy',     slot:'RR 8',    color:'#64748b', tasks:"Women's · Family · TDR · TMBR" },
+    ],
+    auxiliary: [],
+  },
+};
+
+const PM_OVERLAPS = [
+  { name:'Missy',   task:'Vacuum, B&G',           filled:true },
+  { name:'Polly',   task:'Glass, Trash',           filled:true },
+  { name:'Becca',   task:'Tables, RR, B&G',        filled:true },
+  { name:'',        task:'Trash',                  filled:false },
+  { name:'',        task:'Trash',                  filled:false },
+  { name:'',        task:'Trash',                  filled:false },
+];
+const AM_OVERLAPS = [
+  { name:'Char',    task:'CBK / Shkodé',           filled:true },
+  { name:'ChyAnn',  task:'CBK / Shkodé RR',        filled:true },
+  { name:'Eric',    task:'Hotel Offices',           filled:true },
+  { name:'Mike',    task:'Sandhill / Lobby Bar',   filled:true },
+  { name:'Tiffany', task:'131 / CBK Office',       filled:true },
+  { name:'',        task:'Trash',                  filled:false },
+];
+
+
+// ─────────────────────────────────────────────
+// BREAK SHEET TAB CONTENT
+// ─────────────────────────────────────────────
+function BreakRow({ person, isLast }) {
+  const isCalloff = person.calloff;
+  return (
+    <div style={{
+      display:'flex', alignItems:'center', gap:8,
+      padding:'6px 0',
+      borderBottom: isLast ? 'none' : `1px solid ${T.borderSubtle}`,
+    }}>
+      <div style={{
+        width:3, alignSelf:'stretch', borderRadius:2, flexShrink:0,
+        background: isCalloff ? T.red : person.color,
+        minHeight:20,
+      }} />
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{
+          fontSize:13, fontWeight:700, color: isCalloff ? T.red : T.t1,
+          lineHeight:1, display:'flex', alignItems:'center', gap:6,
+        }}>
+          {person.name}
+          {isCalloff && (
+            <span style={{ fontSize:8, fontWeight:800, color:T.red, background:T.redBg, border:`1px solid rgba(248,113,113,0.3)`, borderRadius:2, padding:'1px 4px', letterSpacing:'0.06em' }}>CALL-OFF</span>
+          )}
+        </div>
+        {person.tasks && <div style={{ fontSize:10, color:T.t3, marginTop:2, lineHeight:1.2 }}>{person.tasks}</div>}
+      </div>
+      <div style={{
+        fontSize:9, fontWeight:700, letterSpacing:'0.10em',
+        color: person.color, background:`${person.color}18`,
+        border:`1px solid ${person.color}35`,
+        padding:'2px 7px', borderRadius:3, whiteSpace:'nowrap', flexShrink:0,
+      }}>{person.slot}</div>
+    </div>
+  );
+}
+
+function BreakSubSection({ label, people }) {
+  if (!people || people.length === 0) return null;
+  return (
+    <div style={{ marginBottom:8 }}>
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.t4, marginBottom:4 }}>{label}</div>
+      {people.map((p,i) => <BreakRow key={i} person={p} isLast={i===people.length-1} />)}
+    </div>
+  );
+}
+
+function BreakCol({ wave, data, color }) {
+  const zCount = data.zones ? data.zones.length : 0;
+  const rCount = data.restrooms ? data.restrooms.length : 0;
+  const aCount = data.auxiliary ? data.auxiliary.length : 0;
+  const total = zCount + rCount + aCount;
+  return (
+    <div style={{
+      flex:1, minWidth:0,
+      borderTop:`3px solid ${color}`,
+      paddingTop:12,
+      display:'flex', flexDirection:'column',
+    }}>
+      {/* Wave header */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, paddingBottom:12, borderBottom:`1px solid ${T.borderSubtle}` }}>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:8 }}>
+          <div style={{
+            fontSize:52, fontWeight:800, lineHeight:1,
+            color:color, letterSpacing:'-0.05em',
+            textShadow:`0 0 30px ${color}44`,
+            fontVariantNumeric:'tabular-nums',
+          }}>{wave}</div>
+          <div style={{ paddingBottom:4 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:T.t2 }}>{'Break ' + wave}</div>
+          </div>
+        </div>
+        <div style={{ fontSize:10, fontWeight:600, color:T.t4, background:T.bg3, border:`1px solid ${T.border}`, borderRadius:4, padding:'3px 8px' }}>{total} people</div>
+      </div>
+      <div style={{ flex:1 }}>
+        <BreakSubSection label="Zones"     people={data.zones} />
+        <BreakSubSection label="Restrooms" people={data.restrooms} />
+        <BreakSubSection label="Auxiliary" people={data.auxiliary} />
+      </div>
+    </div>
+  );
+}
+
+function OverlapRow({ time, label, slots }) {
+  const filledCount = slots.filter(s=>s.filled).length;
+  return (
+    <div style={{ display:'flex', gap:14, padding:'10px 0', borderTop:`1px solid ${T.borderSubtle}` }}>
+      {/* Time label */}
+      <div style={{ width:70, flexShrink:0 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:T.t1, letterSpacing:'-0.01em' }}>{time}</div>
+        <div style={{ fontSize:9, fontWeight:600, letterSpacing:'0.10em', textTransform:'uppercase', color:T.t4, marginTop:2 }}>{label}</div>
+      </div>
+      {/* Slots */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, flex:1 }}>
+        {slots.map((s,i) => (
+          <div key={i} style={{
+            background: s.filled ? T.bg3 : T.bg2,
+            border:`1px solid ${s.filled ? T.border : T.borderSubtle}`,
+            borderRadius:6, padding:'6px 8px',
+            opacity: s.filled ? 1 : 0.5,
+          }}>
+            <div style={{
+              fontSize:12, fontWeight: s.filled ? 700 : 400,
+              color: s.filled ? T.t1 : T.t4,
+              fontStyle: s.filled ? 'normal' : 'italic',
+              lineHeight:1, marginBottom:3,
+            }}>{s.name || 'Unfilled'}</div>
+            <div style={{ fontSize:9.5, color:T.t3, lineHeight:1.2 }}>{s.task}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BreakSheetBody() {
+  const WAVE_COLORS = { 1: T.blue, 2: T.green, 3: T.violet };
+  return (
+    <div style={{ padding:'16px 20px 40px' }}>
+      {/* 3 break columns */}
+      <div style={{ display:'flex', gap:20, marginBottom:24 }}>
+        {[1,2,3].map(w => (
+          <BreakCol key={w} wave={w} data={BREAK_WAVES[w]} color={WAVE_COLORS[w]} />
+        ))}
+      </div>
+
+      {/* Overlaps section */}
+      <div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+          <Icon name="arrow-left-right" size={11} color={T.gold} />
+          <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color:T.gold }}>Overlaps</span>
+          <span style={{ marginLeft:'auto', fontSize:10, color:T.t4 }}>
+            {PM_OVERLAPS.filter(s=>s.filled).length + AM_OVERLAPS.filter(s=>s.filled).length} / {PM_OVERLAPS.length + AM_OVERLAPS.length} staffed
+          </span>
+        </div>
+        <div className="section-gold-rule" />
+        <OverlapRow time="11p – 1a" label="Late Evening" slots={PM_OVERLAPS} />
+        <OverlapRow time="5a – 7a"  label="Early AM"    slots={AM_OVERLAPS} />
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// TM PICKER DRAWER
+// ─────────────────────────────────────────────
+const ALL_TMS = [
+  { name:'Nikki',    group:1, pool:'grave', assigned:'Zone 1' },
+  { name:'Gary',     group:2, pool:'grave', assigned:'Zone 2' },
+  { name:'Liz',      group:3, pool:'grave', assigned:'Zone 3' },
+  { name:'Amanda',   group:1, pool:'grave', assigned:'Zone 4' },
+  { name:'Carter',   group:2, pool:'grave', assigned:'Zone 5' },
+  { name:'Jessica',  group:3, pool:'grave', assigned:'Zone 6', calloff:true },
+  { name:'Kaiden',   group:1, pool:'grave', assigned:'Zone 7' },
+  { name:'Drew',     group:2, pool:'grave', assigned:'Zone 8' },
+  { name:'Peter',    group:3, pool:'grave', assigned:'Zone 9' },
+  { name:'Jeff',     group:2, pool:'grave', assigned:'Zone 10' },
+  { name:'Missy',    group:1, pool:'pm_ol', assigned:null },
+  { name:'Polly',    group:2, pool:'pm_ol', assigned:null },
+  { name:'Becca',    group:3, pool:'pm_ol', assigned:null },
+  { name:'Char',     group:1, pool:'am_ol', assigned:null },
+  { name:'ChyAnn',   group:2, pool:'am_ol', assigned:null },
+  { name:'Eric',     group:3, pool:'am_ol', assigned:null },
+  { name:'Mike',     group:1, pool:'am_ol', assigned:null },
+  { name:'Tiffany',  group:2, pool:'am_ol', assigned:null },
+  { name:'Mike S',   group:2, pool:'grave', assigned:'RR 1+2 Men' },
+  { name:'Abby',     group:3, pool:'grave', assigned:'RR 1+2 Women' },
+  { name:'Jack',     group:2, pool:'grave', assigned:'RR 6 Men' },
+  { name:'Sherry',   group:1, pool:'grave', assigned:'RR 6 Women' },
+  { name:'Jared',    group:3, pool:'grave', assigned:'RR 7 Men' },
+  { name:'Jamie',    group:2, pool:'grave', assigned:'RR 7 Women' },
+  { name:'Alec',     group:1, pool:'grave', assigned:'RR 8 Men' },
+  { name:'Joy',      group:3, pool:'grave', assigned:'RR 8 Women' },
+  { name:'Steve',    group:3, pool:'grave', assigned:'RR 10 Men' },
+  { name:'Tawnya',   group:1, pool:'grave', assigned:'RR 10 Women' },
+  { name:'Silvia',   group:2, pool:'grave', assigned:'Z9 SR' },
+  { name:'Sam',      group:2, pool:'grave', assigned:'Admin' },
+  { name:'Robby',    group:2, pool:'grave', assigned:'Trash 1' },
+  { name:'Mike W',   group:1, pool:'grave', assigned:'Trash 2' },
+  { name:'Trenidee', group:1, pool:'grave', assigned:'MP 1' },
+];
+
+const POOL_META = {
+  grave: { label:'Grave', color:'#10b981', bg:'rgba(16,185,129,0.10)' },
+  pm_ol: { label:'PM OL', color:'#f59e0b', bg:'rgba(245,158,11,0.10)' },
+  am_ol: { label:'AM OL', color:'#3b82f6', bg:'rgba(59,130,246,0.10)' },
+};
+
+function TMPicker({ slotLabel, onClose, onSelect }) {
+  const [search, setSearch] = React.useState('');
+  const [filter, setFilter] = React.useState('all');
+  const [hovTM, setHovTM] = React.useState(null);
+
+  const filtered = ALL_TMS.filter(tm => {
+    const matchSearch = !search || tm.name.toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === 'all' || 
+      (filter === 'unassigned' && !tm.assigned) ||
+      (filter === 'grave' && tm.pool === 'grave') ||
+      (filter === 'overlaps' && (tm.pool === 'pm_ol' || tm.pool === 'am_ol'));
+    const notCalloff = !tm.calloff;
+    return matchSearch && matchFilter && notCalloff;
+  });
+
+  const GRP_C = { 1: T.blue, 2: T.green, 3: T.violet };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{
+        position:'fixed', inset:0, background:'rgba(0,0,0,0.6)',
+        backdropFilter:'blur(4px)', zIndex:200,
+      }} />
+
+      {/* Drawer */}
+      <div style={{
+        position:'fixed', top:0, right:0, bottom:0,
+        width:360, zIndex:201,
+        background: T.bg2,
+        borderLeft:`1px solid ${T.border}`,
+        display:'flex', flexDirection:'column',
+        boxShadow:'-20px 0 60px rgba(0,0,0,0.5)',
+      }}>
+        {/* Header */}
+        <div className="chip-header" style={{
+          background:'linear-gradient(180deg,#0d1824 0%,#080e14 100%)',
+          borderBottom:`1px solid ${T.border}`,
+          padding:'14px 16px',
+        }}>
+          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.t3, marginBottom:3 }}>Assign to</div>
+              <div style={{ fontSize:16, fontWeight:700, color:T.t1 }}>{slotLabel}</div>
+            </div>
+            <div onClick={onClose} style={{ color:T.t3, cursor:'pointer', padding:'2px', marginTop:2 }}>
+              <Icon name="x" size={16} />
+            </div>
+          </div>
+          {/* Search */}
+          <div style={{ position:'relative' }}>
+            <div style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
+              <Icon name="search" size={13} color={T.t3} />
+            </div>
+            <input
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              placeholder="Search team members…"
+              autoFocus
+              style={{
+                width:'100%', padding:'8px 10px 8px 32px',
+                background: T.bg4, border:`1px solid ${T.border}`,
+                borderRadius:6, color:T.t1, fontSize:12,
+                fontFamily:'Barlow, sans-serif',
+                outline:'none',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Filter pills */}
+        <div style={{ padding:'10px 16px', borderBottom:`1px solid ${T.borderSubtle}`, display:'flex', gap:6 }}>
+          {[['all','All'],['unassigned','Unassigned'],['grave','Grave'],['overlaps','Overlaps']].map(([k,l])=>(
+            <div key={k} onClick={()=>setFilter(k)} style={{
+              padding:'3px 10px', borderRadius:999, fontSize:11, fontWeight:600,
+              cursor:'pointer',
+              background: filter===k ? T.blue : T.bg3,
+              color: filter===k ? '#000' : T.t3,
+              border: filter===k ? 'none' : `1px solid ${T.border}`,
+              transition:'all 0.15s',
+            }}>{l}</div>
+          ))}
+        </div>
+
+        {/* TM List */}
+        <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding:'32px', textAlign:'center', color:T.t4, fontSize:12, fontStyle:'italic' }}>No team members found</div>
+          ) : filtered.map((tm,i) => {
+            const pool = POOL_META[tm.pool];
+            const isHov = hovTM === i;
+            const gColor = GRP_C[tm.group];
+            return (
+              <div
+                key={i}
+                onMouseEnter={()=>setHovTM(i)}
+                onMouseLeave={()=>setHovTM(null)}
+                onClick={()=>{ onSelect && onSelect(tm); onClose(); }}
+                style={{
+                  display:'flex', alignItems:'center', gap:10,
+                  padding:'10px 16px',
+                  background: isHov ? T.bg3 : 'transparent',
+                  cursor:'pointer', transition:'background 0.1s',
+                  borderBottom:`1px solid ${T.borderSubtle}`,
+                }}>
+                {/* Avatar */}
+                <div style={{
+                  width:34, height:34, borderRadius:8, flexShrink:0,
+                  background: `${gColor}18`,
+                  border:`1px solid ${gColor}35`,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:12, fontWeight:800, color:gColor,
+                  letterSpacing:'-0.01em',
+                }}>{tm.name.slice(0,2).toUpperCase()}</div>
+                {/* Info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:T.t1, lineHeight:1 }}>{tm.name}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:3 }}>
+                    <span style={{
+                      fontSize:9, fontWeight:700, letterSpacing:'0.08em',
+                      color:pool.color, background:pool.bg,
+                      padding:'1px 5px', borderRadius:3,
+                    }}>{pool.label}</span>
+                    {tm.assigned && (
+                      <span style={{ fontSize:10, color:T.t4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        → {tm.assigned}
+                      </span>
+                    )}
+                    {!tm.assigned && (
+                      <span style={{ fontSize:10, color:T.green, fontWeight:600 }}>Available</span>
+                    )}
+                  </div>
+                </div>
+                {/* Group badge */}
+                <div style={{
+                  width:18, height:18, borderRadius:4, flexShrink:0,
+                  background:`${gColor}18`, border:`1px solid ${gColor}35`,
+                  color:gColor, fontSize:10, fontWeight:800,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                }}>{tm.group}</div>
+                {/* Chevron */}
+                {isHov && <Icon name="chevron-right" size={13} color={T.blue} />}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding:'12px 16px', borderTop:`1px solid ${T.border}`,
+          background:T.bg1, display:'flex', justifyContent:'space-between', alignItems:'center',
+        }}>
+          <span style={{ fontSize:11, color:T.t4 }}>{filtered.length} team members</span>
+          <Btn label="Clear Slot" icon="x" variant="danger" small onClick={onClose} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// NOTICE SYSTEM
+// ─────────────────────────────────────────────
+const NOTICE_TYPES = {
+  alert:    { label:'Alert',    color:'#fbbf24', bg:'rgba(251,191,36,0.15)',  border:'rgba(251,191,36,0.35)',  icon:'triangle-alert' },
+  info:     { label:'Info',     color:'#30b2ff', bg:'rgba(48,178,255,0.12)',  border:'rgba(48,178,255,0.30)',  icon:'info' },
+  training: { label:'Training', color:'#34d399', bg:'rgba(52,211,153,0.12)',  border:'rgba(52,211,153,0.30)',  icon:'graduation-cap' },
+  meeting:  { label:'Meeting',  color:'#a78bfa', bg:'rgba(167,139,250,0.12)', border:'rgba(167,139,250,0.30)', icon:'calendar' },
+};
+
+// Context menu component
+function ContextMenu({ x, y, target, onClose, onNotice, onClearSlot, onLockSlot }) {
+  const menuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  // Clamp to viewport
+  const [pos, setPos] = React.useState({ x, y });
+  React.useEffect(() => {
+    if (menuRef.current) {
+      const r = menuRef.current.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      setPos({
+        x: Math.min(x, vw - r.width - 8),
+        y: Math.min(y, vh - r.height - 8),
+      });
+    }
+  }, [x, y]);
+
+  const MenuItem = ({ icon, label, color, onClick, danger }) => (
+    <div onClick={() => { onClick(); onClose(); }} style={{
+      display:'flex', alignItems:'center', gap:9,
+      padding:'7px 14px', cursor:'pointer', fontSize:12, fontWeight:500,
+      color: danger ? T.red : color || T.t2,
+      transition:'background 0.1s',
+    }}
+    onMouseEnter={e => e.currentTarget.style.background = T.bg3}
+    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      <Icon name={icon} size={13} color={danger ? T.red : color || T.t3} />
+      {label}
+    </div>
+  );
+
+  const Divider = () => <div style={{ height:1, background:T.borderSubtle, margin:'3px 0' }} />;
+
+  return (
+    <div ref={menuRef} style={{
+      position:'fixed', left:pos.x, top:pos.y,
+      background:'linear-gradient(180deg, #141f2e 0%, #0f1a27 100%)',
+      border:`1px solid ${T.border}`,
+      borderRadius:8, zIndex:500, minWidth:190,
+      boxShadow:'0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+      overflow:'hidden',
+    }}>
+      {/* Context header */}
+      <div style={{ padding:'8px 14px 6px', borderBottom:`1px solid ${T.borderSubtle}` }}>
+        <div style={{ fontSize:10, fontWeight:700, letterSpacing:'0.10em', textTransform:'uppercase', color:T.t4 }}>Notice for</div>
+        <div style={{ fontSize:12, fontWeight:700, color:T.t1, marginTop:2 }}>{target}</div>
+      </div>
+      {/* Notice types */}
+      {Object.entries(NOTICE_TYPES).map(([key, nt]) => (
+        <MenuItem key={key} icon={nt.icon} label={'Add ' + nt.label} color={nt.color}
+          onClick={() => onNotice(key)} />
+      ))}
+      <Divider />
+      <MenuItem icon="lock" label="Lock slot" onClick={onLockSlot} />
+      <MenuItem icon="x" label="Clear slot" onClick={onClearSlot} danger />
+    </div>
+  );
+}
+
+// Notice dot (shown on card corner)
+function NoticeDot({ notices }) {
+  if (!notices || notices.length === 0) return null;
+  const top = notices[notices.length - 1];
+  const nt = NOTICE_TYPES[top.type] || NOTICE_TYPES.info;
+  const [hov, setHov] = React.useState(false);
+  return (
+    <div style={{ position:'absolute', top:6, left:6, zIndex:5 }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <div style={{
+        width:8, height:8, borderRadius:'50%',
+        background: nt.color,
+        boxShadow:`0 0 6px ${nt.color}88`,
+        cursor:'pointer',
+      }}/>
+      {hov && (
+        <div style={{
+          position:'absolute', top:12, left:0,
+          background:T.bg2, border:`1px solid ${nt.border}`,
+          borderRadius:6, padding:'6px 10px',
+          minWidth:160, maxWidth:220, zIndex:10,
+          boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
+        }}>
+          {notices.map((n,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'2px 0' }}>
+              <Icon name={NOTICE_TYPES[n.type]?.icon || 'info'} size={11} color={NOTICE_TYPES[n.type]?.color || T.blue} style={{ marginTop:1, flexShrink:0 }} />
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:NOTICE_TYPES[n.type]?.color || T.blue, letterSpacing:'0.06em', textTransform:'uppercase' }}>{NOTICE_TYPES[n.type]?.label}</div>
+                <div style={{ fontSize:11, color:T.t2, marginTop:1 }}>{n.text}</div>
+                <div style={{ fontSize:9, color:T.t4, marginTop:2 }}>{n.by} · {n.time}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// UNDO TOAST
+// ─────────────────────────────────────────────
+function UndoToast({ message, onUndo, onDismiss }) {
+  const [visible, setVisible] = React.useState(true);
+  React.useEffect(() => {
+    const t = setTimeout(() => { setVisible(false); setTimeout(onDismiss, 300); }, 8000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+  return (
+    <div style={{
+      position:'fixed', bottom:72, left:'50%', transform:'translateX(-50%)',
+      background:'#1a2a3e', border:`1px solid ${T.border}`,
+      borderRadius:8, padding:'10px 16px',
+      display:'flex', alignItems:'center', gap:12,
+      boxShadow:'0 8px 32px rgba(0,0,0,0.5)',
+      zIndex:400, opacity: visible ? 1 : 0,
+      transition:'opacity 0.3s',
+      whiteSpace:'nowrap',
+    }}>
+      <Icon name="rotate-ccw" size={14} color={T.t3} />
+      <span style={{ fontSize:12, color:T.t2 }}>{message}</span>
+      <div onClick={onUndo} style={{
+        fontSize:12, fontWeight:700, color:T.blue, cursor:'pointer',
+        padding:'3px 8px', background:T.bgBlue, border:`1px solid ${T.border}`,
+        borderRadius:4,
+      }}>Undo</div>
+      <div onClick={onDismiss} style={{ color:T.t4, cursor:'pointer', marginLeft:4 }}>
+        <Icon name="x" size={12} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// DAY LOCK BADGE
+// ─────────────────────────────────────────────
+function LockBadge({ locked, lockedBy, lockedAt, onToggle }) {
+  const [confirm, setConfirm] = React.useState(false);
+  if (locked) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:6,
+          background:'rgba(224,203,182,0.12)',
+          border:'1px solid rgba(224,203,182,0.30)',
+          borderRadius:6, padding:'4px 10px',
+        }}>
+          <Icon name="lock" size={12} color={T.gold} />
+          <div>
+            <span style={{ fontSize:11, fontWeight:700, color:T.gold, letterSpacing:'0.06em' }}>LOCKED</span>
+            <span style={{ fontSize:10, color:T.t4, marginLeft:8 }}>{lockedBy} · {lockedAt}</span>
+          </div>
+        </div>
+        {confirm ? (
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ fontSize:11, color:T.amber }}>Unlock this night?</span>
+            <Btn label="Confirm" variant="engine" small onClick={() => { onToggle(false); setConfirm(false); }} />
+            <Btn label="Cancel" variant="ghost" small onClick={() => setConfirm(false)} />
+          </div>
+        ) : (
+          <Btn label="Unlock" icon="lock-open" variant="ghost" small onClick={() => setConfirm(true)} />
+        )}
+      </div>
+    );
+  }
+  return (
+    <Btn label="Lock Night" icon="lock" variant="default" small onClick={() => onToggle(true)} />
+  );
+}
+
+// ─────────────────────────────────────────────
+// AT-A-GLANCE SLOT GRID
+// ─────────────────────────────────────────────
+function SlotGrid({ zones, rr, aux }) {
+  const allSlots = [
+    ...zones.map(z => ({ label:z.label.replace('Zone ','Z'), filled:!!z.name, color:ZONE_COLORS[z.key], locked:z.locked, warning:z.warning })),
+    ...rr.map(r  => ({ label:r.label, filled:!!(r.mens && r.womens), color:ZONE_COLORS[r.key], locked:false })),
+    ...aux.map(a => ({ label:a.label, filled:!!a.name, color:a.color, locked:false })),
+  ];
+  return (
+    <div style={{ display:'flex', gap:3, flexWrap:'wrap', alignItems:'center' }}>
+      {allSlots.map((s,i) => (
+        <div key={i} title={s.label} style={{
+          width:22, height:22, borderRadius:4,
+          background: s.filled ? `${s.color}30` : T.bg4,
+          border: `1px solid ${s.filled ? s.color + '60' : T.borderSubtle}`,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          position:'relative',
+          transition:'all 0.15s',
+        }}>
+          {s.filled ? (
+            <div style={{ width:8, height:8, borderRadius:'50%', background:s.color, boxShadow:`0 0 4px ${s.color}88` }} />
+          ) : (
+            <div style={{ width:6, height:6, borderRadius:'50%', background:T.t4, opacity:0.4 }} />
+          )}
+          {s.locked && <Icon name="lock" size={7} color={T.gold} style={{ position:'absolute', top:1, right:1 }} />}
+          {s.warning === 'called_off' && <div style={{ position:'absolute', top:-2, right:-2, width:6, height:6, borderRadius:'50%', background:T.red }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// AUDIT STRIP
+// ─────────────────────────────────────────────
+function AuditStrip({ lastSaved, lastBy, locked, lockedBy, lockedAt }) {
+  return (
+    <div style={{
+      position:'fixed', bottom:16, right:16, zIndex:300,
+      background:'rgba(13,21,32,0.92)',
+      border:`1px solid ${T.border}`,
+      borderRadius:7, padding:'6px 12px',
+      display:'flex', alignItems:'center', gap:8,
+      backdropFilter:'blur(8px)',
+      boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
+    }}>
+      {locked ? (
+        <>
+          <Icon name="lock" size={11} color={T.gold} />
+          <span style={{ fontSize:10, fontWeight:700, color:T.gold }}>Locked</span>
+          <span style={{ fontSize:10, color:T.t4 }}>{lockedBy} · {lockedAt}</span>
+        </>
+      ) : (
+        <>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:T.green, boxShadow:`0 0 4px ${T.green}88` }} />
+          <span style={{ fontSize:10, color:T.t3 }}>Saved {lastSaved}</span>
+          <span style={{ fontSize:10, color:T.t4 }}>{lastBy}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TWEAKS
+// ─────────────────────────────────────────────
+const TWEAK_DEFAULS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#30b2ff",
+  "cardRadius": 10,
+  "density": "comfortable"
+}/*EDITMODE-END*/;
+
+// ─────────────────────────────────────────────
+// APP SHELL — multi-page nav
+// ─────────────────────────────────────────────
+function App() {
+  const [page, setPage] = React.useState('index');
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULS);
+
+  // Lucide init
+  React.useEffect(() => {
+    if (window.lucide) window.lucide.createIcons();
+  });
+
+  return (
+    <>
+      {page === 'index' && <IndexPage onOpen={() => setPage('week-overview')} />}
+      {page === 'week-overview' && <WeekOverviewPage onEdit={() => setPage('deployment')} onBack={() => setPage('index')} />}
+      {page === 'deployment' && <DeploymentPage onBack={() => setPage('week-overview')} />}
+
+      <TweaksPanel>
+        <TweakSection label="Accent" />
+        <TweakColor label="Accent color" value={t.accentColor}
+          options={['#30b2ff','#10b981','#a78bfa','#f59e0b','#f87171']}
+          onChange={v=>setTweak('accentColor',v)} />
+        <TweakSection label="Layout" />
+        <TweakSlider label="Card radius" value={t.cardRadius} min={0} max={16} step={2} unit="px"
+          onChange={v=>setTweak('cardRadius',v)} />
+        <TweakRadio label="Density" value={t.density}
+          options={['compact','comfortable']}
+          onChange={v=>setTweak('density',v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+setTimeout(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+}, 0);
+</script>
+</body>
+</html>

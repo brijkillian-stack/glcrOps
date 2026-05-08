@@ -4,6 +4,59 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4i: Zone Task DB tracking — migrate, surface, assign (Sonnet)
+
+### 4i.1 — DB migration + seed
+- Applied Supabase migration `create_zone_tasks_and_assignments`: two new tables.
+  - `zone_tasks`: canonical task registry (name, default_zone, category, active flag,
+    partial unique indexes on name+zone, trigger to update `updated_at`).
+  - `zone_task_assignments`: per-night task→TM assignments (task_id, night_id, tm_id,
+    zone_slot, assigned_by, source). UNIQUE(task_id, night_id). Indexes on night/task/tm.
+- `apps/zds/engine/migrate_tasks_to_db.py`: idempotent seed script that populates
+  `zone_tasks` from hardcoded TASKS_ZONE / TASKS_RR / TASKS_AUX lists. Seeded 36 rows
+  (28 zone, 6 rr, 8 aux) in first run; safe to re-run.
+
+### 4i.2 — DB-backed task loading
+- `shared/db.py`: added `get_zone_tasks_for_engine()` returning
+  `{default_zone_key: [{id, name, category}]}` for all active tasks.
+- `apps/zds/database.py:fetch_zone_assignments`: `display_tasks` now resolved as
+  `custom_tasks` → DB zone_tasks → hardcoded constants (three-tier fallback). DB tasks
+  loaded once per call, applied by slot type (zone/rr/aux key mapping).
+- `apps/zds/engine/render_deployment_book.py`: imports `get_zone_tasks_for_engine`;
+  added `_refresh_tasks_from_db()` called at start of `render_book()` to overwrite
+  module-level `TASKS_ZONE` and `TASKS_RR` dicts from DB (hardcoded stays as fallback).
+- `apps/zds/engine/fill_engine.py`: imports `get_zone_tasks_for_engine`; at end of run,
+  `_write_zone_task_assignments()` bulk-inserts zone_task_assignments rows (4i.6
+  idempotency: DELETEs engine-assigned rows for this week's nights before re-inserting).
+  Engine slot_code → `default_zone` key mapping handled internally. Non-fatal: errors
+  print a warning but never block a fill run.
+
+### 4i.3 — Admin tasks page (`/admin/tasks`)
+- `apps/admin/tasks_state.py` (`ZoneTasksState`): full CRUD state for zone_tasks.
+  Load, open drawer (with zone affinity % chart), save edit, archive/restore, add new.
+  Neglect ranking computed from last zone_task_assignment per task.
+- `apps/admin/pages/tasks.py`: two-tab page (All Tasks | Neglect Ranking).
+  Inline add-task strip, archived toggle, click-to-edit drawer with bar-chart affinity,
+  archive button. Standard admin CSS tokens throughout.
+- `apps/admin/routes.py`: wired `/admin/tasks` with `ZoneTasksState.load_tasks` on_load.
+
+### 4i.4 — Collapsible task panel on deployment page
+- `apps/zds/state.py`: added `tasks_panel_open`, `night_task_assignments`,
+  `toggle_tasks_panel()`, `_load_night_tasks()` to `ZdsState`. Lazy-loads on first open.
+- `apps/zds/pages/deployment.py`: `_tasks_panel()` component below zone grid — collapses
+  by default, shows chevron toggle + assignment count. Grid layout for task rows
+  (slot badge + task name + TM name). `deployment_body()` now includes `_tasks_panel()`.
+
+### 4i.5 — Shift HUD zone tasks floating drawer
+- `apps/shift/state.py`: added `zone_tasks_drawer_open`, `zone_task_rows`,
+  `open_zone_tasks_drawer()`, `close_zone_tasks_drawer()`, `_load_zone_tasks()` to
+  `ShiftState`. Resolves tonight's `current_night_id` from `ZdsState`.
+- `apps/shift/pages/index.py`: `_zone_tasks_fab()` (bottom-left pill button) +
+  `_zone_tasks_drawer()` (fixed right panel, dark HUD palette). Both mounted in
+  `shift_page()` after existing overlay stack.
+
+---
+
 ## 2026-05-08 — Phase 4h: Prevent duplicate stub creation for existing TMs (Sonnet)
 
 ### Root cause

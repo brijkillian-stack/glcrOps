@@ -194,6 +194,55 @@ class ShiftState(rx.State):
     # Populated from ZdsState.tm_name_to_id on load; used by capture modals.
     roster_name_to_id: dict = {}
 
+    # ── Phase 4i.5 — Zone Tasks floating drawer ───────────────────────────────
+    zone_tasks_drawer_open: bool = False
+    zone_task_rows: list[dict] = []    # [{zone_slot, task_name, category, tm_name, assigned_by}]
+
+    def open_zone_tasks_drawer(self):
+        self.zone_tasks_drawer_open = True
+        return ShiftState._load_zone_tasks()
+
+    def close_zone_tasks_drawer(self):
+        self.zone_tasks_drawer_open = False
+
+    async def _load_zone_tasks(self):
+        """Load zone_task_assignments for tonight's night via ZdsState.current_night_id."""
+        try:
+            from apps.zds.state import ZdsState
+            zds = await self.get_state(ZdsState)
+            night_id = zds.current_night_id
+            if not night_id:
+                self.zone_task_rows = []
+                return
+            from shared.db import get_client
+            sb = get_client()
+            res = (
+                sb.table("zone_task_assignments")
+                .select(
+                    "zone_slot,assigned_by,"
+                    "zone_tasks(name,category),"
+                    "tm_profiles(display_name)"
+                )
+                .eq("night_id", night_id)
+                .order("zone_slot")
+                .execute()
+            )
+            rows = []
+            for r in (res.data or []):
+                task = r.get("zone_tasks") or {}
+                tm   = r.get("tm_profiles") or {}
+                rows.append({
+                    "zone_slot":   r.get("zone_slot") or "—",
+                    "task_name":   task.get("name", ""),
+                    "category":    task.get("category", "zone"),
+                    "tm_name":     tm.get("display_name") or "Unassigned",
+                    "assigned_by": r.get("assigned_by", "engine"),
+                })
+            self.zone_task_rows = rows
+        except Exception as e:
+            print(f"[ShiftState._load_zone_tasks] error: {e}")
+            self.zone_task_rows = []
+
     # ── Loading ───────────────────────────────────────────────────────────────
     loading: bool = False
 

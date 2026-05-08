@@ -110,6 +110,46 @@ class ZdsState(rx.State):
     show_schedule:    bool = False
     active_tab:       str  = "deployment"  # "deployment" | "break" | "schedule"
 
+    # ── Phase 4i.4 — Task list panel (collapsible, below zone grid) ─────────────
+    tasks_panel_open: bool = False          # default collapsed
+    night_task_assignments: list[dict] = [] # zone_task_assignments for current night
+
+    def toggle_tasks_panel(self):
+        self.tasks_panel_open = not self.tasks_panel_open
+        if self.tasks_panel_open and self.current_night_id:
+            return ZdsState._load_night_tasks()
+
+    async def _load_night_tasks(self):
+        try:
+            from shared.db import get_client
+            sb = get_client()
+            res = (
+                sb.table("zone_task_assignments")
+                .select(
+                    "id,zone_slot,assigned_by,source,"
+                    "zone_tasks(name,category,default_zone),"
+                    "tm_profiles(display_name)"
+                )
+                .eq("night_id", self.current_night_id)
+                .order("zone_slot")
+                .execute()
+            )
+            rows = []
+            for r in (res.data or []):
+                task  = r.get("zone_tasks") or {}
+                tm    = r.get("tm_profiles") or {}
+                rows.append({
+                    "id":           r["id"],
+                    "zone_slot":    r.get("zone_slot") or "—",
+                    "task_name":    task.get("name", ""),
+                    "category":     task.get("category", "zone"),
+                    "tm_name":      tm.get("display_name") or "Unassigned",
+                    "assigned_by":  r.get("assigned_by", "engine"),
+                })
+            self.night_task_assignments = rows
+        except Exception as e:
+            print(f"[ZdsState] _load_night_tasks error: {e}")
+
     # ── Schedule pools (keyed by night_date ISO string) ───────────────────────
     # Raw pool data: {date_str: {"grave": [...], "pm_ol": [...], "am_ol": [...]}}
     schedule_pools:     dict = {}

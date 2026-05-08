@@ -1,0 +1,985 @@
+<!-- GLCR Icon Pack v1.0 — Casino Operations & Web App Icons -->
+<!-- Usage: stroke="currentColor" — color inherits from CSS -->
+
+
+<!-- ═══ OPS ═══ -->
+<!-- Ops · Badge -->
+<svg id="icon-ops---badge" width="24" height="24" aria-label="Ops · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2l2.4 1.5L17 3l1 2.6 2.4 1.4-.4 2.7L21 12l-1 2.6.4 2.7-2.4 1.4-1 2.6-2.6-.5L12 22l-2.4-1.5L7 21l-1-2.6-2.4-1.4.4-2.7L3 12l1-2.6-.4-2.7L6 5.3 7 3l2.6.5L12 2z"/>
+    <path d="M9 12l2 2 4-4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+<!-- Org Chart -->
+<svg id="icon-org-chart" width="24" height="24" aria-label="Org Chart" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="2.5" width="6" height="4.5" rx="1"/>
+    <rect x="2" y="15" width="6" height="4.5" rx="1"/>
+    <rect x="9" y="15" width="6" height="4.5" rx="1"/>
+    <rect x="16" y="15" width="6" height="4.5" rx="1"/>
+    <path d="M12 7v3.5"/>
+    <path d="M5 15v-2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2"/>
+  </svg>
+
+<!-- Shift Schedule -->
+<svg id="icon-shift-schedule" width="24" height="24" aria-label="Shift Schedule" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="17" rx="2.5"/>
+    <line x1="16" y1="2" x2="16" y2="6" stroke-linecap="round"/>
+    <line x1="8" y1="2" x2="8" y2="6" stroke-linecap="round"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <rect x="6" y="13" width="4" height="2.5" rx="0.6" fill="currentColor" fill-opacity="0.25"/>
+    <rect x="14" y="13" width="4" height="2.5" rx="0.6" fill="currentColor" fill-opacity="0.25"/>
+    <rect x="6" y="17" width="4" height="2" rx="0.5"/>
+  </svg>
+
+<!-- Roster -->
+<svg id="icon-roster" width="24" height="24" aria-label="Roster" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7" cy="7.5" r="3"/>
+    <path d="M2 17v-1a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v1"/>
+    <line x1="15" y1="7" x2="22" y2="7" stroke-linecap="round"/>
+    <line x1="15" y1="12" x2="22" y2="12" stroke-linecap="round"/>
+    <line x1="15" y1="17" x2="19" y2="17" stroke-linecap="round"/>
+  </svg>
+
+<!-- Reporting -->
+<svg id="icon-reporting" width="24" height="24" aria-label="Reporting" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+    <line x1="3" y1="9" x2="21" y2="9"/>
+    <polyline points="8 3 8 9"/>
+    <polyline points="7 14 10 17 17 14"/>
+  </svg>
+
+<!-- Compliance -->
+<svg id="icon-compliance" width="24" height="24" aria-label="Compliance" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2L3 7v6c0 5.25 3.75 10.16 9 11.36C17.25 23.16 21 18.25 21 13V7l-9-5z"/>
+    <polyline points="9 12 11 14 15 10"/>
+  </svg>
+
+<!-- Alerts -->
+<svg id="icon-alerts" width="24" height="24" aria-label="Alerts" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    <line x1="12" y1="2" x2="12" y2="5"/>
+  </svg>
+
+<!-- Shift Handoff -->
+<svg id="icon-shift-handoff" width="24" height="24" aria-label="Shift Handoff" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 1l4 4-4 4"/>
+    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+    <path d="M7 23l-4-4 4-4"/>
+    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+  </svg>
+
+<!-- Approvals -->
+<svg id="icon-approvals" width="24" height="24" aria-label="Approvals" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 11l3 3L22 4"/>
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+  </svg>
+
+<!-- Communications -->
+<svg id="icon-communications" width="24" height="24" aria-label="Communications" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    <line x1="9" y1="10" x2="15" y2="10"/>
+    <line x1="9" y1="14" x2="13" y2="14"/>
+  </svg>
+
+
+<!-- ═══ MAINT ═══ -->
+<!-- Maint · Badge -->
+<svg id="icon-maint---badge" width="24" height="24" aria-label="Maint · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+  </svg>
+
+<!-- Work Order -->
+<svg id="icon-work-order" width="24" height="24" aria-label="Work Order" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="9" y1="13" x2="15" y2="13"/>
+    <line x1="9" y1="17" x2="13" y2="17"/>
+    <polyline points="9 9 10 9 11 9"/>
+  </svg>
+
+<!-- Inspection -->
+<svg id="icon-inspection" width="24" height="24" aria-label="Inspection" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/>
+    <path d="M17.5 2.5a2.121 2.121 0 0 1 3 3L12 14l-4 1 1-4 7.5-7.5z"/>
+  </svg>
+
+<!-- HVAC / Air -->
+<svg id="icon-hvac---air" width="24" height="24" aria-label="HVAC / Air" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
+  </svg>
+
+<!-- Electrical -->
+<svg id="icon-electrical" width="24" height="24" aria-label="Electrical" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+
+<!-- Plumbing -->
+<svg id="icon-plumbing" width="24" height="24" aria-label="Plumbing" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12a7 7 0 0 0 7 7"/>
+    <path d="M12 5a7 7 0 0 1 7 7"/>
+    <path d="M5 12V7a7 7 0 0 1 7-7"/>
+    <path d="M14 21h3a2 2 0 0 0 2-2v-3"/>
+    <circle cx="17" cy="17" r="2"/>
+    <circle cx="7" cy="7" r="2"/>
+  </svg>
+
+<!-- Equipment -->
+<svg id="icon-equipment" width="24" height="24" aria-label="Equipment" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="8" width="20" height="13" rx="2"/>
+    <path d="M7 8V4.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V8"/>
+    <circle cx="12" cy="14.5" r="3"/>
+    <line x1="12" y1="12.5" x2="12" y2="13.5" stroke-linecap="round"/>
+    <line x1="12" y1="15.5" x2="12" y2="16.5" stroke-linecap="round"/>
+    <line x1="10" y1="14.5" x2="11" y2="14.5" stroke-linecap="round"/>
+    <line x1="13" y1="14.5" x2="14" y2="14.5" stroke-linecap="round"/>
+  </svg>
+
+<!-- Safety Check -->
+<svg id="icon-safety-check" width="24" height="24" aria-label="Safety Check" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2L3 7v6c0 5.25 3.75 10.16 9 11.36C17.25 23.16 21 18.25 21 13V7l-9-5z"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+
+<!-- Lighting -->
+<svg id="icon-lighting" width="24" height="24" aria-label="Lighting" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="2" x2="12" y2="6"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
+    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+    <line x1="2" y1="12" x2="6" y2="12"/>
+    <line x1="18" y1="12" x2="22" y2="12"/>
+    <path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/>
+    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
+  </svg>
+
+<!-- Preventive PM -->
+<svg id="icon-preventive-pm" width="24" height="24" aria-label="Preventive PM" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3v5h5"/>
+    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+    <line x1="12" y1="7" x2="12" y2="12"/>
+    <polyline points="12 12 15 15"/>
+  </svg>
+
+
+<!-- ═══ PORTER ═══ -->
+<!-- Porter · Badge -->
+<svg id="icon-porter---badge" width="24" height="24" aria-label="Porter · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>
+  </svg>
+
+<!-- Cleaning / Broom -->
+<svg id="icon-cleaning---broom" width="24" height="24" aria-label="Cleaning / Broom" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21l14-14"/>
+    <path d="M5 21c0-3.87 3.13-7 7-7h2v2a2 2 0 0 1-2 2H5z"/>
+    <line x1="12" y1="14" x2="19" y2="7"/>
+    <line x1="17" y1="5" x2="21" y2="9"/>
+    <line x1="14" y1="8" x2="18" y2="4"/>
+  </svg>
+
+<!-- Trash / Waste -->
+<svg id="icon-trash---waste" width="24" height="24" aria-label="Trash / Waste" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+
+<!-- Supply Cart -->
+<svg id="icon-supply-cart" width="24" height="24" aria-label="Supply Cart" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <path d="M16 10a4 4 0 0 1-8 0"/>
+  </svg>
+
+<!-- Supply Restock -->
+<svg id="icon-supply-restock" width="24" height="24" aria-label="Supply Restock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="12 22 12 12"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="12" x2="12" y2="2"/>
+  </svg>
+
+<!-- Floor Care / Mop -->
+<svg id="icon-floor-care---mop" width="24" height="24" aria-label="Floor Care / Mop" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="2" x2="12" y2="14"/>
+    <path d="M5 14c0 3.87 3.13 7 7 7s7-3.13 7-7"/>
+    <line x1="5" y1="14" x2="19" y2="14"/>
+    <line x1="8" y1="2" x2="16" y2="2"/>
+  </svg>
+
+<!-- Spill Response -->
+<svg id="icon-spill-response" width="24" height="24" aria-label="Spill Response" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+    <path d="M12 12v3"/>
+    <line x1="12" y1="18" x2="12.01" y2="18"/>
+  </svg>
+
+<!-- Linen / Towels -->
+<svg id="icon-linen---towels" width="24" height="24" aria-label="Linen / Towels" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3h18v4H3z"/>
+    <path d="M3 10h18v4H3z"/>
+    <path d="M3 17h18v4H3z"/>
+  </svg>
+
+<!-- Rounds / Patrol -->
+<svg id="icon-rounds---patrol" width="24" height="24" aria-label="Rounds / Patrol" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+    <path d="M4.93 4.93l1.41 1.41"/>
+    <path d="M17.66 6.34l1.41-1.41"/>
+  </svg>
+
+<!-- Deep Clean -->
+<svg id="icon-deep-clean" width="24" height="24" aria-label="Deep Clean" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18M3 10h18M3 14h18M3 18h18"/>
+    <path d="M5 6V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2"/>
+    <path d="M5 18v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>
+  </svg>
+
+
+<!-- ═══ UNIFORM ═══ -->
+<!-- Uniform · Badge -->
+<svg id="icon-uniform---badge" width="24" height="24" aria-label="Uniform · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/>
+  </svg>
+
+<!-- Inventory -->
+<svg id="icon-inventory" width="24" height="24" aria-label="Inventory" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+
+<!-- Laundry -->
+<svg id="icon-laundry" width="24" height="24" aria-label="Laundry" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="2" width="20" height="20" rx="3"/>
+    <circle cx="12" cy="13" r="5"/>
+    <circle cx="12" cy="13" r="2"/>
+    <path d="M4 7h4"/>
+    <circle cx="15" cy="7" r="1" fill="currentColor"/>
+    <circle cx="17.5" cy="7" r="1" fill="currentColor"/>
+  </svg>
+
+<!-- Issue / Check Out -->
+<svg id="icon-issue---check-out" width="24" height="24" aria-label="Issue / Check Out" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/>
+    <path d="M16 2l4 4-8 8H8v-4L16 2z"/>
+  </svg>
+
+<!-- Return -->
+<svg id="icon-return" width="24" height="24" aria-label="Return" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 14l-5-5 5-5"/>
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+    <path d="M15 18h3a2 2 0 0 0 2-2v-2"/>
+  </svg>
+
+<!-- Sizing / Fit -->
+<svg id="icon-sizing---fit" width="24" height="24" aria-label="Sizing / Fit" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 3H3v18h18V3z"/>
+    <path d="M3 9h4M3 15h4M17 9h4M17 15h4M9 3v4M15 3v4M9 17v4M15 17v4"/>
+  </svg>
+
+<!-- Alterations -->
+<svg id="icon-alterations" width="24" height="24" aria-label="Alterations" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="6" cy="6" r="3"/>
+    <circle cx="18" cy="18" r="3"/>
+    <line x1="8.46" y1="8.46" x2="15.54" y2="15.54"/>
+    <line x1="18" y1="6" x2="18" y2="15"/>
+    <line x1="6" y1="9" x2="6" y2="18"/>
+  </svg>
+
+<!-- Condition Check -->
+<svg id="icon-condition-check" width="24" height="24" aria-label="Condition Check" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <polyline points="9 15 11 17 15 13"/>
+  </svg>
+
+<!-- Reorder -->
+<svg id="icon-reorder" width="24" height="24" aria-label="Reorder" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 4v6h6"/>
+    <path d="M23 20v-6h-6"/>
+    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+  </svg>
+
+<!-- Lost & Found -->
+<svg id="icon-lost---found" width="24" height="24" aria-label="Lost & Found" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    <line x1="11" y1="8" x2="11" y2="14"/>
+    <line x1="8" y1="11" x2="14" y2="11"/>
+  </svg>
+
+
+<!-- ═══ CASINO ═══ -->
+<!-- Casino · Badge -->
+<svg id="icon-casino---badge" width="24" height="24" aria-label="Casino · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="14" width="5" height="5" rx="1.5"/>
+    <rect x="9.5" y="9.5" width="5" height="5" rx="1.5"/>
+    <rect x="17" y="5" width="5" height="5" rx="1.5"/>
+    <circle cx="4" cy="16" r="0.7" fill="currentColor"/>
+    <circle cx="6" cy="18" r="0.7" fill="currentColor"/>
+    <circle cx="11" cy="12" r="0.7" fill="currentColor"/>
+    <circle cx="13" cy="11" r="0.7" fill="currentColor"/>
+    <circle cx="19" cy="7" r="0.7" fill="currentColor"/>
+    <circle cx="21" cy="9" r="0.7" fill="currentColor"/>
+  </svg>
+
+<!-- Chip -->
+<svg id="icon-chip" width="24" height="24" aria-label="Chip" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <circle cx="12" cy="12" r="5.5"/>
+    <line x1="12" y1="3" x2="12" y2="6.5"/>
+    <line x1="12" y1="17.5" x2="12" y2="21"/>
+    <line x1="3" y1="12" x2="6.5" y2="12"/>
+    <line x1="17.5" y1="12" x2="21" y2="12"/>
+    <line x1="5.64" y1="5.64" x2="7.87" y2="7.87"/>
+    <line x1="16.13" y1="16.13" x2="18.36" y2="18.36"/>
+    <line x1="5.64" y1="18.36" x2="7.87" y2="16.13"/>
+    <line x1="16.13" y1="7.87" x2="18.36" y2="5.64"/>
+  </svg>
+
+<!-- Playing Card -->
+<svg id="icon-playing-card" width="24" height="24" aria-label="Playing Card" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="2" width="14" height="20" rx="2"/>
+    <text x="8" y="8" font-size="5" font-weight="700" fill="currentColor" font-family="Barlow,sans-serif" stroke="none" text-anchor="middle">A</text>
+    <path d="M12 10c-1.5 1-2.5 2.3-2.5 3.6 0 1.4 1 2.4 2.5 2.4s2.5-1 2.5-2.4c0-1.3-1-2.6-2.5-3.6z" fill="currentColor" stroke="none" opacity="0.85"/>
+    <path d="M12 16v2" stroke-linecap="round"/>
+    <text x="16" y="19.5" font-size="5" font-weight="700" fill="currentColor" font-family="Barlow,sans-serif" stroke="none" text-anchor="middle" transform="rotate(180 16 19.5)">A</text>
+  </svg>
+
+<!-- Dice -->
+<svg id="icon-dice" width="24" height="24" aria-label="Dice" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="2" width="20" height="20" rx="4"/>
+    <circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/>
+    <circle cx="16.5" cy="7.5" r="1.2" fill="currentColor"/>
+    <circle cx="7.5" cy="16.5" r="1.2" fill="currentColor"/>
+    <circle cx="16.5" cy="16.5" r="1.2" fill="currentColor"/>
+    <circle cx="12" cy="12" r="1.2" fill="currentColor"/>
+  </svg>
+
+<!-- Slot Machine -->
+<svg id="icon-slot-machine" width="24" height="24" aria-label="Slot Machine" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="16" rx="2.5"/>
+    <rect x="6" y="9" width="12" height="7" rx="1.5"/>
+    <line x1="10" y1="9" x2="10" y2="16"/>
+    <line x1="14" y1="9" x2="14" y2="16"/>
+    <path d="M9 3h6a2 2 0 0 1 2 2H7a2 2 0 0 1 2-2z"/>
+    <circle cx="12" cy="19.5" r="1" fill="currentColor"/>
+  </svg>
+
+<!-- Casino Table -->
+<svg id="icon-casino-table" width="24" height="24" aria-label="Casino Table" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 7h18a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
+    <path d="M12 7v10"/>
+    <path d="M7 12h10"/>
+    <circle cx="12" cy="12" r="2.5"/>
+  </svg>
+
+<!-- Cash Cage -->
+<svg id="icon-cash-cage" width="24" height="24" aria-label="Cash Cage" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="5" width="20" height="14" rx="2"/>
+    <line x1="2" y1="10" x2="22" y2="10"/>
+    <path d="M6 15h2M10 15h4M16 15h2"/>
+    <path d="M9 5V3M15 5V3"/>
+  </svg>
+
+<!-- Surveillance -->
+<svg id="icon-surveillance" width="24" height="24" aria-label="Surveillance" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 7l-7 5 7 5V7z"/>
+    <rect x="1" y="5" width="15" height="14" rx="2"/>
+    <circle cx="8.5" cy="12" r="2.5"/>
+  </svg>
+
+<!-- Comp / Reward -->
+<svg id="icon-comp---reward" width="24" height="24" aria-label="Comp / Reward" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+
+<!-- Jackpot -->
+<svg id="icon-jackpot" width="24" height="24" aria-label="Jackpot" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17.3l-6.2 4.1 2.4-7.4L2 9.4h7.6z"/>
+    <circle cx="12" cy="12" r="2" stroke="currentColor" opacity="0.6" fill="none"/>
+  </svg>
+
+
+<!-- ═══ CLEAN ═══ -->
+<!-- Clean · Badge -->
+<svg id="icon-clean---badge" width="24" height="24" aria-label="Clean · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21l11-11" stroke-linecap="round"/>
+    <path d="M5 21h-.5c-1 0-1.5-.7-1.5-1.5 0-3 2.5-6 6-6 1.5 0 2.5.5 3.5 1.5L8 21H5z"/>
+    <path d="M14 8l4-4" stroke-linecap="round"/>
+    <path d="M16 4l4 4" stroke-linecap="round"/>
+    <path d="M19 7l-3 3" stroke-linecap="round"/>
+    <circle cx="19" cy="3" r="0.7" fill="currentColor" stroke="none"/>
+    <circle cx="22" cy="6" r="0.7" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Restroom -->
+<svg id="icon-restroom" width="24" height="24" aria-label="Restroom" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+    <line x1="12" y1="4" x2="12" y2="20"/>
+    <circle cx="7.5" cy="8.5" r="1.4"/>
+    <path d="M6 17v-3.2c0-.7.5-1.3 1.2-1.3h.6c.7 0 1.2.6 1.2 1.3V17"/>
+    <circle cx="16.5" cy="8.5" r="1.4"/>
+    <path d="M14.5 17l.6-3.6c.1-.7.7-1.2 1.4-1.2s1.3.5 1.4 1.2L18.5 17"/>
+    <line x1="15.5" y1="14" x2="17.5" y2="14"/>
+  </svg>
+
+<!-- Men's RR -->
+<svg id="icon-men-s-rr" width="24" height="24" aria-label="Men's RR" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="5" r="2"/>
+    <path d="M9.5 9h5c.6 0 1 .4 1 1v5h-1.5v6h-4v-6H8.5v-5c0-.6.4-1 1-1z"/>
+  </svg>
+
+<!-- Women's RR -->
+<svg id="icon-women-s-rr" width="24" height="24" aria-label="Women's RR" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="5" r="2"/>
+    <path d="M12 8c-1.6 0-2.8 1-3.2 2.5L7.5 16h2v5h5v-5h2L15.2 10.5C14.8 9 13.6 8 12 8z"/>
+  </svg>
+
+<!-- Family RR -->
+<svg id="icon-family-rr" width="24" height="24" aria-label="Family RR" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="6" cy="5" r="1.6"/>
+    <path d="M4 8.5h4c.4 0 .7.3.7.7v4.3H7.5V21h-3v-7.5H3.3V9.2c0-.4.3-.7.7-.7z"/>
+    <circle cx="15" cy="5" r="1.6"/>
+    <path d="M13 8.5c-1.2 0-2.2.8-2.5 1.9L9.5 14.5h1.5V21h4v-6.5H17l-1-4.1c-.3-1.1-1.3-1.9-2.5-1.9z"/>
+    <circle cx="20" cy="7.5" r="1.2"/>
+    <path d="M19 10.5h2c.3 0 .5.2.5.5v3h-1V19h-2v-5h-1V11c0-.3.2-.5.5-.5z"/>
+  </svg>
+
+<!-- Smoking Room -->
+<svg id="icon-smoking-room" width="24" height="24" aria-label="Smoking Room" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="15" width="15" height="4" rx="1"/>
+    <line x1="6" y1="15" x2="6" y2="19"/>
+    <line x1="10.5" y1="15" x2="10.5" y2="19"/>
+    <rect x="19" y="15" width="3" height="4" rx="1"/>
+    <path d="M11 11c2 0 3-1 3-2.5S13 6 11 6c-1.5 0-2.5-.8-2.5-2"/>
+    <path d="M15.5 11c2.5 0 4-1.5 4-3.5S18 4 15.5 4c-2 0-3-1-3-2.5"/>
+  </svg>
+
+<!-- Outdoor Area -->
+<svg id="icon-outdoor-area" width="24" height="24" aria-label="Outdoor Area" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 13l7-9 7 9"/>
+    <path d="M7.5 13l4.5-6 4.5 6"/>
+    <line x1="12" y1="7" x2="12" y2="21"/>
+    <line x1="4" y1="21" x2="20" y2="21"/>
+    <path d="M2 16h4M18 16h4" opacity="0.6"/>
+  </svg>
+
+<!-- Trash Pull / Bin -->
+<svg id="icon-trash-pull---bin" width="24" height="24" aria-label="Trash Pull / Bin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 3h6l.5 2H21" stroke-linecap="round"/>
+    <path d="M3 5h18" stroke-linecap="round"/>
+    <path d="M5.5 5l1 14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2l1-14"/>
+    <line x1="10" y1="10" x2="10" y2="17"/>
+    <line x1="14" y1="10" x2="14" y2="17"/>
+  </svg>
+
+<!-- Glass / Windows -->
+<svg id="icon-glass---windows" width="24" height="24" aria-label="Glass / Windows" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="12" y1="3" x2="12" y2="21"/>
+    <path d="M6 6.5l1.5 1.5" stroke-linecap="round" opacity="0.5"/>
+    <path d="M16.5 6.5L18 8" stroke-linecap="round" opacity="0.5"/>
+    <path d="M14 16l2 2 3-3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+<!-- Elevator / Lobby -->
+<svg id="icon-elevator---lobby" width="24" height="24" aria-label="Elevator / Lobby" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="2" width="16" height="20" rx="2"/>
+    <line x1="12" y1="2" x2="12" y2="22"/>
+    <path d="M8 8.5l-1.5 2h3z" fill="currentColor" stroke-linejoin="round"/>
+    <path d="M8 15.5l-1.5-2h3z" fill="currentColor" stroke-linejoin="round"/>
+    <path d="M16 8.5l-1.5 2h3z" fill="currentColor" stroke-linejoin="round"/>
+    <path d="M16 15.5l-1.5-2h3z" fill="currentColor" stroke-linejoin="round"/>
+  </svg>
+
+<!-- Drink Trays -->
+<svg id="icon-drink-trays" width="24" height="24" aria-label="Drink Trays" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="15" rx="9" ry="2"/>
+    <path d="M3 15l1.5-3h15L21 15" stroke-linejoin="round"/>
+    <path d="M9 12V8.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V12"/>
+    <path d="M11 7.5V5" stroke-linecap="round"/>
+    <path d="M13 7.5V4" stroke-linecap="round"/>
+    <line x1="6" y1="19" x2="18" y2="19" opacity="0.5"/>
+  </svg>
+
+<!-- Pit Area -->
+<svg id="icon-pit-area" width="24" height="24" aria-label="Pit Area" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="12" rx="10" ry="6"/>
+    <ellipse cx="12" cy="12" rx="4.5" ry="2.5"/>
+    <path d="M2 12c0-3 4.5-5 4.5-5" opacity="0.5"/>
+    <path d="M22 12c0-3-4.5-5-4.5-5" opacity="0.5"/>
+    <circle cx="7.5" cy="9" r="0.6" fill="currentColor" stroke="none"/>
+    <circle cx="16.5" cy="9" r="0.6" fill="currentColor" stroke="none"/>
+    <circle cx="7.5" cy="15" r="0.6" fill="currentColor" stroke="none"/>
+    <circle cx="16.5" cy="15" r="0.6" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Spill / Wet Floor -->
+<svg id="icon-spill---wet-floor" width="24" height="24" aria-label="Spill / Wet Floor" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3c1 2 4 4.5 4 7.5a4 4 0 1 1-8 0c0-3 3-5.5 4-7.5z"/>
+    <path d="M9 13a3 3 0 0 0 2 2.5" opacity="0.6"/>
+    <path d="M3 20c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5" stroke-linecap="round"/>
+  </svg>
+
+<!-- Door Glass -->
+<svg id="icon-door-glass" width="24" height="24" aria-label="Door Glass" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="2" width="16" height="20" rx="1.5"/>
+    <rect x="7" y="5" width="10" height="7" rx="1"/>
+    <line x1="12" y1="5" x2="12" y2="12" opacity="0.4"/>
+    <circle cx="16.5" cy="15" r="0.8" fill="currentColor" stroke="none"/>
+    <line x1="7.5" y1="17" x2="14" y2="17" opacity="0.5"/>
+    <line x1="7.5" y1="19" x2="12" y2="19" opacity="0.5"/>
+  </svg>
+
+
+<!-- ═══ ZDS ═══ -->
+<!-- Zone / Grid -->
+<svg id="icon-zone---grid" width="24" height="24" aria-label="Zone / Grid" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="2" width="9" height="9" rx="2"/>
+    <rect x="13" y="2" width="9" height="9" rx="2"/>
+    <rect x="2" y="13" width="9" height="9" rx="2"/>
+    <rect x="13" y="13" width="9" height="9" rx="2"/>
+  </svg>
+
+<!-- Unfilled Slot -->
+<svg id="icon-unfilled-slot" width="24" height="24" aria-label="Unfilled Slot" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3.5 3"/>
+    <circle cx="12" cy="11" r="2.5"/>
+    <path d="M8 18.5c.7-2 2.2-3 4-3s3.3 1 4 3"/>
+  </svg>
+
+<!-- Filled / Assigned -->
+<svg id="icon-filled---assigned" width="24" height="24" aria-label="Filled / Assigned" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3"/>
+    <circle cx="12" cy="11" r="2.5" fill="currentColor" stroke="none"/>
+    <path d="M8 18.5c.7-2 2.2-3 4-3s3.3 1 4 3" fill="currentColor" fill-opacity="0.25"/>
+    <path d="M8 18.5c.7-2 2.2-3 4-3s3.3 1 4 3"/>
+  </svg>
+
+<!-- Called Off -->
+<svg id="icon-called-off" width="24" height="24" aria-label="Called Off" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M5.6 5.6l12.8 12.8" stroke-linecap="round"/>
+    <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" opacity="0.15"/>
+  </svg>
+
+<!-- Run Engine -->
+<svg id="icon-run-engine" width="24" height="24" aria-label="Run Engine" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="5" width="14" height="14" rx="2.5"/>
+    <rect x="8.5" y="8.5" width="7" height="7" rx="1"/>
+    <line x1="9.5" y1="2" x2="9.5" y2="5" stroke-linecap="round"/>
+    <line x1="14.5" y1="2" x2="14.5" y2="5" stroke-linecap="round"/>
+    <line x1="9.5" y1="19" x2="9.5" y2="22" stroke-linecap="round"/>
+    <line x1="14.5" y1="19" x2="14.5" y2="22" stroke-linecap="round"/>
+    <line x1="2" y1="9.5" x2="5" y2="9.5" stroke-linecap="round"/>
+    <line x1="2" y1="14.5" x2="5" y2="14.5" stroke-linecap="round"/>
+    <line x1="19" y1="9.5" x2="22" y2="9.5" stroke-linecap="round"/>
+    <line x1="19" y1="14.5" x2="22" y2="14.5" stroke-linecap="round"/>
+  </svg>
+
+<!-- Break Waves -->
+<svg id="icon-break-waves" width="24" height="24" aria-label="Break Waves" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 8c2 0 2-2 5-2s3 2 5 2 2-2 5-2 3 2 5 2" stroke-linecap="round"/>
+    <path d="M2 13c2 0 2-2 5-2s3 2 5 2 2-2 5-2 3 2 5 2" stroke-linecap="round"/>
+    <path d="M2 18c2 0 2-2 5-2s3 2 5 2 2-2 5-2 3 2 5 2" stroke-linecap="round"/>
+  </svg>
+
+<!-- Night / Shift Lock -->
+<svg id="icon-night---shift-lock" width="24" height="24" aria-label="Night / Shift Lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z"/>
+    <rect x="13" y="14" width="8" height="6" rx="1.5" fill="var(--bg)" stroke="currentColor"/>
+    <path d="M14.5 14v-1.5a2.5 2.5 0 0 1 5 0V14"/>
+    <circle cx="17" cy="17" r="0.8" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Slot Grid View -->
+<svg id="icon-slot-grid-view" width="24" height="24" aria-label="Slot Grid View" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="6" height="6" rx="1.2" fill="currentColor" fill-opacity="0.25"/>
+    <rect x="10.5" y="3" width="6" height="6" rx="1.2"/>
+    <rect x="18" y="3" width="3" height="6" rx="1" stroke-dasharray="2 2"/>
+    <rect x="3" y="10.5" width="6" height="6" rx="1.2" fill="currentColor" fill-opacity="0.25"/>
+    <rect x="10.5" y="10.5" width="6" height="6" rx="1.2" stroke-dasharray="2 2"/>
+    <rect x="18" y="10.5" width="3" height="6" rx="1"/>
+    <rect x="3" y="18" width="6" height="3" rx="1"/>
+    <rect x="10.5" y="18" width="6" height="3" rx="1" fill="currentColor" fill-opacity="0.25"/>
+    <rect x="18" y="18" width="3" height="3" rx="1" stroke-dasharray="2 2"/>
+  </svg>
+
+<!-- Upload Schedule -->
+<svg id="icon-upload-schedule" width="24" height="24" aria-label="Upload Schedule" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/>
+    <line x1="12" y1="3" x2="12" y2="15"/>
+    <path d="M9 21h6"/>
+  </svg>
+
+<!-- Week Overview -->
+<svg id="icon-week-overview" width="24" height="24" aria-label="Week Overview" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="17" rx="2.5"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <line x1="7" y1="14" x2="7" y2="18"/>
+    <line x1="12" y1="14" x2="12" y2="18"/>
+    <line x1="17" y1="14" x2="17" y2="18"/>
+  </svg>
+
+<!-- Assign / Staff -->
+<svg id="icon-assign---staff" width="24" height="24" aria-label="Assign / Staff" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+    <line x1="17" y1="11" x2="23" y2="11"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+  </svg>
+
+<!-- Group Badge -->
+<svg id="icon-group-badge" width="24" height="24" aria-label="Group Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="4"/>
+    <text x="12" y="16" text-anchor="middle" font-size="10" font-weight="800" fill="currentColor" font-family="Barlow,sans-serif" stroke="none">G</text>
+  </svg>
+
+<!-- Fill Bar -->
+<svg id="icon-fill-bar" width="24" height="24" aria-label="Fill Bar" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="10" width="20" height="4" rx="2"/>
+    <rect x="2" y="10" width="13" height="4" rx="2" fill="currentColor" stroke="none" opacity="0.35"/>
+    <rect x="2" y="10" width="13" height="4" rx="2"/>
+    <circle cx="5" cy="7" r="2"/>
+    <line x1="3" y1="17" x2="5" y2="20"/>
+    <line x1="7" y1="17" x2="7" y2="20"/>
+    <line x1="13" y1="17" x2="13" y2="20"/>
+    <line x1="19" y1="17" x2="21" y2="20"/>
+  </svg>
+
+<!-- Print Day -->
+<svg id="icon-print-day" width="24" height="24" aria-label="Print Day" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9"/>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+    <rect x="6" y="14" width="12" height="8"/>
+    <line x1="9" y1="17" x2="15" y2="17"/>
+    <line x1="9" y1="19.5" x2="13" y2="19.5"/>
+  </svg>
+
+<!-- Audit / Save -->
+<svg id="icon-audit---save" width="24" height="24" aria-label="Audit / Save" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M8 12l3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+<!-- Draft Status -->
+<svg id="icon-draft-status" width="24" height="24" aria-label="Draft Status" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="9" y1="13" x2="15" y2="13" stroke-dasharray="2 2"/>
+    <line x1="9" y1="17" x2="12" y2="17" stroke-dasharray="2 2"/>
+  </svg>
+
+
+<!-- ═══ CONTROLS ═══ -->
+<!-- Toggle On -->
+<svg id="icon-toggle-on" width="24" height="24" aria-label="Toggle On" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="8" width="20" height="8" rx="4" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="16" cy="12" r="3" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Toggle Off -->
+<svg id="icon-toggle-off" width="24" height="24" aria-label="Toggle Off" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="8" width="20" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+    <circle cx="8" cy="12" r="3" fill="currentColor" stroke="none" opacity="0.4"/>
+  </svg>
+
+<!-- Knob / Dial -->
+<svg id="icon-knob---dial" width="24" height="24" aria-label="Knob / Dial" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity="0.08" stroke="currentColor" stroke-width="2"/>
+    <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" opacity="0.25"/>
+    <line x1="12" y1="3" x2="12" y2="7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M5.22 16.78A9 9 0 0 1 3 12" stroke="currentColor" opacity="0.6" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </svg>
+
+<!-- Slider -->
+<svg id="icon-slider" width="24" height="24" aria-label="Slider" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+    <line x1="2" y1="12" x2="15" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="15" cy="12" r="4" fill="currentColor" stroke="none" opacity="0.2"/>
+    <circle cx="15" cy="12" r="2.5" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Range Slider -->
+<svg id="icon-range-slider" width="24" height="24" aria-label="Range Slider" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+    <line x1="7" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="7" cy="12" r="3" fill="currentColor" stroke="none"/>
+    <circle cx="17" cy="12" r="3" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Indicator · On -->
+<svg id="icon-indicator---on" width="24" height="24" aria-label="Indicator · On" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+    <circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" opacity="0.25"/>
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Indicator · Off -->
+<svg id="icon-indicator---off" width="24" height="24" aria-label="Indicator · Off" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" opacity="0.15"/>
+    <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+  </svg>
+
+<!-- Indicator · Warn -->
+<svg id="icon-indicator---warn" width="24" height="24" aria-label="Indicator · Warn" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9" fill="rgba(242,178,58,0.1)" stroke="currentColor" opacity="0.6" stroke-width="2"/>
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" opacity="0.6" stroke="none"/>
+    <line x1="12" y1="8" x2="12" y2="10" stroke="currentColor" opacity="0.6" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+<!-- Steppers +/− -->
+<svg id="icon-steppers----" width="24" height="24" aria-label="Steppers +/−" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="8" width="9" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+    <rect x="13" y="8" width="9" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="6.5" y1="12" x2="6.5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="15.5" y1="12" x2="18.5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="17" y1="10.5" x2="17" y2="13.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="5" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+<!-- Checkbox Off -->
+<svg id="icon-checkbox-off" width="24" height="24" aria-label="Checkbox Off" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"/>
+  </svg>
+
+<!-- Checkbox On -->
+<svg id="icon-checkbox-on" width="24" height="24" aria-label="Checkbox On" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2"/>
+    <polyline points="8 12 11 15 16 9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+<!-- Radio Off -->
+<svg id="icon-radio-off" width="24" height="24" aria-label="Radio Off" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"/>
+  </svg>
+
+<!-- Radio On -->
+<svg id="icon-radio-on" width="24" height="24" aria-label="Radio On" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-width="2"/>
+    <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/>
+  </svg>
+
+<!-- Segment Control -->
+<svg id="icon-segment-control" width="24" height="24" aria-label="Segment Control" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="7" width="20" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+    <rect x="8.5" y="7" width="7" height="10" rx="2" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="8.5" y1="7" x2="8.5" y2="17" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
+    <line x1="15.5" y1="7" x2="15.5" y2="17" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
+  </svg>
+
+<!-- Volume / Level -->
+<svg id="icon-volume---level" width="24" height="24" aria-label="Volume / Level" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="17" width="4" height="5" rx="1" fill="currentColor" stroke="none"/>
+    <rect x="8" y="12" width="4" height="10" rx="1" fill="currentColor" stroke="none" opacity="0.7"/>
+    <rect x="14" y="7" width="4" height="15" rx="1" fill="currentColor" stroke="none" opacity="0.4"/>
+    <rect x="20" y="2" width="4" height="20" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+  </svg>
+
+<!-- Power Button -->
+<svg id="icon-power-button" width="24" height="24" aria-label="Power Button" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2v10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <path d="M6.48 5.48a9 9 0 1 0 11.04 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+<!-- Brightness -->
+<svg id="icon-brightness" width="24" height="24" aria-label="Brightness" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="2"/>
+    <line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+
+<!-- ═══ NAV ═══ -->
+<!-- Home -->
+<svg id="icon-home" width="24" height="24" aria-label="Home" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+
+<!-- Dashboard -->
+<svg id="icon-dashboard" width="24" height="24" aria-label="Dashboard" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+
+<!-- Schedule -->
+<svg id="icon-schedule" width="24" height="24" aria-label="Schedule" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+
+<!-- People -->
+<svg id="icon-people" width="24" height="24" aria-label="People" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+
+<!-- Reports -->
+<svg id="icon-reports" width="24" height="24" aria-label="Reports" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="7" y1="3" x2="7" y2="9"/><polyline points="7 17 10 14 13 16 17 12"/></svg>
+
+<!-- Settings -->
+<svg id="icon-settings" width="24" height="24" aria-label="Settings" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M18.36 18.36l-1.41-1.41M4.93 4.93l1.41 1.41M5.64 17.66l1.41-1.41M20 12h2M2 12h2M12 20v2M12 2v2"/></svg>
+
+<!-- Departments -->
+<svg id="icon-departments" width="24" height="24" aria-label="Departments" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="5" y2="16"/><line x1="12" y1="12" x2="19" y2="16"/></svg>
+
+<!-- Notifications -->
+<svg id="icon-notifications" width="24" height="24" aria-label="Notifications" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+
+<!-- Messages -->
+<svg id="icon-messages" width="24" height="24" aria-label="Messages" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+
+<!-- Time & Attendance -->
+<svg id="icon-time---attendance" width="24" height="24" aria-label="Time & Attendance" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+
+
+<!-- ═══ ACTIONS ═══ -->
+<!-- Add / New -->
+<svg id="icon-add---new" width="24" height="24" aria-label="Add / New" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+
+<!-- Edit / Pencil -->
+<svg id="icon-edit---pencil" width="24" height="24" aria-label="Edit / Pencil" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+
+<!-- Delete / Trash -->
+<svg id="icon-delete---trash" width="24" height="24" aria-label="Delete / Trash" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+
+<!-- Search -->
+<svg id="icon-search" width="24" height="24" aria-label="Search" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+
+<!-- Filter -->
+<svg id="icon-filter" width="24" height="24" aria-label="Filter" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+
+<!-- Sort -->
+<svg id="icon-sort" width="24" height="24" aria-label="Sort" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="16" y2="12"/><line x1="3" y1="18" x2="11" y2="18"/></svg>
+
+<!-- Export -->
+<svg id="icon-export" width="24" height="24" aria-label="Export" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+
+<!-- Import -->
+<svg id="icon-import" width="24" height="24" aria-label="Import" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+
+<!-- Download -->
+<svg id="icon-download" width="24" height="24" aria-label="Download" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+
+<!-- Copy -->
+<svg id="icon-copy" width="24" height="24" aria-label="Copy" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+
+<!-- Print -->
+<svg id="icon-print" width="24" height="24" aria-label="Print" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+
+<!-- Share / Link -->
+<svg id="icon-share---link" width="24" height="24" aria-label="Share / Link" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+
+<!-- Refresh -->
+<svg id="icon-refresh" width="24" height="24" aria-label="Refresh" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+
+<!-- Archive -->
+<svg id="icon-archive" width="24" height="24" aria-label="Archive" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+
+
+<!-- ═══ STATUS ═══ -->
+<!-- Success / Check -->
+<svg id="icon-success---check" width="24" height="24" aria-label="Success / Check" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+
+<!-- Warning -->
+<svg id="icon-warning" width="24" height="24" aria-label="Warning" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+
+<!-- Error / X -->
+<svg id="icon-error---x" width="24" height="24" aria-label="Error / X" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+
+<!-- Info -->
+<svg id="icon-info" width="24" height="24" aria-label="Info" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+
+<!-- Locked -->
+<svg id="icon-locked" width="24" height="24" aria-label="Locked" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+
+<!-- Unlocked -->
+<svg id="icon-unlocked" width="24" height="24" aria-label="Unlocked" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+
+<!-- Clock / Pending -->
+<svg id="icon-clock---pending" width="24" height="24" aria-label="Clock / Pending" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+
+<!-- Paused -->
+<svg id="icon-paused" width="24" height="24" aria-label="Paused" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>
+
+<!-- Live / Active -->
+<svg id="icon-live---active" width="24" height="24" aria-label="Live / Active" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+
+<!-- Offline -->
+<svg id="icon-offline" width="24" height="24" aria-label="Offline" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+
+
+<!-- ═══ UI ═══ -->
+<!-- Chevron Up -->
+<svg id="icon-chevron-up" width="24" height="24" aria-label="Chevron Up" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+
+<!-- Chevron Down -->
+<svg id="icon-chevron-down" width="24" height="24" aria-label="Chevron Down" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+
+<!-- Chevron Left -->
+<svg id="icon-chevron-left" width="24" height="24" aria-label="Chevron Left" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+
+<!-- Chevron Right -->
+<svg id="icon-chevron-right" width="24" height="24" aria-label="Chevron Right" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+
+<!-- Close / X -->
+<svg id="icon-close---x" width="24" height="24" aria-label="Close / X" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+
+<!-- Menu / Hamburger -->
+<svg id="icon-menu---hamburger" width="24" height="24" aria-label="Menu / Hamburger" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+
+<!-- More / Ellipsis -->
+<svg id="icon-more---ellipsis" width="24" height="24" aria-label="More / Ellipsis" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+
+<!-- Expand -->
+<svg id="icon-expand" width="24" height="24" aria-label="Expand" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+
+<!-- Collapse -->
+<svg id="icon-collapse" width="24" height="24" aria-label="Collapse" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+
+<!-- Pin / Bookmark -->
+<svg id="icon-pin---bookmark" width="24" height="24" aria-label="Pin / Bookmark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+
+<!-- Tag / Label -->
+<svg id="icon-tag---label" width="24" height="24" aria-label="Tag / Label" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+
+<!-- Calendar -->
+<svg id="icon-calendar" width="24" height="24" aria-label="Calendar" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+
+<!-- Bell -->
+<svg id="icon-bell" width="24" height="24" aria-label="Bell" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+
+<!-- Star / Favorite -->
+<svg id="icon-star---favorite" width="24" height="24" aria-label="Star / Favorite" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+
+
+<!-- ═══ PEOPLE ═══ -->
+<!-- Person / User -->
+<svg id="icon-person---user" width="24" height="24" aria-label="Person / User" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+
+<!-- Team / Group -->
+<svg id="icon-team---group" width="24" height="24" aria-label="Team / Group" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+
+<!-- Manager -->
+<svg id="icon-manager" width="24" height="24" aria-label="Manager" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><polyline points="12 12 12 18 15 16 12 21 9 16 12 18"/></svg>
+
+<!-- Employee Badge -->
+<svg id="icon-employee-badge" width="24" height="24" aria-label="Employee Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="8" y1="6" x2="16" y2="6"/><circle cx="12" cy="13" r="3"/><line x1="9" y1="19" x2="15" y2="19"/></svg>
+
+<!-- Shift Assignment -->
+<svg id="icon-shift-assignment" width="24" height="24" aria-label="Shift Assignment" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="11" x2="23" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>
+
+<!-- Supervisor -->
+<svg id="icon-supervisor" width="24" height="24" aria-label="Supervisor" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21.5a6.5 6.5 0 0 1 13 0"/><line x1="12" y1="3" x2="12" y2="2"/>
+    <polyline points="10 2 12 0 14 2"/></svg>
+
+<!-- On Duty -->
+<svg id="icon-on-duty" width="24" height="24" aria-label="On Duty" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+
+<!-- Off Duty -->
+<svg id="icon-off-duty" width="24" height="24" aria-label="Off Duty" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+

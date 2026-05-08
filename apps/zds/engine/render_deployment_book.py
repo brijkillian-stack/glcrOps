@@ -65,6 +65,7 @@ from shared.db import (
     get_training_schedule_from_db,
     get_engine_roster_from_db,
     get_engine_profiles_from_db,
+    get_zone_tasks_for_engine,
 )
 
 # --------------------------------------------------------------------------
@@ -145,6 +146,31 @@ _OVERLAP_DEFAULT_AM = [
     "131 / Group Room / CBK Office",
     "Trash",
 ]
+
+def _refresh_tasks_from_db() -> None:
+    """Phase 4i.2 — Overwrite module-level TASKS_ZONE and TASKS_RR with live
+    data from the zone_tasks table. Hardcoded values remain as fallback when
+    the DB returns nothing for a given slot key."""
+    try:
+        db_tasks = get_zone_tasks_for_engine()   # {slot_key: [{id, name, category}]}
+    except Exception:
+        return  # silently keep hardcoded defaults
+    # Update TASKS_ZONE (keyed by int zone number)
+    for z in range(1, 11):
+        key = f"zone_{z}"
+        rows = db_tasks.get(key)
+        if rows:
+            TASKS_ZONE[z] = [r["name"] for r in rows]
+    # Update TASKS_RR (keyed by int zone number)
+    for z in (1, 6, 7, 8, 10):
+        key = f"rr_{z}"
+        rows = db_tasks.get(key)
+        if rows:
+            TASKS_RR[z] = [r["name"] for r in rows]
+    # TASKS_AUX has a different structure (tuple: label, description) so we
+    # intentionally leave it alone — aux task descriptions are rendered as a
+    # single summary string, not as editable task-list rows.
+
 
 def load_overlap_tasks() -> tuple[list[str], list[str], dict]:
     """Read PM/AM canonical overlap tasks from Supabase via
@@ -2470,6 +2496,10 @@ def main(argv):
     # via shared/db.py engine helpers. Rules/ folder no longer touched here.
     global TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES
     TASKS_PM_OL, TASKS_AM_OL, OVERLAP_OVERRIDES = load_overlap_tasks()
+
+    # Phase 4i.2: refresh zone/RR task lists from DB (hardcoded dicts stay as
+    # fallback when DB returns nothing for a slot).
+    _refresh_tasks_from_db()
 
     males, females, no_sweeper = load_gender_info()
 

@@ -1159,6 +1159,12 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
         .execute()
     )
     rows = res.data or []
+    # Phase 4i.2 — load zone tasks from DB once; fall back to hardcoded below
+    try:
+        from shared.db import get_zone_tasks_for_engine as _gzte
+        _db_zone_tasks: dict = _gzte()
+    except Exception:
+        _db_zone_tasks = {}
     # Flatten the joined entity into top-level keys + pre-compute display fields
     for row in rows:
         entity = row.pop("entities", None) or {}
@@ -1206,18 +1212,30 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
         else:
             row["group_num"] = BG_AUX.get(sk, 0)
         row["has_group"] = bool(row["group_num"])
-        # ── display_tasks: custom overrides, otherwise defaults from constants
+        # ── display_tasks: custom_tasks → DB zone_tasks → hardcoded constants ──
         custom = row.get("custom_tasks")
         if custom is not None:
             row["display_tasks"] = list(custom)
-        elif st == "zone":
-            n = int(sk.rsplit("_", 1)[-1])
-            row["display_tasks"] = list(TASKS_ZONE.get(n, []))
-        elif st == "rr":
-            num = 1 if sk == "rr_1_2" else int(sk.rsplit("_", 1)[-1])
-            row["display_tasks"] = list(TASKS_RR.get(num, []))
         else:
-            row["display_tasks"] = list(TASKS_AUX_SLOT.get(sk, []))
+            # Resolve DB lookup key from slot type + slot_key
+            if st == "zone":
+                _db_key = sk                    # "zone_1" .. "zone_10"
+                _num    = int(sk.rsplit("_", 1)[-1])
+            elif st == "rr":
+                _num    = 1 if sk == "rr_1_2" else int(sk.rsplit("_", 1)[-1])
+                _db_key = f"rr_{_num}"
+            else:
+                _db_key = sk                    # aux: "admin", "trash_1", etc.
+                _num    = 0
+            _db_rows = _db_zone_tasks.get(_db_key, [])
+            if _db_rows:
+                row["display_tasks"] = [t["name"] for t in _db_rows]
+            elif st == "zone":
+                row["display_tasks"] = list(TASKS_ZONE.get(_num, []))
+            elif st == "rr":
+                row["display_tasks"] = list(TASKS_RR.get(_num, []))
+            else:
+                row["display_tasks"] = list(TASKS_AUX_SLOT.get(sk, []))
         # ── Sweeper task: always appended on top (never stored in custom_tasks) ──
         if row.get("is_sweeper") and row.get("sweeper_route"):
             sweeper_label = f"Sweeper – {row['sweeper_route']}"

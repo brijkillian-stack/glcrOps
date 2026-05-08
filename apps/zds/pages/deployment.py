@@ -310,11 +310,126 @@ def _aux_section() -> rx.Component:
     )
 
 
+def _task_assignment_row(r: dict) -> rx.Component:
+    """Single row in the task panel: slot badge + task name + TM name."""
+    cat_color = rx.match(
+        r["category"],
+        ("zone", "#2563eb"),
+        ("rr",   "#7c3aed"),
+        ("aux",  "#d97706"),
+        "#6b7280",
+    )
+    return rx.el.div(
+        # Slot badge
+        rx.el.span(
+            r["zone_slot"],
+            style={
+                "fontSize":     "10px",
+                "fontWeight":   "700",
+                "padding":      "2px 7px",
+                "borderRadius": "4px",
+                "background":   cat_color,
+                "color":        "#fff",
+                "whiteSpace":   "nowrap",
+                "minWidth":     "56px",
+                "textAlign":    "center",
+            },
+        ),
+        # Task name
+        rx.el.span(
+            r["task_name"],
+            style={"fontSize": "12px", "color": "var(--ink1)", "flex": "1",
+                   "fontWeight": "500"},
+        ),
+        # TM name
+        rx.el.span(
+            r["tm_name"],
+            style={"fontSize": "12px", "color": "var(--ink2)", "minWidth": "100px",
+                   "textAlign": "right"},
+        ),
+        style={
+            "display":       "flex",
+            "alignItems":    "center",
+            "gap":           "10px",
+            "padding":       "5px 8px",
+            "borderRadius":  "4px",
+            "_hover":        {"background": "rgba(0,0,0,0.03)"},
+        },
+    )
+
+
+def _tasks_panel() -> rx.Component:
+    """Collapsible task list below the zone grid. Phase 4i.4."""
+    chevron = rx.cond(ZdsState.tasks_panel_open, "▾", "▸")
+    count   = ZdsState.night_task_assignments.length()
+
+    return rx.el.div(
+        # Header / toggle
+        rx.el.button(
+            rx.el.span(chevron, style={"fontSize": "12px", "marginRight": "6px",
+                                       "color": "var(--ink3)"}),
+            rx.el.span("Tasks", style={"fontSize": "12px", "fontWeight": "700",
+                                       "textTransform": "uppercase",
+                                       "letterSpacing": "0.07em",
+                                       "color": "var(--ink2)"}),
+            rx.cond(
+                ZdsState.tasks_panel_open,
+                rx.el.span(
+                    count.to_string() + " assignments",
+                    style={"fontSize": "11px", "color": "var(--ink3)",
+                           "marginLeft": "8px"},
+                ),
+                rx.el.span(""),
+            ),
+            on_click=ZdsState.toggle_tasks_panel,
+            style={
+                "display":      "flex",
+                "alignItems":   "center",
+                "background":   "none",
+                "border":       "none",
+                "cursor":       "pointer",
+                "padding":      "8px 0",
+                "fontFamily":   "var(--font)",
+            },
+        ),
+        # Expandable body
+        rx.cond(
+            ZdsState.tasks_panel_open,
+            rx.el.div(
+                rx.cond(
+                    count == 0,
+                    rx.el.div(
+                        "No task assignments for this night yet. Run the engine to populate.",
+                        style={"fontSize": "12px", "color": "var(--ink3)",
+                               "padding": "10px 0", "fontStyle": "italic"},
+                    ),
+                    rx.el.div(
+                        rx.foreach(ZdsState.night_task_assignments, _task_assignment_row),
+                        style={
+                            "display":             "grid",
+                            "gridTemplateColumns": "repeat(auto-fill, minmax(320px, 1fr))",
+                            "gap":                 "2px",
+                        },
+                    ),
+                ),
+                style={"paddingTop": "6px"},
+            ),
+            rx.el.span(""),
+        ),
+        style={
+            "borderTop":    "1px solid var(--border-subtle)",
+            "paddingTop":   "4px",
+            "marginTop":    "8px",
+        },
+    )
+
+
 def deployment_body() -> rx.Component:
     return rx.vstack(
         _zones_section(),
         _rr_section(),
         _aux_section(),
+        _tasks_panel(),
         gap="20px",
         width="100%",
     )

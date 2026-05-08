@@ -66,6 +66,7 @@ from shared.db import (
     get_scorecard_config as _get_scorecard_config_db,
     get_overlap_tasks_for_engine,
     get_training_schedule_from_db,
+    get_zone_tasks_for_engine as _get_zone_tasks_db,
     create_new_tm_stub_in_db,
     get_engine_overrides,
     mark_engine_overrides_applied,
@@ -2013,6 +2014,131 @@ for tm_n in sorted(tm_zone_dates.keys()):
     row_data.append(total); hs.append(row_data)
 
 awb.save(ARCHIVE_PATH)
+
+# ── Phase 4i.2 / 4i.6: write zone_task_assignments to DB ─────────────────────
+def _write_zone_task_assignments() -> None:
+    """Bulk-insert zone_task_assignments rows for this week's nights.
+
+    Maps each placement in `placements` → (night_id, task_id, tm_id, zone_slot).
+    Engine-code → DB zone_tasks.default_zone key mapping is done here so the
+    rest of the engine can stay slot-code agnostic.
+
+    Idempotent: DELETEs 'engine' rows for this week's nights before re-inserting
+    (4i.6). Never raises — errors print a warning but do NOT block the run.
+    """
+    if not _WEEK_ID:
+        print("  [zone_tasks] WEEK_ID not found — skipping zone_task_assignments write.")
+        return
+    try:
+        sb = _get_db_client()
+
+        # 1. Resolve night_id per date_iso
+        nights_res = (
+            sb.table("nights")
+            .select("id,night_date")
+            .eq("week_id", _WEEK_ID)
+            .execute()
+        )
+        date_to_night: dict[str, str] = {
+            r["night_date"][:10]: r["id"]
+            for r in (nights_res.data or [])
+        }
+        if not date_to_night:
+            print("  [zone_tasks] No nights found for this week — skipping.")
+            return
+
+        # 2. Load zone_tasks from DB: {default_zone_key: [{id, name, category}]}
+        db_zone_tasks = _get_zone_tasks_db()
+
+        # 3. Engine slot_code → zone_tasks.default_zone key
+        #    Pattern: "Zone{N}" → "zone_{N}", "MRR{N}"/"WRR{N}" → "rr_{N}",
+        #    "Trash1"/"Trash2"/"Admin"/"Z9SR"/"Z9SRBuddy"/etc. → lowercase aux key.
+        import re as _re
+        def _engine_slot_to_db_key(slot: str) -> str | None:
+            m = _re.fullmatch(r"Zone(\d+)", slot)
+            if m:
+                return f"zone_{m.group(1)}"
+            m = _re.fullmatch(r"[MW]RR(\d+)", slot)
+            if m:
+                return f"rr_{m.group(1)}"
+            # Aux slot codes (canonical mapping)
+            _aux_map = {
+                "Admin":     "admin",
+                "Trash1":    "trash_1",
+                "Trash2":    "trash_2",
+                "Z9SR":      "z9_sr",
+                "Z9SRBuddy": "z9_sr_buddy",
+                "Support1":  "support_1",
+                "Support2":  "support_2",
+                "Support3":  "support_3",
+                "MP1":       "support_1",   # treat MP1/MP2 as support slots
+                "MP2":       "support_2",
+            }
+            return _aux_map.get(slot)
+
+        # 4. Build {default_zone_key: [task_id, ...]} for fast lookup
+        zone_to_task_ids: dict[str, list[str]] = {
+            key: [t["id"] for t in tasks]
+            for key, tasks in db_zone_tasks.items()
+        }
+
+        # 5. Build tm display_name → tm_id lookup
+        prof_res = sb.table("tm_profiles").select("tm_id,display_name").execute()
+        dn_to_tm_id: dict[str, str] = {
+            r["display_name"]: r["tm_id"]
+            for r in (prof_res.data or [])
+            if r.get("display_name") and r.get("tm_id")
+        }
+
+        # 6. 4i.6 idempotency: delete engine-assigned rows for this week's nights
+        night_ids = list(date_to_night.values())
+        sb.table("zone_task_assignments").delete().in_(
+            "night_id", night_ids
+        ).eq("assigned_by", "engine").execute()
+
+        # 7. Build insert rows
+        rows_to_insert: list[dict] = []
+        for p in placements:
+            date_iso  = str(p["date"])[:10]
+            night_id  = date_to_night.get(date_iso)
+            if not night_id:
+                continue
+            slot       = p["zone_slot"]
+            db_key     = _engine_slot_to_db_key(slot)
+            if not db_key:
+                continue
+            task_ids   = zone_to_task_ids.get(db_key, [])
+            tm_dn      = p.get("tm_display_name", "")
+            tm_id      = dn_to_tm_id.get(tm_dn)
+            for task_id in task_ids:
+                rows_to_insert.append({
+                    "task_id":     task_id,
+                    "night_id":    night_id,
+                    "tm_id":       tm_id,
+                    "zone_slot":   slot,
+                    "assigned_by": "engine",
+                    "source":      "auto",
+                })
+
+        if rows_to_insert:
+            # Upsert in batches of 200 to stay within Supabase row limits
+            batch = 200
+            inserted = 0
+            for i in range(0, len(rows_to_insert), batch):
+                chunk = rows_to_insert[i : i + batch]
+                res = sb.table("zone_task_assignments").insert(chunk).execute()
+                inserted += len(res.data or [])
+            print(f"  [zone_tasks] Wrote {inserted} zone_task_assignment rows.")
+        else:
+            print("  [zone_tasks] No task assignment rows to write.")
+
+    except Exception as _zta_err:
+        import traceback as _tb
+        print(f"  [zone_tasks] zone_task_assignments write failed (non-fatal): {_zta_err}")
+        print(_tb.format_exc())
+
+
+_write_zone_task_assignments()
 
 print(f"\n{'='*62}")
 # Severity-aware DONE line. Same logic as the mid-run summary above —

@@ -2718,6 +2718,46 @@ def get_canonical_tasks_for_slot(slot_code: str) -> list[str]:
         return []
 
 
+def get_zone_tasks_for_engine() -> dict[str, list[dict]]:
+    """
+    Phase 4i.2 — Load zone tasks from the zone_tasks table.
+
+    Returns a dict keyed by slot_key → list of task dicts:
+        {
+          "zone_1":   [{"id": "<uuid>", "name": "Outdoor Smoking Area", "category": "zone"}, ...],
+          "rr_1":     [...],
+          "admin":    [...],
+          ...
+        }
+
+    Keys match the `default_zone` column values stored in zone_tasks.
+    Only active tasks (active=true) are returned.
+    Falls back to empty dict on any DB error (callers supply hardcoded defaults).
+    """
+    try:
+        sb = get_client()
+        res = (
+            sb.table("zone_tasks")
+            .select("id,name,category,default_zone")
+            .eq("active", True)
+            .execute()
+        )
+        result: dict[str, list[dict]] = {}
+        for row in (res.data or []):
+            key = row.get("default_zone")
+            if not key:
+                continue
+            result.setdefault(key, []).append({
+                "id":       row["id"],
+                "name":     row["name"],
+                "category": row["category"],
+            })
+        return result
+    except Exception:
+        print(f"[db] get_zone_tasks_for_engine error:\n{traceback.format_exc()}")
+        return {}
+
+
 def get_training_schedule_from_db() -> dict:
     """
     Replace Training Config.json read in fill_engine.py.

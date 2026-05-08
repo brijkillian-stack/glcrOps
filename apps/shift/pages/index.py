@@ -789,6 +789,161 @@ def _body_grid() -> rx.Component:
     )
 
 
+# ── Zone Tasks floating drawer (Phase 4i.5) ──────────────────────────────────
+
+def _zone_task_row_hud(r: dict) -> rx.Component:
+    cat_color = rx.match(
+        r["category"],
+        ("zone", "#3b82f6"),
+        ("rr",   "#a78bfa"),
+        ("aux",  "#fbbf24"),
+        "#9ca3af",
+    )
+    return rx.el.div(
+        rx.el.span(
+            r["zone_slot"],
+            style={
+                "fontSize":     "10px",
+                "fontWeight":   "700",
+                "padding":      "2px 6px",
+                "borderRadius": "3px",
+                "background":   cat_color,
+                "color":        "#fff",
+                "minWidth":     "48px",
+                "textAlign":    "center",
+                "flexShrink":   "0",
+            },
+        ),
+        rx.el.span(
+            r["task_name"],
+            style={"fontSize": "12px", "color": "#f1f5f9", "flex": "1",
+                   "fontWeight": "500"},
+        ),
+        rx.el.span(
+            r["tm_name"],
+            style={"fontSize": "11px", "color": "#94a3b8",
+                   "textAlign": "right", "minWidth": "80px", "flexShrink": "0"},
+        ),
+        style={
+            "display":      "flex",
+            "alignItems":   "center",
+            "gap":          "8px",
+            "padding":      "5px 6px",
+            "borderRadius": "4px",
+            "_hover":       {"background": "rgba(255,255,255,0.05)"},
+        },
+    )
+
+
+def _zone_tasks_drawer() -> rx.Component:
+    """Fixed right-side drawer for zone task assignments. Phase 4i.5."""
+    count = ShiftState.zone_task_rows.length()
+    return rx.cond(
+        ShiftState.zone_tasks_drawer_open,
+        rx.el.div(
+            # Backdrop
+            rx.el.div(
+                on_click=ShiftState.close_zone_tasks_drawer,
+                style={
+                    "position": "fixed", "inset": "0",
+                    "background": "rgba(0,0,0,0.5)",
+                    "zIndex": "800",
+                },
+            ),
+            # Drawer
+            rx.el.div(
+                # Header
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.span("Zone Tasks Tonight",
+                                   style={"fontSize": "14px", "fontWeight": "700",
+                                          "color": "#f1f5f9"}),
+                        rx.el.span(
+                            count.to_string() + " assignments",
+                            style={"fontSize": "11px", "color": "#64748b",
+                                   "marginLeft": "8px"},
+                        ),
+                        style={"display": "flex", "alignItems": "baseline", "gap": "0"},
+                    ),
+                    rx.el.button(
+                        "✕",
+                        on_click=ShiftState.close_zone_tasks_drawer,
+                        style={
+                            "background": "none", "border": "none", "color": "#64748b",
+                            "cursor": "pointer", "fontSize": "16px", "lineHeight": "1",
+                        },
+                    ),
+                    style={
+                        "display":        "flex",
+                        "justifyContent": "space-between",
+                        "alignItems":     "center",
+                        "paddingBottom":  "12px",
+                        "borderBottom":   "1px solid #1e293b",
+                        "marginBottom":   "12px",
+                    },
+                ),
+                # Content
+                rx.cond(
+                    count == 0,
+                    rx.el.div(
+                        "No zone task assignments for tonight. Run the engine first.",
+                        style={"fontSize": "12px", "color": "#64748b",
+                               "fontStyle": "italic", "padding": "12px 0"},
+                    ),
+                    rx.el.div(
+                        rx.foreach(ShiftState.zone_task_rows, _zone_task_row_hud),
+                        style={"display": "flex", "flexDirection": "column", "gap": "2px"},
+                    ),
+                ),
+                style={
+                    "position":   "fixed",
+                    "top":        "0",
+                    "right":      "0",
+                    "width":      "380px",
+                    "height":     "100vh",
+                    "background": "#0f172a",
+                    "borderLeft": "1px solid #1e293b",
+                    "boxShadow":  "-4px 0 20px rgba(0,0,0,0.4)",
+                    "zIndex":     "801",
+                    "padding":    "24px 18px",
+                    "overflowY":  "auto",
+                    "boxSizing":  "border-box",
+                },
+            ),
+        ),
+        rx.el.span(""),
+    )
+
+
+def _zone_tasks_fab() -> rx.Component:
+    """Floating action button to open the zone tasks drawer. Positioned bottom-left."""
+    return rx.el.button(
+        "📋",
+        rx.el.span("Tasks", style={"fontSize": "11px", "fontWeight": "600",
+                                   "marginLeft": "5px"}),
+        on_click=ShiftState.open_zone_tasks_drawer,
+        style={
+            "position":     "fixed",
+            "bottom":       "24px",
+            "left":         "24px",
+            "display":      "flex",
+            "alignItems":   "center",
+            "background":   "#1e293b",
+            "border":       "1px solid #334155",
+            "borderRadius": "20px",
+            "color":        "#94a3b8",
+            "padding":      "8px 14px",
+            "cursor":       "pointer",
+            "fontSize":     "13px",
+            "fontFamily":   "var(--font)",
+            "boxShadow":    "0 4px 12px rgba(0,0,0,0.3)",
+            "zIndex":       "700",
+            "transition":   "all 0.15s",
+            "_hover":       {"color": "#e2e8f0", "borderColor": "#475569"},
+        },
+    )
+
+
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 def shift_page() -> rx.Component:
@@ -799,6 +954,9 @@ def shift_page() -> rx.Component:
         thumb_cluster(),
         capture_toast(),
         capture_modals(),
+        # Phase 4i.5 — Zone Tasks FAB + drawer
+        _zone_tasks_fab(),
+        _zone_tasks_drawer(),
         style={
             "display": "flex",
             "flexDirection": "column",
