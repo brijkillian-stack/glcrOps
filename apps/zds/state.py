@@ -19,6 +19,7 @@ from .types import (
     EMPTY_NIGHT,
     EMPTY_ENGINE_RESULT,
     BreakRow,
+    CardAdhocTask,
     ChangeLogEntry,
     EngineResult,
     Night,
@@ -274,11 +275,15 @@ class ZdsState(rx.State):
     card_annotation_data: dict = {}
 
     @rx.var
-    def card_menu_adhoc_tasks(self) -> list:
+    def card_menu_adhoc_tasks(self) -> list[CardAdhocTask]:
         """Adhoc task list for the card currently open in the annotation menu.
 
         Avoids chained Var subscripts in the component — returns a plain list
         of {ref, name} dicts for the active card_code.
+
+        Typed return matters: Reflex 0.9 needs the TypedDict shape to resolve
+        task["name"] / task["ref"] inside rx.foreach lambdas without crashing
+        with UntypedVarError.
         """
         if not self.menu_target_ref:
             return []

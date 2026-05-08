@@ -189,6 +189,17 @@ class OverlapRow(TypedDict):
     tm_name: str
 
 
+class CardAdhocTask(TypedDict):
+    """One adhoc task row surfaced to the card-menu's manage submenu (4k.5).
+
+    Returned by ZdsState.card_menu_adhoc_tasks. Without this typed shape,
+    Reflex 0.9 crashes with UntypedVarError when rx.foreach hits
+    task["name"] / task["ref"] inside the lambda body.
+    """
+    ref:  str   # composite target_ref ("{card_code}:{uuid}")
+    name: str   # display text from the adhoc_task annotation value
+
+
 class TM(TypedDict):
     """A team member row used by the picker."""
     id: str
