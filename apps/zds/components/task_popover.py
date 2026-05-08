@@ -27,16 +27,20 @@ _HL_COLORS = [
     ("purple",  "var(--c-purple,  #7c3aed)"),
 ]
 
-# (section, slug, label) matching glcr_icons structure
+# (section, slug, label) — section MUST match the directory the SVG
+# lives in under assets/icons/glcr/. Verified against the canonical GLCR
+# icon pack; section directories are: ops, maint, porter, uniform,
+# casino, clean, zds, controls, nav, actions, status, ui, people.
+# (No 'alerts' directory; alerts.svg lives in ops/.)
 _SYMBOLS = [
-    ("actions",  "star-favorite",    "Star"),
-    ("ui",       "pin-bookmark",     "Pin"),
-    ("alerts",   "warning",          "Warn"),
-    ("ui",       "info-circle",      "Info"),
-    ("actions",  "clock-pending",    "Clock"),
-    ("alerts",   "alert-circle",     "Alert"),
-    ("actions",  "inspection",       "Check"),
-    ("actions",  "safety-check",     "Safe"),
+    ("ui",     "star-favorite",  "Priority"),
+    ("ui",     "pin-bookmark",   "Remember"),
+    ("status", "warning",        "Watch"),
+    ("status", "info",           "Note attached"),
+    ("status", "clock-pending",  "Time-sensitive"),
+    ("ops",    "alerts",         "Alert"),
+    ("maint",  "inspection",     "Inspect"),
+    ("maint",  "safety-check",   "Safety priority"),
 ]
 
 
