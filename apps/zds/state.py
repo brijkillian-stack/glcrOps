@@ -421,6 +421,68 @@ class ZdsState(rx.State):
                 out[tm_id] = " ".join(parts)
         return out
 
+    @rx.var
+    def task_class_map(self) -> dict[str, str]:
+        """Map task_id → space-separated CSS class string for live-page rendering.
+
+        Emits task-hl-{color} when a highlight annotation is present, and
+        task-skip when a skip annotation is present. Only annotated tasks appear
+        in the map; missing key means no extra classes.
+
+        Phase 4k.6 hotfix: restores annotation visibility on the live page
+        (zone_card.py foreach consumes this via .contains() guard).
+        """
+        out: dict[str, str] = {}
+        for task_id, anns in (self.task_annotation_data or {}).items():
+            parts = []
+            hl = (anns.get("highlight") or {}).get("color", "")
+            if hl:
+                parts.append(f"task-hl-{hl}")
+            if anns.get("skip"):
+                parts.append("task-skip")
+            if parts:
+                out[task_id] = " ".join(parts)
+        return out
+
+    @rx.var
+    def task_symbol_html(self) -> dict[str, str]:
+        """Map task_id → SVG icon HTML string for symbol annotations.
+
+        Defers glcr_icon import to the function body to avoid a circular import
+        (state.py → components/ → state.py). Only tasks with a symbol annotation
+        appear in the map.
+
+        Phase 4k.6 hotfix: symbol icons now render inline on the live page.
+        """
+        from .components.glcr_icons import glcr_icon  # deferred — avoid circular import
+        out: dict[str, str] = {}
+        for task_id, anns in (self.task_annotation_data or {}).items():
+            sym     = anns.get("symbol") or {}
+            section = sym.get("section", "")
+            slug    = sym.get("slug", "")
+            if section and slug:
+                try:
+                    out[task_id] = glcr_icon(section, slug, size=11, css_class="task-symbol")
+                except Exception:
+                    pass
+        return out
+
+    @rx.var
+    def task_note_text_map(self) -> dict[str, str]:
+        """Map task_id → note text for tasks that have a note annotation.
+
+        Used by zone_card.py to show a brief italic note preview inline.
+        Only tasks with non-empty note text appear in the map.
+
+        Phase 4k.6 hotfix: note text now renders inline on the live page.
+        """
+        out: dict[str, str] = {}
+        for task_id, anns in (self.task_annotation_data or {}).items():
+            text = (anns.get("note") or {}).get("text", "")
+            if text:
+                out[task_id] = text
+        return out
+
     # ── Loading / error ───────────────────────────────────────────────────────
     loading: bool = False
     error:   str = ""

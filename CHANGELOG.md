@@ -4,6 +4,40 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Hotfix 4k.6: restore live annotations, PDF highlights, popover clipping (Sonnet)
+
+Three bugs introduced by Phase 4k.6 annotation pivot:
+
+### Fix 1 — Live page annotations invisible
+- `zone_card.py` `_task_section` foreach lambda never read `task_annotation_data`,
+  so highlights/symbols/notes/skip had no visual effect on the live deployment page.
+- Added three typed `dict[str, str]` computed vars to `ZdsState`:
+  - `task_class_map` — maps task UUID → CSS class string (`task-hl-{color}` + `task-skip`)
+  - `task_symbol_html` — maps task UUID → SVG icon HTML (deferred `glcr_icon` import
+    inside function body to avoid circular import via `state.py → components/`)
+  - `task_note_text_map` — maps task UUID → note text string
+- Updated foreach lambda to consume all three: symbol icon replaces bullet, highlight/skip
+  class applied to task text, italic note preview appended before the × button.
+
+### Fix 2 — PDF highlight rendering missing
+- `_apply_task_annotations()` in `print_renderer.py` had no highlight path.
+- Added `_inject_task_highlights(card_html, task_items, annots)` post-processor that
+  runs after `render_zone_card()` (consistent with `_inject_tm_annotation` pattern).
+- Engine's `_render_task_li` calls `esc()` on the whole task string, so injecting HTML
+  before render would double-escape — post-processing is the correct approach.
+- Wired into both zone card render call sites (full-page and single-card).
+- Highlights appear as `<li class="task-hl-{color}">` in print HTML.
+
+### Fix 3 — Task popover clipped by `overflow: hidden` card ancestors
+- `.task-popover` was `position: absolute` inside zone card wrappers that have
+  `overflow: hidden`, causing the popover to be clipped at the card boundary.
+- Switched to `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%)`
+  — centered in viewport, immune to ancestor clipping.
+- Changed `.task-popover-overlay` background from `transparent` to `rgba(0, 0, 0, 0.20)`
+  so the overlay is visually distinct and the open popover state is obvious.
+
+---
+
 ## 2026-05-08 — Hotfix: break tab wave grouping + canonical overlap slot rendering (Sonnet)
 
 ### Fix 1 — Break Sheet tab: all TMs landing in column 1

@@ -320,6 +320,47 @@ def _apply_task_annotations(items: list, annots: dict) -> list[str]:
     return result
 
 
+def _inject_task_highlights(card_html: str, task_items: list, annots: dict) -> str:
+    """Post-process a rendered card HTML string to add highlight CSS classes to task <li>s.
+
+    The engine's _render_task_li escapes task strings, so we cannot inject HTML
+    before the render call. Instead we walk the rendered HTML and find each task's
+    <li> by matching the end-anchor ``{esc(name)}</li>``, then inject a
+    ``class="task-hl-{color}"`` attribute.
+
+    Only tasks with an id (UUIDs) and a highlight annotation are processed;
+    custom/hardcoded tasks (id="") pass through unchanged.
+
+    Phase 4k.6 hotfix: adds highlight rendering to PDF output.
+    """
+    if not annots:
+        return card_html
+    for item in task_items:
+        if not isinstance(item, dict):
+            continue
+        task_id = item.get("id", "")
+        if not task_id:
+            continue
+        ann = annots.get(task_id) or {}
+        hl_color = (ann.get("highlight") or {}).get("color", "")
+        if not hl_color:
+            continue
+        esc_name = esc(item.get("name", ""))
+        end_anchor = f"{esc_name}</li>"
+        idx = card_html.find(end_anchor)
+        if idx == -1:
+            continue
+        # Walk back from idx to find the opening <li>
+        li_start = card_html.rfind("<li>", 0, idx)
+        if li_start == -1:
+            continue
+        old_li = card_html[li_start : idx + len(end_anchor)]
+        inner   = old_li[4 : -5]  # strip <li> (4) and </li> (5)
+        new_li  = f'<li class="task-hl-{hl_color}">{inner}</li>'
+        card_html = card_html[:li_start] + new_li + card_html[li_start + len(old_li):]
+    return card_html
+
+
 def _apply_tm_annotations(card_html: str, tm_id: str, tm_name: str,
                           tm_annots: dict) -> str:
     """Post-process a rendered card HTML string to inject TM annotation markup.
@@ -578,16 +619,23 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     # Zone cards
     zone_cards = []
     for n in range(1, 11):
-        sk     = f"zone_{n}"
-        s      = slot_map.get(sk, {})
-        tm_nm  = s.get("tm_name") or ""
+        sk      = f"zone_{n}"
+        s       = slot_map.get(sk, {})
+        tm_nm   = s.get("tm_name") or ""
         tm_id_z = s.get("tm_id") or ""
+        # Capture raw items (with UUIDs) for the highlight post-processor, then
+        # build the processed task list (skip applied, sweeper appended).
+        raw_items = (
+            list(s["display_tasks"]) if s.get("display_tasks") is not None
+            else [{"id": "", "name": t} for t in TASKS_ZONE.get(n, [])]
+        )
         card = render_zone_card(
             n, tm_nm, ZONE_COLOR[n],
             zone_tasks(n),
             alert=_alert(sk, slot_map),
             group=_grp(sk, slot_map),
         )
+        card = _inject_task_highlights(card, raw_items, task_annots)
         card = _apply_tm_annotations(card, tm_id_z, tm_nm, tm_annots)
         # card code matches ZONE_LABELS["zone_N"] = "Zone N" = slot["label"] in UI
         card = _apply_card_annotations(card, f"Zone {n}", card_annots)
@@ -1160,6 +1208,7 @@ def render_single_card_html(night_id: str, card_code: str) -> str:
                 alert=_alert(sk, slot_map),
                 group=_grp(sk, slot_map),
             )
+            card_html = _inject_task_highlights(card_html, raw_tasks, task_annots)
             card_html = _apply_tm_annotations(card_html, tm_id, tm, tm_annots)
             card_html = _apply_card_annotations(card_html, card_code, card_annots)
 

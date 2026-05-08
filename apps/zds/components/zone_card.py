@@ -258,13 +258,34 @@ def _task_section(slot_id, tasks, card_label) -> rx.Component:
             tasks,
             lambda task: rx.box(
                 rx.hstack(
-                    rx.text("·", size="1", color="#9ca3af", flex_shrink="0"),
+                    # Symbol icon when annotated; bullet otherwise
+                    rx.cond(
+                        ZdsState.task_symbol_html.contains(task["id"]),
+                        rx.html(ZdsState.task_symbol_html[task["id"]]),
+                        rx.text("·", size="1", color="#9ca3af", flex_shrink="0"),
+                    ),
                     rx.text(
                         task["name"],
                         size="1", flex="1", line_height="1.3",
-                        class_name="task-line-clickable",
+                        class_name=rx.cond(
+                            ZdsState.task_class_map.contains(task["id"]),
+                            "task-line-clickable " + ZdsState.task_class_map[task["id"]],
+                            "task-line-clickable",
+                        ),
                         on_click=ZdsState.open_task_popover(task["id"], card_label),
                         cursor="pointer",
+                    ),
+                    # Note preview — italic truncated suffix
+                    rx.cond(
+                        ZdsState.task_note_text_map.contains(task["id"]),
+                        rx.text(
+                            "(" + ZdsState.task_note_text_map[task["id"]] + ")",
+                            size="1", color="#9ca3af", font_style="italic",
+                            flex_shrink="0", max_width="80px",
+                            overflow="hidden", text_overflow="ellipsis",
+                            white_space="nowrap",
+                        ),
+                        rx.fragment(),
                     ),
                     rx.text(
                         "×",

@@ -580,26 +580,29 @@ details > summary::-webkit-details-marker {
 
 /* ── Phase 4k.6 — Task popover (click-based annotation surface) ────────────── */
 
-/* Full-page transparent overlay — shown when a popover is open.
+/* Full-page dim overlay — shown when a popover is open.
    Clicking it fires close_task_popover. z-index below the popover (200). */
 .task-popover-overlay {
   position: fixed;
   inset: 0;
   z-index: 150;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.20);
 }
 
-/* Container <li> for each task row — relative so the popover anchors to it. */
+/* Container <li> for each task row. No longer needs relative positioning
+   since the popover is fixed-centered in the viewport. */
 .task-line-li {
   position: relative;
   width: 100%;
 }
 
-/* The popover panel itself — absolutely positioned below the task row. */
+/* The popover panel — fixed-centered in the viewport so it can't be
+   clipped by overflow:hidden ancestors (zone card wrappers). */
 .task-popover {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: -4px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 200;
   min-width: 220px;
   background: white;
@@ -608,8 +611,6 @@ details > summary::-webkit-details-marker {
   padding: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
   font-family: var(--font, sans-serif);
-  /* Guard against parent overflow:hidden clipping */
-  overflow: visible;
 }
 
 /* Clickable task text — hover affordance */
