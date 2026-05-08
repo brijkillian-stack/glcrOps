@@ -1,0 +1,9 @@
+<svg width="24" height="24" aria-label="Clean · Badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21l11-11" stroke-linecap="round"/>
+    <path d="M5 21h-.5c-1 0-1.5-.7-1.5-1.5 0-3 2.5-6 6-6 1.5 0 2.5.5 3.5 1.5L8 21H5z"/>
+    <path d="M14 8l4-4" stroke-linecap="round"/>
+    <path d="M16 4l4 4" stroke-linecap="round"/>
+    <path d="M19 7l-3 3" stroke-linecap="round"/>
+    <circle cx="19" cy="3" r="0.7" fill="currentColor" stroke="none"/>
+    <circle cx="22" cy="6" r="0.7" fill="currentColor" stroke="none"/>
+  </svg>

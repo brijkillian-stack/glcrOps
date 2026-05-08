@@ -1,0 +1,7 @@
+<svg width="24" height="24" aria-label="Outdoor Area" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 13l7-9 7 9"/>
+    <path d="M7.5 13l4.5-6 4.5 6"/>
+    <line x1="12" y1="7" x2="12" y2="21"/>
+    <line x1="4" y1="21" x2="20" y2="21"/>
+    <path d="M2 16h4M18 16h4" opacity="0.6"/>
+  </svg>

@@ -1,0 +1,946 @@
+{
+  "ops": [
+    {
+      "slug": "ops-badge",
+      "id": "icon-ops---badge",
+      "label": "Ops \u00b7 Badge",
+      "path": "icons/glcr/ops/ops-badge.svg"
+    },
+    {
+      "slug": "org-chart",
+      "id": "icon-org-chart",
+      "label": "Org Chart",
+      "path": "icons/glcr/ops/org-chart.svg"
+    },
+    {
+      "slug": "shift-schedule",
+      "id": "icon-shift-schedule",
+      "label": "Shift Schedule",
+      "path": "icons/glcr/ops/shift-schedule.svg"
+    },
+    {
+      "slug": "roster",
+      "id": "icon-roster",
+      "label": "Roster",
+      "path": "icons/glcr/ops/roster.svg"
+    },
+    {
+      "slug": "reporting",
+      "id": "icon-reporting",
+      "label": "Reporting",
+      "path": "icons/glcr/ops/reporting.svg"
+    },
+    {
+      "slug": "compliance",
+      "id": "icon-compliance",
+      "label": "Compliance",
+      "path": "icons/glcr/ops/compliance.svg"
+    },
+    {
+      "slug": "alerts",
+      "id": "icon-alerts",
+      "label": "Alerts",
+      "path": "icons/glcr/ops/alerts.svg"
+    },
+    {
+      "slug": "shift-handoff",
+      "id": "icon-shift-handoff",
+      "label": "Shift Handoff",
+      "path": "icons/glcr/ops/shift-handoff.svg"
+    },
+    {
+      "slug": "approvals",
+      "id": "icon-approvals",
+      "label": "Approvals",
+      "path": "icons/glcr/ops/approvals.svg"
+    },
+    {
+      "slug": "communications",
+      "id": "icon-communications",
+      "label": "Communications",
+      "path": "icons/glcr/ops/communications.svg"
+    }
+  ],
+  "maint": [
+    {
+      "slug": "maint-badge",
+      "id": "icon-maint---badge",
+      "label": "Maint \u00b7 Badge",
+      "path": "icons/glcr/maint/maint-badge.svg"
+    },
+    {
+      "slug": "work-order",
+      "id": "icon-work-order",
+      "label": "Work Order",
+      "path": "icons/glcr/maint/work-order.svg"
+    },
+    {
+      "slug": "inspection",
+      "id": "icon-inspection",
+      "label": "Inspection",
+      "path": "icons/glcr/maint/inspection.svg"
+    },
+    {
+      "slug": "hvac-air",
+      "id": "icon-hvac---air",
+      "label": "HVAC / Air",
+      "path": "icons/glcr/maint/hvac-air.svg"
+    },
+    {
+      "slug": "electrical",
+      "id": "icon-electrical",
+      "label": "Electrical",
+      "path": "icons/glcr/maint/electrical.svg"
+    },
+    {
+      "slug": "plumbing",
+      "id": "icon-plumbing",
+      "label": "Plumbing",
+      "path": "icons/glcr/maint/plumbing.svg"
+    },
+    {
+      "slug": "equipment",
+      "id": "icon-equipment",
+      "label": "Equipment",
+      "path": "icons/glcr/maint/equipment.svg"
+    },
+    {
+      "slug": "safety-check",
+      "id": "icon-safety-check",
+      "label": "Safety Check",
+      "path": "icons/glcr/maint/safety-check.svg"
+    },
+    {
+      "slug": "lighting",
+      "id": "icon-lighting",
+      "label": "Lighting",
+      "path": "icons/glcr/maint/lighting.svg"
+    },
+    {
+      "slug": "preventive-pm",
+      "id": "icon-preventive-pm",
+      "label": "Preventive PM",
+      "path": "icons/glcr/maint/preventive-pm.svg"
+    }
+  ],
+  "porter": [
+    {
+      "slug": "porter-badge",
+      "id": "icon-porter---badge",
+      "label": "Porter \u00b7 Badge",
+      "path": "icons/glcr/porter/porter-badge.svg"
+    },
+    {
+      "slug": "cleaning-broom",
+      "id": "icon-cleaning---broom",
+      "label": "Cleaning / Broom",
+      "path": "icons/glcr/porter/cleaning-broom.svg"
+    },
+    {
+      "slug": "trash-waste",
+      "id": "icon-trash---waste",
+      "label": "Trash / Waste",
+      "path": "icons/glcr/porter/trash-waste.svg"
+    },
+    {
+      "slug": "supply-cart",
+      "id": "icon-supply-cart",
+      "label": "Supply Cart",
+      "path": "icons/glcr/porter/supply-cart.svg"
+    },
+    {
+      "slug": "supply-restock",
+      "id": "icon-supply-restock",
+      "label": "Supply Restock",
+      "path": "icons/glcr/porter/supply-restock.svg"
+    },
+    {
+      "slug": "floor-care-mop",
+      "id": "icon-floor-care---mop",
+      "label": "Floor Care / Mop",
+      "path": "icons/glcr/porter/floor-care-mop.svg"
+    },
+    {
+      "slug": "spill-response",
+      "id": "icon-spill-response",
+      "label": "Spill Response",
+      "path": "icons/glcr/porter/spill-response.svg"
+    },
+    {
+      "slug": "linen-towels",
+      "id": "icon-linen---towels",
+      "label": "Linen / Towels",
+      "path": "icons/glcr/porter/linen-towels.svg"
+    },
+    {
+      "slug": "rounds-patrol",
+      "id": "icon-rounds---patrol",
+      "label": "Rounds / Patrol",
+      "path": "icons/glcr/porter/rounds-patrol.svg"
+    },
+    {
+      "slug": "deep-clean",
+      "id": "icon-deep-clean",
+      "label": "Deep Clean",
+      "path": "icons/glcr/porter/deep-clean.svg"
+    }
+  ],
+  "uniform": [
+    {
+      "slug": "uniform-badge",
+      "id": "icon-uniform---badge",
+      "label": "Uniform \u00b7 Badge",
+      "path": "icons/glcr/uniform/uniform-badge.svg"
+    },
+    {
+      "slug": "inventory",
+      "id": "icon-inventory",
+      "label": "Inventory",
+      "path": "icons/glcr/uniform/inventory.svg"
+    },
+    {
+      "slug": "laundry",
+      "id": "icon-laundry",
+      "label": "Laundry",
+      "path": "icons/glcr/uniform/laundry.svg"
+    },
+    {
+      "slug": "issue-check-out",
+      "id": "icon-issue---check-out",
+      "label": "Issue / Check Out",
+      "path": "icons/glcr/uniform/issue-check-out.svg"
+    },
+    {
+      "slug": "return",
+      "id": "icon-return",
+      "label": "Return",
+      "path": "icons/glcr/uniform/return.svg"
+    },
+    {
+      "slug": "sizing-fit",
+      "id": "icon-sizing---fit",
+      "label": "Sizing / Fit",
+      "path": "icons/glcr/uniform/sizing-fit.svg"
+    },
+    {
+      "slug": "alterations",
+      "id": "icon-alterations",
+      "label": "Alterations",
+      "path": "icons/glcr/uniform/alterations.svg"
+    },
+    {
+      "slug": "condition-check",
+      "id": "icon-condition-check",
+      "label": "Condition Check",
+      "path": "icons/glcr/uniform/condition-check.svg"
+    },
+    {
+      "slug": "reorder",
+      "id": "icon-reorder",
+      "label": "Reorder",
+      "path": "icons/glcr/uniform/reorder.svg"
+    },
+    {
+      "slug": "lost-found",
+      "id": "icon-lost---found",
+      "label": "Lost & Found",
+      "path": "icons/glcr/uniform/lost-found.svg"
+    }
+  ],
+  "casino": [
+    {
+      "slug": "casino-badge",
+      "id": "icon-casino---badge",
+      "label": "Casino \u00b7 Badge",
+      "path": "icons/glcr/casino/casino-badge.svg"
+    },
+    {
+      "slug": "chip",
+      "id": "icon-chip",
+      "label": "Chip",
+      "path": "icons/glcr/casino/chip.svg"
+    },
+    {
+      "slug": "playing-card",
+      "id": "icon-playing-card",
+      "label": "Playing Card",
+      "path": "icons/glcr/casino/playing-card.svg"
+    },
+    {
+      "slug": "dice",
+      "id": "icon-dice",
+      "label": "Dice",
+      "path": "icons/glcr/casino/dice.svg"
+    },
+    {
+      "slug": "slot-machine",
+      "id": "icon-slot-machine",
+      "label": "Slot Machine",
+      "path": "icons/glcr/casino/slot-machine.svg"
+    },
+    {
+      "slug": "casino-table",
+      "id": "icon-casino-table",
+      "label": "Casino Table",
+      "path": "icons/glcr/casino/casino-table.svg"
+    },
+    {
+      "slug": "cash-cage",
+      "id": "icon-cash-cage",
+      "label": "Cash Cage",
+      "path": "icons/glcr/casino/cash-cage.svg"
+    },
+    {
+      "slug": "surveillance",
+      "id": "icon-surveillance",
+      "label": "Surveillance",
+      "path": "icons/glcr/casino/surveillance.svg"
+    },
+    {
+      "slug": "comp-reward",
+      "id": "icon-comp---reward",
+      "label": "Comp / Reward",
+      "path": "icons/glcr/casino/comp-reward.svg"
+    },
+    {
+      "slug": "jackpot",
+      "id": "icon-jackpot",
+      "label": "Jackpot",
+      "path": "icons/glcr/casino/jackpot.svg"
+    }
+  ],
+  "clean": [
+    {
+      "slug": "clean-badge",
+      "id": "icon-clean---badge",
+      "label": "Clean \u00b7 Badge",
+      "path": "icons/glcr/clean/clean-badge.svg"
+    },
+    {
+      "slug": "restroom",
+      "id": "icon-restroom",
+      "label": "Restroom",
+      "path": "icons/glcr/clean/restroom.svg"
+    },
+    {
+      "slug": "men-s-rr",
+      "id": "icon-men-s-rr",
+      "label": "Men's RR",
+      "path": "icons/glcr/clean/men-s-rr.svg"
+    },
+    {
+      "slug": "women-s-rr",
+      "id": "icon-women-s-rr",
+      "label": "Women's RR",
+      "path": "icons/glcr/clean/women-s-rr.svg"
+    },
+    {
+      "slug": "family-rr",
+      "id": "icon-family-rr",
+      "label": "Family RR",
+      "path": "icons/glcr/clean/family-rr.svg"
+    },
+    {
+      "slug": "smoking-room",
+      "id": "icon-smoking-room",
+      "label": "Smoking Room",
+      "path": "icons/glcr/clean/smoking-room.svg"
+    },
+    {
+      "slug": "outdoor-area",
+      "id": "icon-outdoor-area",
+      "label": "Outdoor Area",
+      "path": "icons/glcr/clean/outdoor-area.svg"
+    },
+    {
+      "slug": "trash-pull-bin",
+      "id": "icon-trash-pull---bin",
+      "label": "Trash Pull / Bin",
+      "path": "icons/glcr/clean/trash-pull-bin.svg"
+    },
+    {
+      "slug": "glass-windows",
+      "id": "icon-glass---windows",
+      "label": "Glass / Windows",
+      "path": "icons/glcr/clean/glass-windows.svg"
+    },
+    {
+      "slug": "elevator-lobby",
+      "id": "icon-elevator---lobby",
+      "label": "Elevator / Lobby",
+      "path": "icons/glcr/clean/elevator-lobby.svg"
+    },
+    {
+      "slug": "drink-trays",
+      "id": "icon-drink-trays",
+      "label": "Drink Trays",
+      "path": "icons/glcr/clean/drink-trays.svg"
+    },
+    {
+      "slug": "pit-area",
+      "id": "icon-pit-area",
+      "label": "Pit Area",
+      "path": "icons/glcr/clean/pit-area.svg"
+    },
+    {
+      "slug": "spill-wet-floor",
+      "id": "icon-spill---wet-floor",
+      "label": "Spill / Wet Floor",
+      "path": "icons/glcr/clean/spill-wet-floor.svg"
+    },
+    {
+      "slug": "door-glass",
+      "id": "icon-door-glass",
+      "label": "Door Glass",
+      "path": "icons/glcr/clean/door-glass.svg"
+    }
+  ],
+  "zds": [
+    {
+      "slug": "zone-grid",
+      "id": "icon-zone---grid",
+      "label": "Zone / Grid",
+      "path": "icons/glcr/zds/zone-grid.svg"
+    },
+    {
+      "slug": "unfilled-slot",
+      "id": "icon-unfilled-slot",
+      "label": "Unfilled Slot",
+      "path": "icons/glcr/zds/unfilled-slot.svg"
+    },
+    {
+      "slug": "filled-assigned",
+      "id": "icon-filled---assigned",
+      "label": "Filled / Assigned",
+      "path": "icons/glcr/zds/filled-assigned.svg"
+    },
+    {
+      "slug": "called-off",
+      "id": "icon-called-off",
+      "label": "Called Off",
+      "path": "icons/glcr/zds/called-off.svg"
+    },
+    {
+      "slug": "run-engine",
+      "id": "icon-run-engine",
+      "label": "Run Engine",
+      "path": "icons/glcr/zds/run-engine.svg"
+    },
+    {
+      "slug": "break-waves",
+      "id": "icon-break-waves",
+      "label": "Break Waves",
+      "path": "icons/glcr/zds/break-waves.svg"
+    },
+    {
+      "slug": "night-shift-lock",
+      "id": "icon-night---shift-lock",
+      "label": "Night / Shift Lock",
+      "path": "icons/glcr/zds/night-shift-lock.svg"
+    },
+    {
+      "slug": "slot-grid-view",
+      "id": "icon-slot-grid-view",
+      "label": "Slot Grid View",
+      "path": "icons/glcr/zds/slot-grid-view.svg"
+    },
+    {
+      "slug": "upload-schedule",
+      "id": "icon-upload-schedule",
+      "label": "Upload Schedule",
+      "path": "icons/glcr/zds/upload-schedule.svg"
+    },
+    {
+      "slug": "week-overview",
+      "id": "icon-week-overview",
+      "label": "Week Overview",
+      "path": "icons/glcr/zds/week-overview.svg"
+    },
+    {
+      "slug": "assign-staff",
+      "id": "icon-assign---staff",
+      "label": "Assign / Staff",
+      "path": "icons/glcr/zds/assign-staff.svg"
+    },
+    {
+      "slug": "group-badge",
+      "id": "icon-group-badge",
+      "label": "Group Badge",
+      "path": "icons/glcr/zds/group-badge.svg"
+    },
+    {
+      "slug": "fill-bar",
+      "id": "icon-fill-bar",
+      "label": "Fill Bar",
+      "path": "icons/glcr/zds/fill-bar.svg"
+    },
+    {
+      "slug": "print-day",
+      "id": "icon-print-day",
+      "label": "Print Day",
+      "path": "icons/glcr/zds/print-day.svg"
+    },
+    {
+      "slug": "audit-save",
+      "id": "icon-audit---save",
+      "label": "Audit / Save",
+      "path": "icons/glcr/zds/audit-save.svg"
+    },
+    {
+      "slug": "draft-status",
+      "id": "icon-draft-status",
+      "label": "Draft Status",
+      "path": "icons/glcr/zds/draft-status.svg"
+    }
+  ],
+  "controls": [
+    {
+      "slug": "toggle-on",
+      "id": "icon-toggle-on",
+      "label": "Toggle On",
+      "path": "icons/glcr/controls/toggle-on.svg"
+    },
+    {
+      "slug": "toggle-off",
+      "id": "icon-toggle-off",
+      "label": "Toggle Off",
+      "path": "icons/glcr/controls/toggle-off.svg"
+    },
+    {
+      "slug": "knob-dial",
+      "id": "icon-knob---dial",
+      "label": "Knob / Dial",
+      "path": "icons/glcr/controls/knob-dial.svg"
+    },
+    {
+      "slug": "slider",
+      "id": "icon-slider",
+      "label": "Slider",
+      "path": "icons/glcr/controls/slider.svg"
+    },
+    {
+      "slug": "range-slider",
+      "id": "icon-range-slider",
+      "label": "Range Slider",
+      "path": "icons/glcr/controls/range-slider.svg"
+    },
+    {
+      "slug": "indicator-on",
+      "id": "icon-indicator---on",
+      "label": "Indicator \u00b7 On",
+      "path": "icons/glcr/controls/indicator-on.svg"
+    },
+    {
+      "slug": "indicator-off",
+      "id": "icon-indicator---off",
+      "label": "Indicator \u00b7 Off",
+      "path": "icons/glcr/controls/indicator-off.svg"
+    },
+    {
+      "slug": "indicator-warn",
+      "id": "icon-indicator---warn",
+      "label": "Indicator \u00b7 Warn",
+      "path": "icons/glcr/controls/indicator-warn.svg"
+    },
+    {
+      "slug": "steppers",
+      "id": "icon-steppers----",
+      "label": "Steppers +/\u2212",
+      "path": "icons/glcr/controls/steppers.svg"
+    },
+    {
+      "slug": "checkbox-off",
+      "id": "icon-checkbox-off",
+      "label": "Checkbox Off",
+      "path": "icons/glcr/controls/checkbox-off.svg"
+    },
+    {
+      "slug": "checkbox-on",
+      "id": "icon-checkbox-on",
+      "label": "Checkbox On",
+      "path": "icons/glcr/controls/checkbox-on.svg"
+    },
+    {
+      "slug": "radio-off",
+      "id": "icon-radio-off",
+      "label": "Radio Off",
+      "path": "icons/glcr/controls/radio-off.svg"
+    },
+    {
+      "slug": "radio-on",
+      "id": "icon-radio-on",
+      "label": "Radio On",
+      "path": "icons/glcr/controls/radio-on.svg"
+    },
+    {
+      "slug": "segment-control",
+      "id": "icon-segment-control",
+      "label": "Segment Control",
+      "path": "icons/glcr/controls/segment-control.svg"
+    },
+    {
+      "slug": "volume-level",
+      "id": "icon-volume---level",
+      "label": "Volume / Level",
+      "path": "icons/glcr/controls/volume-level.svg"
+    },
+    {
+      "slug": "power-button",
+      "id": "icon-power-button",
+      "label": "Power Button",
+      "path": "icons/glcr/controls/power-button.svg"
+    },
+    {
+      "slug": "brightness",
+      "id": "icon-brightness",
+      "label": "Brightness",
+      "path": "icons/glcr/controls/brightness.svg"
+    }
+  ],
+  "nav": [
+    {
+      "slug": "home",
+      "id": "icon-home",
+      "label": "Home",
+      "path": "icons/glcr/nav/home.svg"
+    },
+    {
+      "slug": "dashboard",
+      "id": "icon-dashboard",
+      "label": "Dashboard",
+      "path": "icons/glcr/nav/dashboard.svg"
+    },
+    {
+      "slug": "schedule",
+      "id": "icon-schedule",
+      "label": "Schedule",
+      "path": "icons/glcr/nav/schedule.svg"
+    },
+    {
+      "slug": "people",
+      "id": "icon-people",
+      "label": "People",
+      "path": "icons/glcr/nav/people.svg"
+    },
+    {
+      "slug": "reports",
+      "id": "icon-reports",
+      "label": "Reports",
+      "path": "icons/glcr/nav/reports.svg"
+    },
+    {
+      "slug": "settings",
+      "id": "icon-settings",
+      "label": "Settings",
+      "path": "icons/glcr/nav/settings.svg"
+    },
+    {
+      "slug": "departments",
+      "id": "icon-departments",
+      "label": "Departments",
+      "path": "icons/glcr/nav/departments.svg"
+    },
+    {
+      "slug": "notifications",
+      "id": "icon-notifications",
+      "label": "Notifications",
+      "path": "icons/glcr/nav/notifications.svg"
+    },
+    {
+      "slug": "messages",
+      "id": "icon-messages",
+      "label": "Messages",
+      "path": "icons/glcr/nav/messages.svg"
+    },
+    {
+      "slug": "time-attendance",
+      "id": "icon-time---attendance",
+      "label": "Time & Attendance",
+      "path": "icons/glcr/nav/time-attendance.svg"
+    }
+  ],
+  "actions": [
+    {
+      "slug": "add-new",
+      "id": "icon-add---new",
+      "label": "Add / New",
+      "path": "icons/glcr/actions/add-new.svg"
+    },
+    {
+      "slug": "edit-pencil",
+      "id": "icon-edit---pencil",
+      "label": "Edit / Pencil",
+      "path": "icons/glcr/actions/edit-pencil.svg"
+    },
+    {
+      "slug": "delete-trash",
+      "id": "icon-delete---trash",
+      "label": "Delete / Trash",
+      "path": "icons/glcr/actions/delete-trash.svg"
+    },
+    {
+      "slug": "search",
+      "id": "icon-search",
+      "label": "Search",
+      "path": "icons/glcr/actions/search.svg"
+    },
+    {
+      "slug": "filter",
+      "id": "icon-filter",
+      "label": "Filter",
+      "path": "icons/glcr/actions/filter.svg"
+    },
+    {
+      "slug": "sort",
+      "id": "icon-sort",
+      "label": "Sort",
+      "path": "icons/glcr/actions/sort.svg"
+    },
+    {
+      "slug": "export",
+      "id": "icon-export",
+      "label": "Export",
+      "path": "icons/glcr/actions/export.svg"
+    },
+    {
+      "slug": "import",
+      "id": "icon-import",
+      "label": "Import",
+      "path": "icons/glcr/actions/import.svg"
+    },
+    {
+      "slug": "download",
+      "id": "icon-download",
+      "label": "Download",
+      "path": "icons/glcr/actions/download.svg"
+    },
+    {
+      "slug": "copy",
+      "id": "icon-copy",
+      "label": "Copy",
+      "path": "icons/glcr/actions/copy.svg"
+    },
+    {
+      "slug": "print",
+      "id": "icon-print",
+      "label": "Print",
+      "path": "icons/glcr/actions/print.svg"
+    },
+    {
+      "slug": "share-link",
+      "id": "icon-share---link",
+      "label": "Share / Link",
+      "path": "icons/glcr/actions/share-link.svg"
+    },
+    {
+      "slug": "refresh",
+      "id": "icon-refresh",
+      "label": "Refresh",
+      "path": "icons/glcr/actions/refresh.svg"
+    },
+    {
+      "slug": "archive",
+      "id": "icon-archive",
+      "label": "Archive",
+      "path": "icons/glcr/actions/archive.svg"
+    }
+  ],
+  "status": [
+    {
+      "slug": "success-check",
+      "id": "icon-success---check",
+      "label": "Success / Check",
+      "path": "icons/glcr/status/success-check.svg"
+    },
+    {
+      "slug": "warning",
+      "id": "icon-warning",
+      "label": "Warning",
+      "path": "icons/glcr/status/warning.svg"
+    },
+    {
+      "slug": "error-x",
+      "id": "icon-error---x",
+      "label": "Error / X",
+      "path": "icons/glcr/status/error-x.svg"
+    },
+    {
+      "slug": "info",
+      "id": "icon-info",
+      "label": "Info",
+      "path": "icons/glcr/status/info.svg"
+    },
+    {
+      "slug": "locked",
+      "id": "icon-locked",
+      "label": "Locked",
+      "path": "icons/glcr/status/locked.svg"
+    },
+    {
+      "slug": "unlocked",
+      "id": "icon-unlocked",
+      "label": "Unlocked",
+      "path": "icons/glcr/status/unlocked.svg"
+    },
+    {
+      "slug": "clock-pending",
+      "id": "icon-clock---pending",
+      "label": "Clock / Pending",
+      "path": "icons/glcr/status/clock-pending.svg"
+    },
+    {
+      "slug": "paused",
+      "id": "icon-paused",
+      "label": "Paused",
+      "path": "icons/glcr/status/paused.svg"
+    },
+    {
+      "slug": "live-active",
+      "id": "icon-live---active",
+      "label": "Live / Active",
+      "path": "icons/glcr/status/live-active.svg"
+    },
+    {
+      "slug": "offline",
+      "id": "icon-offline",
+      "label": "Offline",
+      "path": "icons/glcr/status/offline.svg"
+    }
+  ],
+  "ui": [
+    {
+      "slug": "chevron-up",
+      "id": "icon-chevron-up",
+      "label": "Chevron Up",
+      "path": "icons/glcr/ui/chevron-up.svg"
+    },
+    {
+      "slug": "chevron-down",
+      "id": "icon-chevron-down",
+      "label": "Chevron Down",
+      "path": "icons/glcr/ui/chevron-down.svg"
+    },
+    {
+      "slug": "chevron-left",
+      "id": "icon-chevron-left",
+      "label": "Chevron Left",
+      "path": "icons/glcr/ui/chevron-left.svg"
+    },
+    {
+      "slug": "chevron-right",
+      "id": "icon-chevron-right",
+      "label": "Chevron Right",
+      "path": "icons/glcr/ui/chevron-right.svg"
+    },
+    {
+      "slug": "close-x",
+      "id": "icon-close---x",
+      "label": "Close / X",
+      "path": "icons/glcr/ui/close-x.svg"
+    },
+    {
+      "slug": "menu-hamburger",
+      "id": "icon-menu---hamburger",
+      "label": "Menu / Hamburger",
+      "path": "icons/glcr/ui/menu-hamburger.svg"
+    },
+    {
+      "slug": "more-ellipsis",
+      "id": "icon-more---ellipsis",
+      "label": "More / Ellipsis",
+      "path": "icons/glcr/ui/more-ellipsis.svg"
+    },
+    {
+      "slug": "expand",
+      "id": "icon-expand",
+      "label": "Expand",
+      "path": "icons/glcr/ui/expand.svg"
+    },
+    {
+      "slug": "collapse",
+      "id": "icon-collapse",
+      "label": "Collapse",
+      "path": "icons/glcr/ui/collapse.svg"
+    },
+    {
+      "slug": "pin-bookmark",
+      "id": "icon-pin---bookmark",
+      "label": "Pin / Bookmark",
+      "path": "icons/glcr/ui/pin-bookmark.svg"
+    },
+    {
+      "slug": "tag-label",
+      "id": "icon-tag---label",
+      "label": "Tag / Label",
+      "path": "icons/glcr/ui/tag-label.svg"
+    },
+    {
+      "slug": "calendar",
+      "id": "icon-calendar",
+      "label": "Calendar",
+      "path": "icons/glcr/ui/calendar.svg"
+    },
+    {
+      "slug": "bell",
+      "id": "icon-bell",
+      "label": "Bell",
+      "path": "icons/glcr/ui/bell.svg"
+    },
+    {
+      "slug": "star-favorite",
+      "id": "icon-star---favorite",
+      "label": "Star / Favorite",
+      "path": "icons/glcr/ui/star-favorite.svg"
+    }
+  ],
+  "people": [
+    {
+      "slug": "person-user",
+      "id": "icon-person---user",
+      "label": "Person / User",
+      "path": "icons/glcr/people/person-user.svg"
+    },
+    {
+      "slug": "team-group",
+      "id": "icon-team---group",
+      "label": "Team / Group",
+      "path": "icons/glcr/people/team-group.svg"
+    },
+    {
+      "slug": "manager",
+      "id": "icon-manager",
+      "label": "Manager",
+      "path": "icons/glcr/people/manager.svg"
+    },
+    {
+      "slug": "employee-badge",
+      "id": "icon-employee-badge",
+      "label": "Employee Badge",
+      "path": "icons/glcr/people/employee-badge.svg"
+    },
+    {
+      "slug": "shift-assignment",
+      "id": "icon-shift-assignment",
+      "label": "Shift Assignment",
+      "path": "icons/glcr/people/shift-assignment.svg"
+    },
+    {
+      "slug": "supervisor",
+      "id": "icon-supervisor",
+      "label": "Supervisor",
+      "path": "icons/glcr/people/supervisor.svg"
+    },
+    {
+      "slug": "on-duty",
+      "id": "icon-on-duty",
+      "label": "On Duty",
+      "path": "icons/glcr/people/on-duty.svg"
+    },
+    {
+      "slug": "off-duty",
+      "id": "icon-off-duty",
+      "label": "Off Duty",
+      "path": "icons/glcr/people/off-duty.svg"
+    }
+  ]
+}

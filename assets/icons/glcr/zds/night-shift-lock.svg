@@ -1,0 +1,6 @@
+<svg width="24" height="24" aria-label="Night / Shift Lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z"/>
+    <rect x="13" y="14" width="8" height="6" rx="1.5" fill="var(--bg)" stroke="currentColor"/>
+    <path d="M14.5 14v-1.5a2.5 2.5 0 0 1 5 0V14"/>
+    <circle cx="17" cy="17" r="0.8" fill="currentColor" stroke="none"/>
+  </svg>
