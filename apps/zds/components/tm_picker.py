@@ -293,11 +293,7 @@ def _card_options_section() -> rx.Component:
                     value=rx.cond(
                         ZdsState.picker_note_text != "",
                         ZdsState.picker_note_text,
-                        rx.cond(
-                            ZdsState.picker_card_has_note,
-                            ZdsState.card_annotation_data[ZdsState.picker_card_code]["note"]["text"],
-                            "",
-                        ),
+                        ZdsState.picker_card_saved_note_text,
                     ),
                     on_change=ZdsState.set_picker_note_text,
                     placeholder="Note about this card tonight…",

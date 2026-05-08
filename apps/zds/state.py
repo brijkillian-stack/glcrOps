@@ -300,6 +300,20 @@ class ZdsState(rx.State):
         )
 
     @rx.var
+    def picker_card_saved_note_text(self) -> str:
+        """Saved note text for the currently open picker card.
+
+        Returned as a typed `str` so the textarea fallback in tm_picker.py
+        doesn't have to chain-subscript card_annotation_data (bare `dict`
+        return type → Reflex 0.9 UntypedVarError on nested ["note"]["text"]).
+        """
+        if not self.picker_card_code:
+            return ""
+        entry = self.card_annotation_data.get(self.picker_card_code, {})
+        note = entry.get("note") or {}
+        return note.get("text", "") or ""
+
+    @rx.var
     def picker_card_has_priority(self) -> bool:
         """True when the currently open picker card has a priority annotation."""
         if not self.picker_card_code:
