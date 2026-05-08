@@ -901,9 +901,29 @@ def render_aux_card(key, name_str, color, extra_tasks=None, alert="", group=None
       - conditional: card carries 'is-conditional' class so empty Support 3 hides
     """
     label, sub = TASKS_AUX[key]
+    # Phase 4g polish — semantic dedup. The default `sub` for trash_1_5 is
+    # "Zones 1–5, plus Annex after 5am" which is functionally the same as the
+    # supervisor-set custom_tasks ["Zones 1-5", "Annex after 5am"]. Rendering
+    # both produced redundant 3-line stacks. Strategy: if any extra-task is a
+    # substring of `sub` (after normalizing punctuation/whitespace), drop the
+    # base `sub` and let the extras tell the full story line-by-line.
     items = []
-    if sub: items.append(sub)
-    if extra_tasks: items.extend(extra_tasks)
+    if extra_tasks:
+        items.extend(extra_tasks)
+    if sub:
+        def _norm(s: str) -> str:
+            return (s or "").replace("–", "-").replace(",", " ").lower().split()
+        sub_words = set(_norm(sub))
+        # If extras collectively cover most of sub's words, sub is redundant.
+        extras_words = set()
+        for e in (extra_tasks or []):
+            extras_words.update(_norm(e))
+        sub_is_redundant = (
+            bool(extras_words) and
+            len(sub_words & extras_words) >= max(1, int(len(sub_words) * 0.6))
+        )
+        if not sub_is_redundant:
+            items.insert(0, sub)
     if items:
         tasks_html = ('<ul class="aux-tasks">'
                       + "".join(_render_task_li(t) for t in items)
@@ -1331,8 +1351,11 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None, cu
     <div class="break-cols" style="max-height:5.4in; overflow:hidden;">
 {cols_html}
     </div>
-    <section class="overlaps-section" style="margin-top:10px;">
-      <h2 class="section-lbl" style="margin-bottom:4px;">
+    <!-- Phase 4g polish: full-width hairline separator pulls the OVERLAPS
+         section visually away from the Break 1-2-3 columns above. Matches the
+         deployment-page treatment so both pages feel like the same family. -->
+    <section class="overlaps-section" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--hairline-strong);">
+      <h2 class="section-lbl" style="margin-bottom:6px;">
         Overlaps <span class="meta">11p–1a &amp; 5a–7a</span>
       </h2>
       <div class="overlap-row">
@@ -1365,7 +1388,11 @@ CSS = r"""
 /* Landscape redesign (5/6/26): lift Barlow weights; drop Atkinson Hyperlegible
    (portrait accessibility face). Landscape is read at table distance, not floor
    distance, so viewport is larger. Landscape uses the template's ink palette. */
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap');
+/* Phase 4g polish: switched primary type from Barlow → Atkinson Hyperlegible.
+   Atkinson is purpose-built for low-vision accessibility — distinct letterforms
+   (no I/l confusion, open apertures, asymmetric b/d/p/q) and prints crisply at
+   small sizes. Barlow kept as fallback for browsers that fail the @import. */
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow:wght@400;500;600;700;800&display=swap');
 
 :root {
   --safe: 0.32in;
@@ -1404,7 +1431,10 @@ CSS = r"""
   --c-teal:   #14b8a6;   /* fallback                              */
   --c-alert:  #e53935;   /* used by alert dot bg                  */
 
-  --font: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+  /* Body text uses Atkinson (legibility); display headings keep Barlow's
+     condensed feel via --font-display. */
+  --font: 'Atkinson Hyperlegible', 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Barlow', 'Atkinson Hyperlegible', 'Helvetica Neue', Arial, sans-serif;
 }
 
 html, body { margin: 0; padding: 0; background: #d0d4d8;
@@ -1474,14 +1504,16 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 
 /* ── SECTION LABEL ── */
 .section-lbl {
-  font-weight: 600; font-size: 10px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--ink-500);
-  margin: 0 0 6px 0;
+  /* Phase 4g polish: ink-500 → ink-700 weight bump for the section
+     hierarchy. The previous color was washing out at print scale. */
+  font-weight: 700; font-size: 10.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink-700);
+  margin: 0 0 8px 0;
   display: flex; align-items: center; gap: 7px;
-  padding-bottom: 5px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--gold-lt);
 }
-.section-lbl .meta { margin-left: auto; font-weight: 400; font-size: 9px; color: var(--ink-300); }
+.section-lbl .meta { margin-left: auto; font-weight: 500; font-size: 9.5px; color: var(--ink-500); letter-spacing: 0.06em; }
 .section-lbl svg { width: 12px; height: 12px; color: var(--ink-300); }
 
 /* ── FOOTER ── */
@@ -1611,14 +1643,18 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 .gp[data-group="3"], .group-pill[data-group="3"] { background: #d2d2d7; color: #1d1d1f; }
 
 /* BODY — Phase F: tighter row ratios per handoff spec */
-.body { padding: 8px var(--safe) 6px; display: grid;
+.body { padding: 10px var(--safe) 8px; display: grid;
   grid-template-rows: minmax(0, 1.4fr) minmax(0, 0.85fr) auto auto;
-  gap: 7px; min-height: 0; }
+  /* Phase 4g polish: gap 7px → 11px so the ZONES → RESTROOMS → AUXILIARY
+     section transitions breathe. Was bumping flush against each other. */
+  gap: 11px; min-height: 0; }
 
 .section-label {
-  font-weight: 500; font-size: 9.5px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--ink-500);
-  margin: 0 0 6px 0;
+  /* Phase 4g polish: bumped section header weight + color for stronger
+     hierarchy between zones / restrooms / auxiliary. */
+  font-weight: 600; font-size: 10px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink-700);
+  margin: 0 0 8px 0;
   display: flex; align-items: center; gap: 7px;
   white-space: nowrap;
 }
@@ -1675,7 +1711,10 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 .zone-name.is-unfilled { color: var(--ink-300); font-weight: 400; font-style: italic; }
 .zone-tasks {
   list-style: none; margin: 1px 0 0; padding: 0;
-  font-size: 11px; line-height: 1.15; color: var(--ink-500);
+  /* Phase 4g polish: bumped from 11px → 11.5px and ink-500 → ink-700 for
+     reliable print legibility. The deployment book is read at 2am by tired
+     supervisors; the original muted color washed out under fluorescent light. */
+  font-size: 11.5px; line-height: 1.18; color: var(--ink-700);
   display: flex; flex-direction: column; gap: 0;
 }
 .zone-tasks li { display: flex; align-items: center; gap: 5px; white-space: nowrap;
@@ -1718,12 +1757,21 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 }
 
 /* AUX */
-.aux-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; min-width: 0; }
+/* Phase 4g polish: align-items stretch + auto-rows so every aux card grows
+   to match the tallest in the row. Was producing a ragged bottom edge when
+   Trash 1 had 3 task lines but Support 1 had none. */
+.aux-strip { display: grid; grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: 1fr; align-items: stretch; gap: 7px; min-width: 0; }
 .aux-card {
   background: #fff; border: 1px solid var(--hairline); border-radius: 6px;
-  padding: 6px 10px 7px; display: grid; gap: 2px; position: relative; overflow: hidden;
+  padding: 6px 10px 7px;
+  /* Make tasks a flex region that absorbs spare vertical space so single-
+     line cards no longer collapse to ~44px while neighbors stretch to 70px. */
+  display: grid; grid-template-rows: auto auto 1fr; gap: 2px;
+  position: relative; overflow: hidden;
   min-height: 44px;
 }
+.aux-card .aux-tasks { align-self: start; }
 .aux-card::before {
   content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;  /* Phase 4g: 2px→4px */
   background: var(--card-color);
@@ -1738,7 +1786,9 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 .aux-name { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; color: var(--ink-900); line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
 .aux-name.is-unfilled { color: var(--ink-300); font-weight: 400; font-style: italic; }
-.aux-tasks { list-style: none; margin: 0; padding: 0; font-size: 10.5px; line-height: 1.25; color: var(--ink-500);
+.aux-tasks { list-style: none; margin: 0; padding: 0;
+  /* Phase 4g polish: 10.5px → 11px, ink-500 → ink-700 for print contrast. */
+  font-size: 11px; line-height: 1.25; color: var(--ink-700);
   display: flex; flex-direction: column; gap: 1px; }
 /* Aux task lines wrap to a 2nd line when long (e.g., Trash 1's "Zones 1-5,
    plus Annex after 5am" was overflowing the narrow card width). */
@@ -1786,7 +1836,8 @@ body { display: flex; flex-direction: column; align-items: center; padding: 32px
 
 .rr-tasks {
   list-style: none; margin: 0; padding: 5px 0 0; border-top: 1px solid var(--hairline);
-  font-size: 11px; line-height: 1.2; color: var(--ink-500);
+  /* Phase 4g polish: ink-500 → ink-700 for print contrast. */
+  font-size: 11px; line-height: 1.25; color: var(--ink-700);
   display: flex; flex-direction: column; gap: 1px;
 }
 .rr-tasks li { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
