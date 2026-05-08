@@ -146,7 +146,7 @@ def _root_view() -> rx.Component:
         ),
         # ── Skip tonight row ─────────────────────────────────────────────
         rx.hstack(
-            rx.html(glcr_icon("actions", "clock-pending", size=13)),
+            rx.html(glcr_icon("status", "clock-pending", size=13)),
             rx.text("Skip tonight", size="2"),
             cursor="pointer",
             on_click=ZdsState.toggle_task_skip,
@@ -157,7 +157,7 @@ def _root_view() -> rx.Component:
         ),
         # ── Edit text row ─────────────────────────────────────────────────
         rx.hstack(
-            rx.html(glcr_icon("ui", "menu-list", size=13)),
+            rx.html(glcr_icon("ui", "tag-label", size=13)),
             rx.text("Edit text", size="2"),
             cursor="pointer",
             on_click=ZdsState.set_task_popover_view("edit_text"),
