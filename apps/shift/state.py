@@ -143,9 +143,13 @@ def _tonight_date_iso() -> str:
     we use 'today's date' as defined by the morning side of the shift:
     before 7 AM → use today's date (the shift is still running from last night);
     7 AM or later → shift hasn't started yet, use today's date as tomorrow's anchor.
-    In practice: just use date.today() which is always correct for the log date.
+    In practice: just use today() which is always correct for the log date.
+
+    Phase 4k.7 hotfix: must be timezone-aware. Render runs in UTC, so a naive
+    date.today() returns tomorrow's date during ET evening hours, surfacing
+    the wrong night on the shift hub.
     """
-    return datetime.date.today().isoformat()
+    return datetime.datetime.now(tz=_ET).date().isoformat()
 
 
 class ShiftState(rx.State):
@@ -349,9 +353,13 @@ class ShiftState(rx.State):
         from apps.zds import database as _zds_db
         try:
             sb = _get_client()
-            today = datetime.date.today().isoformat()
-            tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
-            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+            # Phase 4k.7 hotfix: ET-anchored date so the shift hub picks
+            # tonight's row, not the next-UTC-day row that date.today()
+            # returns during ET evening hours on a UTC server.
+            _today_dt = datetime.datetime.now(tz=_ET).date()
+            today = _today_dt.isoformat()
+            tomorrow = (_today_dt + datetime.timedelta(days=1)).isoformat()
+            yesterday = (_today_dt - datetime.timedelta(days=1)).isoformat()
             # Try in order of likelihood: today (shift-start convention),
             # tomorrow (shift-end convention), yesterday (mid-shift before 7am).
             night_id = ""
