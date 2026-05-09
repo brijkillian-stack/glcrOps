@@ -4,6 +4,55 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
+
+Two issues from live deployment testing of Phase 4k.6:
+
+### Fix 1 — Symbol icons never rendered
+- `rx.html(Var)` with dict-subscript content (`ZdsState.task_symbol_html[task["id"]]`)
+  does not propagate as `dangerouslySetInnerHTML` in Reflex 0.9 — the SVG is silently
+  dropped. No error; icons just never appeared.
+- Replaced `task_symbol_html: dict[str, str]` computed var with `task_symbol_url`,
+  which maps `annot_id → /assets/icons/glcr/{section}/{slug}.svg`.
+- `zone_card.py` foreach lambda now uses `rx.image(src=ZdsState.task_symbol_url[...])`.
+- Trade-off: `<img>`-loaded SVGs cannot inherit `currentColor` for stroke tinting,
+  so icons render in default black regardless of highlight color. Acceptable for v1.
+
+### Fix 2 — Custom slot tasks (added via "+ task") could not be annotated
+- Custom tasks stored in `slot.custom_tasks` column had `task["id"]=""`. Every
+  setter handler (`set_task_highlight`, `set_task_symbol`, `save_task_note`,
+  `toggle_task_skip`, `clear_task_annotation`) bailed on `if not task_popover_task_id`.
+  Highlighting, symbols, notes, and skip were silently no-ops for all custom tasks.
+  Most visible on aux cards (Trash, Support, Z9 SR, Admin) where custom tasks dominate.
+
+#### Architectural change — stable `annot_id` on every task
+- `types.TaskItem` gains `annot_id: str` (never empty):
+  - Canonical tasks (UUID in zone_tasks): `annot_id = id`
+  - Custom / hardcoded tasks: `annot_id = "custom:{row_label}:{sha1(name)[:8]}"`
+- `database._annot_id_for_task()` helper + injected at all 5 `display_tasks`
+  construction sites (custom, canonical DB, zone fallback, RR fallback, aux fallback,
+  and sweeper append).
+- `ZdsState.task_popover_task_id` renamed → `task_popover_annot_id` everywhere
+  (state var, computed vars, all setter handlers, `task_popover.py` condition).
+- `task_popover_is_adhoc` refined: custom tasks (`"custom:"` prefix) are NOT adhoc.
+  Adhoc card-annotation tasks retain the existing `:` detection minus the prefix.
+- `edit_task_text` and `delete_adhoc_task_from_popover` guard against `"custom:"`
+  prefix (editing custom task text is not yet supported — silently closes popover).
+- All annotation computed vars (`task_class_map`, `task_symbol_url`, `task_note_text_map`)
+  key on `annot_id` via `task_annotation_data` (which is written with `annot_id` as
+  `target_ref`).
+- `zone_card.py` foreach lambda switches `task["id"]` → `task["annot_id"]` for all
+  annotation lookups and the `open_task_popover` call.
+- `print_renderer._apply_task_annotations` + `_inject_task_highlights` key on
+  `annot_id` (fallback to `id` for any pre-4k.7 dicts missing the field).
+
+**Caveat:** editing a custom task's display text via the Edit Text sub-view is
+blocked (silently returns to root view). Removing and re-adding the task under a
+new name rotates its `annot_id`, so old annotations on the prior wording stop
+applying — this is expected and documented.
+
+---
+
 ## 2026-05-08 — Hotfix 4k.6: restore live annotations, PDF highlights, popover clipping (Sonnet)
 
 Three bugs introduced by Phase 4k.6 annotation pivot:

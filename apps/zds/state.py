@@ -251,7 +251,7 @@ class ZdsState(rx.State):
     # Click on a task line opens an inline popover anchored below the row.
     # Replaces the right-click JS context menu (4k.3–4k.5).
     task_popover_open:      bool = False
-    task_popover_task_id:   str  = ""   # task UUID (canonical) or adhoc composite ref
+    task_popover_annot_id:   str  = ""   # stable annot_id (UUID or "custom:{lbl}:{hash}")
     task_popover_card_code: str  = ""   # card code the task lives in
     task_popover_view:      str  = "root"  # root | note | edit_text
     task_popover_note_text: str  = ""   # live text for note/edit-text subviews
@@ -344,16 +344,23 @@ class ZdsState(rx.State):
 
     @rx.var
     def task_popover_is_adhoc(self) -> bool:
-        """True when the open popover is on an adhoc task (composite ref with ':')."""
-        return ":" in self.task_popover_task_id
+        """True when the open popover is on an adhoc card-annotation task.
+
+        Adhoc tasks have a composite ref like "Zone 9:abc123" (stored as a
+        card annotation). Custom slot tasks use "custom:{label}:{hash}" and
+        are NOT adhoc — they're stored in the slot's custom_tasks column and
+        can't be deleted via the card-annotation path.
+        """
+        aid = self.task_popover_annot_id
+        return ":" in aid and not aid.startswith("custom:")
 
     @rx.var
     def task_popover_existing_note(self) -> str:
         """Existing note text for the task currently open in the popover."""
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             return ""
         return (
-            self.task_annotation_data.get(self.task_popover_task_id, {})
+            self.task_annotation_data.get(self.task_popover_annot_id, {})
             .get("note", {})
             .get("text", "")
         )
@@ -361,17 +368,17 @@ class ZdsState(rx.State):
     @rx.var
     def task_popover_existing_highlight(self) -> str:
         """Existing highlight color for the task open in the popover ('' = none)."""
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             return ""
-        ann = self.task_annotation_data.get(self.task_popover_task_id, {})
+        ann = self.task_annotation_data.get(self.task_popover_annot_id, {})
         return ann.get("highlight", {}).get("color", "")
 
     @rx.var
     def task_popover_existing_symbol(self) -> dict:
         """Existing symbol annotation for the task open in the popover ({} = none)."""
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             return {}
-        ann = self.task_annotation_data.get(self.task_popover_task_id, {})
+        ann = self.task_annotation_data.get(self.task_popover_annot_id, {})
         return ann.get("symbol", {})
 
     @rx.var
@@ -445,26 +452,24 @@ class ZdsState(rx.State):
         return out
 
     @rx.var
-    def task_symbol_html(self) -> dict[str, str]:
-        """Map task_id → SVG icon HTML string for symbol annotations.
+    def task_symbol_url(self) -> dict[str, str]:
+        """Map annot_id → static asset URL for the task symbol icon SVG.
 
-        Defers glcr_icon import to the function body to avoid a circular import
-        (state.py → components/ → state.py). Only tasks with a symbol annotation
-        appear in the map.
+        Returns the pre-existing SVG path under /assets/icons/glcr/{section}/{slug}.svg.
+        Using a static URL with rx.image is more reliable in Reflex 0.9 than
+        rx.html(Var) with dict-subscript content (which drops dangerouslySetInnerHTML
+        silently). Icons render as <img> — no currentColor inheritance, so they
+        appear in default black stroke; acceptable for v1.
 
-        Phase 4k.6 hotfix: symbol icons now render inline on the live page.
+        Phase 4k.7: replaces task_symbol_html.
         """
-        from .components.glcr_icons import glcr_icon  # deferred — avoid circular import
         out: dict[str, str] = {}
-        for task_id, anns in (self.task_annotation_data or {}).items():
+        for annot_id, anns in (self.task_annotation_data or {}).items():
             sym     = anns.get("symbol") or {}
             section = sym.get("section", "")
             slug    = sym.get("slug", "")
             if section and slug:
-                try:
-                    out[task_id] = glcr_icon(section, slug, size=11, css_class="task-symbol")
-                except Exception:
-                    pass
+                out[annot_id] = f"/assets/icons/glcr/{section}/{slug}.svg"
         return out
 
     @rx.var
@@ -2386,14 +2391,18 @@ class ZdsState(rx.State):
     # =========================================================================
 
     @rx.event
-    def open_task_popover(self, task_id: str, card_code: str):
-        """Open the inline task popover when a task line is clicked."""
-        self.task_popover_task_id   = task_id or ""
+    def open_task_popover(self, annot_id: str, card_code: str):
+        """Open the inline task popover when a task line is clicked.
+
+        annot_id is the TaskItem.annot_id (UUID for canonical tasks,
+        "custom:{label}:{hash}" for custom/hardcoded tasks).
+        """
+        self.task_popover_annot_id  = annot_id or ""
         self.task_popover_card_code = card_code or ""
         self.task_popover_view      = "root"
         self.task_popover_note_text = (
-            self.task_annotation_data.get(task_id, {}).get("note", {}).get("text", "")
-            if task_id else ""
+            self.task_annotation_data.get(annot_id, {}).get("note", {}).get("text", "")
+            if annot_id else ""
         )
         self.task_popover_open = True
 
@@ -2421,16 +2430,16 @@ class ZdsState(rx.State):
     def set_task_highlight(self, color: str):
         """Toggle a highlight annotation on the current task (same color → clears it)."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("highlight")
+        existing    = self.task_annotation_data.get(self.task_popover_annot_id, {}).get("highlight")
         if existing and existing.get("color") == color:
-            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "highlight")
+            delete_annotation(week_ending, day, "task", self.task_popover_annot_id, "highlight")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "highlight",
+            upsert_annotation(week_ending, day, "task", self.task_popover_annot_id, "highlight",
                               {"color": color})
         self._load_task_annotations()
 
@@ -2443,18 +2452,18 @@ class ZdsState(rx.State):
         to look up via glcr_icon(section, slug).
         """
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("symbol")
+        existing    = self.task_annotation_data.get(self.task_popover_annot_id, {}).get("symbol")
         if (existing
                 and existing.get("section") == section
                 and existing.get("slug") == slug):
-            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "symbol")
+            delete_annotation(week_ending, day, "task", self.task_popover_annot_id, "symbol")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "symbol",
+            upsert_annotation(week_ending, day, "task", self.task_popover_annot_id, "symbol",
                               {"section": section, "slug": slug})
         self._load_task_annotations()
 
@@ -2462,17 +2471,17 @@ class ZdsState(rx.State):
     def save_task_note(self):
         """Save (or delete if blank) a note annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
         text        = self.task_popover_note_text.strip()
         if text:
-            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "note",
+            upsert_annotation(week_ending, day, "task", self.task_popover_annot_id, "note",
                               {"text": text})
         else:
-            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "note")
+            delete_annotation(week_ending, day, "task", self.task_popover_annot_id, "note")
         self._load_task_annotations()
         self.task_popover_view = "root"
 
@@ -2480,16 +2489,16 @@ class ZdsState(rx.State):
     def toggle_task_skip(self):
         """Toggle the skip-tonight annotation on the current task."""
         from shared.db import upsert_annotation, delete_annotation
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        existing    = self.task_annotation_data.get(self.task_popover_task_id, {}).get("skip")
+        existing    = self.task_annotation_data.get(self.task_popover_annot_id, {}).get("skip")
         if existing is not None:
-            delete_annotation(week_ending, day, "task", self.task_popover_task_id, "skip")
+            delete_annotation(week_ending, day, "task", self.task_popover_annot_id, "skip")
         else:
-            upsert_annotation(week_ending, day, "task", self.task_popover_task_id, "skip",
+            upsert_annotation(week_ending, day, "task", self.task_popover_annot_id, "skip",
                               {"skipped": True})
         self._load_task_annotations()
 
@@ -2497,16 +2506,16 @@ class ZdsState(rx.State):
     def clear_task_annotation(self):
         """Remove ALL annotations for the current task."""
         from shared.db import list_annotations, delete_annotation
-        if not self.task_popover_task_id:
+        if not self.task_popover_annot_id:
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
         rows = list_annotations(week_ending, day, target_kind="task",
-                                target_ref=self.task_popover_task_id)
+                                target_ref=self.task_popover_annot_id)
         for row in rows:
             delete_annotation(week_ending, day, "task",
-                              self.task_popover_task_id, row["annotation_kind"])
+                              self.task_popover_annot_id, row["annotation_kind"])
         self._load_task_annotations()
         self.task_popover_open = False
 
@@ -2520,20 +2529,26 @@ class ZdsState(rx.State):
         """
         from shared.db import upsert_annotation, get_task_by_id
         new_text = (form_data.get("text") or "").strip()
-        if not new_text or not self.task_popover_task_id:
+        if not new_text or not self.task_popover_annot_id:
             self.task_popover_view = "root"
             return
-        task_id     = self.task_popover_task_id
+        annot_id    = self.task_popover_annot_id
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        if ":" in task_id:
+        # Adhoc card-annotation tasks have ":" but don't start with "custom:"
+        # Custom slot tasks ("custom:...") are stored in slot's custom_tasks column
+        # — editing them is not yet supported (close popover silently).
+        if annot_id.startswith("custom:"):
+            self.task_popover_view = "root"
+            return
+        elif ":" in annot_id:
             # Adhoc composite ref — update the annotation value only (this week)
-            upsert_annotation(week_ending, day, "card", task_id, "adhoc", {"name": new_text})
+            upsert_annotation(week_ending, day, "card", annot_id, "adhoc", {"name": new_text})
         else:
-            # Canonical zone_tasks row — update the name for all weeks
+            # Canonical zone_tasks row (UUID) — update the name for all weeks
             try:
                 from shared.db import upsert_task
-                upsert_task({"id": task_id, "name": new_text})
+                upsert_task({"id": annot_id, "name": new_text})
             except Exception as exc:
                 self.error = f"Edit task error: {exc}"
         self._load_task_annotations()
@@ -2546,15 +2561,19 @@ class ZdsState(rx.State):
 
     @rx.event
     def delete_adhoc_task_from_popover(self):
-        """Delete an adhoc task that is currently open in the task popover."""
+        """Delete an adhoc card-annotation task currently open in the popover.
+
+        Only deletes real adhoc tasks (composite ref, no "custom:" prefix).
+        Custom slot tasks would need a separate slot-edit flow — bail silently.
+        """
         from shared.db import delete_annotation
-        task_id = self.task_popover_task_id
-        if ":" not in task_id:
+        annot_id = self.task_popover_annot_id
+        if ":" not in annot_id or annot_id.startswith("custom:"):
             self.task_popover_open = False
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        delete_annotation(week_ending, day, "card", task_id, "adhoc")
+        delete_annotation(week_ending, day, "card", annot_id, "adhoc")
         self._load_task_annotations()
         self.task_popover_open = False
 

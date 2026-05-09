@@ -5,6 +5,7 @@ Every function returns plain Python dicts so Reflex state can serialize them cle
 
 from __future__ import annotations
 
+import hashlib
 import os
 from functools import lru_cache
 from typing import Optional
@@ -15,6 +16,24 @@ from supabase import create_client, Client
 from .styles import (SLOT_ELIGIBILITY_MAP, ZONE_LABELS, ZONE_COLORS,
                      TASKS_ZONE, TASKS_RR, TASKS_AUX_SLOT,
                      BG_ZONE, BG_RR_M, BG_RR_W, BG_AUX)
+
+# ── Task annotation ID helper (Phase 4k.7) ───────────────────────────────────
+
+def _annot_id_for_task(task_id: str, row_label: str, name: str) -> str:
+    """Stable annotation identifier for a task.
+
+    Canonical tasks (have a UUID from zone_tasks): annot_id == task_id.
+    Custom / hardcoded tasks (id=""): annot_id == "custom:{row_label}:{sha1(name)[:8]}".
+
+    The sha1 truncation gives 8 hex chars — collision risk on a single card
+    with one custom task is negligible. NEVER change this format without
+    migrating existing zds_annotations rows.
+    """
+    if task_id:
+        return task_id
+    h = hashlib.sha1(name.strip().encode("utf-8")).hexdigest()[:8]
+    return f"custom:{row_label}:{h}"
+
 
 # ── Break-sheet slot-ref helpers ─────────────────────────────────────────────
 # Maps the canonical slot_ref label (stored by the engine) → hex color and section.
@@ -1213,10 +1232,15 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
             row["group_num"] = BG_AUX.get(sk, 0)
         row["has_group"] = bool(row["group_num"])
         # ── display_tasks: custom_tasks → DB zone_tasks → hardcoded constants ──
-        custom = row.get("custom_tasks")
+        _lbl    = row.get("label", sk)   # row["label"] already set above
+        custom  = row.get("custom_tasks")
         if custom is not None:
-            # custom_tasks in DB are list[str] — wrap as TaskItem dicts (id="" for custom)
-            row["display_tasks"] = [{"id": "", "name": t} for t in custom]
+            # custom_tasks in DB are list[str] — wrap as TaskItem dicts with stable annot_id
+            row["display_tasks"] = [
+                {"id": "", "name": t,
+                 "annot_id": _annot_id_for_task("", _lbl, t)}
+                for t in custom
+            ]
         else:
             # Resolve DB lookup key from slot type + slot_key
             if st == "zone":
@@ -1230,20 +1254,39 @@ def fetch_zone_assignments(night_id: str) -> list[dict]:
                 _num    = 0
             _db_rows = _db_zone_tasks.get(_db_key, [])
             if _db_rows:
-                # Phase 4k.3: carry UUID so annotation handlers can reference by id
-                row["display_tasks"] = [{"id": t["id"], "name": t["name"]} for t in _db_rows]
+                # Canonical tasks: annot_id == UUID (same as id)
+                row["display_tasks"] = [
+                    {"id": t["id"], "name": t["name"],
+                     "annot_id": _annot_id_for_task(t["id"], _lbl, t["name"])}
+                    for t in _db_rows
+                ]
             elif st == "zone":
-                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_ZONE.get(_num, [])]
+                row["display_tasks"] = [
+                    {"id": "", "name": t,
+                     "annot_id": _annot_id_for_task("", _lbl, t)}
+                    for t in TASKS_ZONE.get(_num, [])
+                ]
             elif st == "rr":
-                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_RR.get(_num, [])]
+                row["display_tasks"] = [
+                    {"id": "", "name": t,
+                     "annot_id": _annot_id_for_task("", _lbl, t)}
+                    for t in TASKS_RR.get(_num, [])
+                ]
             else:
-                row["display_tasks"] = [{"id": "", "name": t} for t in TASKS_AUX_SLOT.get(sk, [])]
+                row["display_tasks"] = [
+                    {"id": "", "name": t,
+                     "annot_id": _annot_id_for_task("", _lbl, t)}
+                    for t in TASKS_AUX_SLOT.get(sk, [])
+                ]
         # ── Sweeper task: always appended on top (never stored in custom_tasks) ──
         if row.get("is_sweeper") and row.get("sweeper_route"):
             sweeper_label = f"Sweeper – {row['sweeper_route']}"
             _existing_names = [t["name"] for t in row["display_tasks"]]
             if sweeper_label not in _existing_names:
-                row["display_tasks"] = list(row["display_tasks"]) + [{"id": "", "name": sweeper_label}]
+                row["display_tasks"] = list(row["display_tasks"]) + [
+                    {"id": "", "name": sweeper_label,
+                     "annot_id": _annot_id_for_task("", _lbl, sweeper_label)}
+                ]
         # ── Normalise is_locked ──
         row["is_locked"] = bool(row.get("is_locked"))
 

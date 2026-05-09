@@ -286,14 +286,16 @@ def _apply_task_annotations(items: list, annots: dict) -> list[str]:
     result: list[str] = []
     for item in items:
         if isinstance(item, dict):
-            task_id = item.get("id", "")
-            name    = item.get("name", "")
+            # Phase 4k.7: use annot_id as the stable annotation key.
+            # Fall back to id for any pre-4k.7 dicts that lack the field.
+            annot_id = item.get("annot_id") or item.get("id", "")
+            name     = item.get("name", "")
         else:
-            task_id = ""
-            name    = str(item)
+            annot_id = ""
+            name     = str(item)
 
-        if task_id and task_id in annots:
-            task_ann = annots[task_id]
+        if annot_id and annot_id in annots:
+            task_ann = annots[annot_id]
             # Skip — omit from print output entirely
             if task_ann.get("skip"):
                 continue
@@ -328,8 +330,8 @@ def _inject_task_highlights(card_html: str, task_items: list, annots: dict) -> s
     <li> by matching the end-anchor ``{esc(name)}</li>``, then inject a
     ``class="task-hl-{color}"`` attribute.
 
-    Only tasks with an id (UUIDs) and a highlight annotation are processed;
-    custom/hardcoded tasks (id="") pass through unchanged.
+    Phase 4k.7: uses annot_id (stable for both canonical and custom tasks).
+    Falls back to id for pre-4k.7 dicts missing the annot_id field.
 
     Phase 4k.6 hotfix: adds highlight rendering to PDF output.
     """
@@ -338,10 +340,10 @@ def _inject_task_highlights(card_html: str, task_items: list, annots: dict) -> s
     for item in task_items:
         if not isinstance(item, dict):
             continue
-        task_id = item.get("id", "")
-        if not task_id:
+        annot_id = item.get("annot_id") or item.get("id", "")
+        if not annot_id:
             continue
-        ann = annots.get(task_id) or {}
+        ann = annots.get(annot_id) or {}
         hl_color = (ann.get("highlight") or {}).get("color", "")
         if not hl_color:
             continue

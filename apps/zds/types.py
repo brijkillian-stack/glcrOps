@@ -17,14 +17,22 @@ from typing import TypedDict
 
 
 class TaskItem(TypedDict):
-    """One task in a slot's display_tasks list (Phase 4k.3).
+    """One task in a slot's display_tasks list (Phase 4k.3 + 4k.7).
 
-    Upgrading from plain str so that annotation handlers have task UUIDs
-    available for writes to `zds_annotations`. Custom tasks (from the
-    custom_tasks JSONB column) and hardcoded fallbacks carry id="".
+    Upgrading from plain str so that annotation handlers have stable keys
+    for writes to `zds_annotations`.
+
+    Phase 4k.7 — annot_id:
+      Canonical tasks: annot_id == id (UUID from zone_tasks)
+      Custom / hardcoded tasks: annot_id == "custom:{row_label}:{sha1(name)[:8]}"
+
+    annot_id is the target_ref used in every zds_annotations row for tasks.
+    It is stable as long as the task name string doesn't change; editing the
+    task text via the popover rotates the annot_id for custom tasks (expected).
     """
-    id:   str   # UUID from zone_tasks; "" for custom / hardcoded tasks
-    name: str   # display label
+    id:       str   # UUID from zone_tasks; "" for custom / hardcoded tasks
+    name:     str   # display label
+    annot_id: str   # stable annotation key (Phase 4k.7); never empty
 
 
 class Week(TypedDict):

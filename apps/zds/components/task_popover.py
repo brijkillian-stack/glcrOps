@@ -1,14 +1,14 @@
-"""task_popover.py — inline annotation popover for task lines (Phase 4k.6).
+"""task_popover.py — inline annotation popover for task lines (Phase 4k.6 + 4k.7).
 
-Renders directly inside each task <li> as an absolute-positioned child.
-Visibility is controlled by ZdsState.task_popover_task_id == task["id"].
+Renders directly inside each task <li> as a fixed-centered overlay.
+Visibility is controlled by ZdsState.task_popover_annot_id == task["annot_id"].
 
 Views:
   root       — color swatches + symbol pills + action rows
   note       — textarea + save/cancel for task note
   edit_text  — input + save/cancel to rename the task
 
-Outside-click dismiss is handled by a full-page transparent overlay
+Outside-click dismiss is handled by a full-page dim overlay
 (task-popover-overlay) that fires close_task_popover on click.
 """
 
@@ -99,7 +99,7 @@ def _symbol_pill(section: str, slug: str, label: str) -> rx.Component:
 
 def _root_view() -> rx.Component:
     has_note     = ZdsState.task_popover_existing_note != ""
-    is_skipped   = ZdsState.task_annotation_data.contains(ZdsState.task_popover_task_id)
+    is_skipped   = ZdsState.task_annotation_data.contains(ZdsState.task_popover_annot_id)
     is_adhoc     = ZdsState.task_popover_is_adhoc
 
     return rx.vstack(
@@ -284,7 +284,7 @@ def task_popover_body() -> rx.Component:
 def task_popover(task_id_var) -> rx.Component:
     """Render the popover only when this task's ID matches the open popover ID."""
     return rx.cond(
-        ZdsState.task_popover_open & (ZdsState.task_popover_task_id == task_id_var),
+        ZdsState.task_popover_open & (ZdsState.task_popover_annot_id == task_id_var),
         task_popover_body(),
         rx.fragment(),
     )
