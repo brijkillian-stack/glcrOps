@@ -393,7 +393,9 @@ class ShiftState(rx.State):
                 tm_name=tm or "—",
                 tm_id=s.get("tm_id") or "",
                 group_num=gn,
-                current_task=tasks[0] if tasks else "",
+                # Phase 4k.7: display_tasks is now list[TaskItem] dicts
+                # ({id, name, annot_id}) instead of plain strings — extract .name
+                current_task=(tasks[0]["name"] if tasks else ""),
                 status=st,
                 is_locked=bool(s.get("is_locked")),
                 is_called_off=is_co,
