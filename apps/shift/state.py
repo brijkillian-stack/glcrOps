@@ -139,17 +139,24 @@ def _now_approx_label() -> str:
 def _tonight_date_iso() -> str:
     """ISO date string for tonight's shift.
 
-    Grave shift runs 11 PM → 7 AM. For the purpose of anchoring captures,
-    we use 'today's date' as defined by the morning side of the shift:
-    before 7 AM → use today's date (the shift is still running from last night);
-    7 AM or later → shift hasn't started yet, use today's date as tomorrow's anchor.
-    In practice: just use today() which is always correct for the log date.
+    Grave shift runs 11 PM → 7 AM. We anchor to the SHIFT'S START DATE,
+    not the current calendar date — Brian's mental model for "Friday's
+    shift" is the shift that DEPLOYED on Friday, even if you're working
+    it at 3 AM Saturday morning.
 
-    Phase 4k.7 hotfix: must be timezone-aware. Render runs in UTC, so a naive
-    date.today() returns tomorrow's date during ET evening hours, surfacing
-    the wrong night on the shift hub.
+    Rule (ET timezone):
+      • ET hour < 7   → mid-shift; shift started YESTERDAY → use yesterday
+      • ET hour ≥ 7   → before/during upcoming shift → use today
+
+    Phase 4k.7 hotfix: was returning UTC date.today() which surfaced the
+    wrong night during ET evening hours; second hotfix moves to ET +
+    "shift started yesterday" before 7am to match the deployed roster.
     """
-    return datetime.datetime.now(tz=_ET).date().isoformat()
+    now_et = datetime.datetime.now(tz=_ET)
+    anchor = now_et.date()
+    if now_et.hour < 7:
+        anchor = anchor - datetime.timedelta(days=1)
+    return anchor.isoformat()
 
 
 class ShiftState(rx.State):
@@ -306,8 +313,13 @@ class ShiftState(rx.State):
 
     async def _build_header(self):
         now = datetime.datetime.now(tz=_ET)
-        day_abbr = now.strftime("%a")
-        month_abbr = now.strftime("%b %-d")
+        # Header label anchors to the SHIFT START date, not the calendar
+        # day. Mid-shift (00:00–06:59 ET) the shift started yesterday, so
+        # the label should say "FRI · MAY 8" not "SAT · MAY 9". Mirrors
+        # _tonight_date_iso() and the _build_from_zds bootstrap.
+        anchor_dt = now if now.hour >= 7 else now - datetime.timedelta(days=1)
+        day_abbr = anchor_dt.strftime("%a")
+        month_abbr = anchor_dt.strftime("%b %-d")
         self.shift_date_label = f"{day_abbr} · {month_abbr} · Grave shift"
         self.shift_date_iso = _tonight_date_iso()
         hour = now.hour
@@ -353,13 +365,18 @@ class ShiftState(rx.State):
         from apps.zds import database as _zds_db
         try:
             sb = _get_client()
-            # Phase 4k.7 hotfix: ET-anchored date so the shift hub picks
-            # tonight's row, not the next-UTC-day row that date.today()
-            # returns during ET evening hours on a UTC server.
-            _today_dt = datetime.datetime.now(tz=_ET).date()
-            today = _today_dt.isoformat()
-            tomorrow = (_today_dt + datetime.timedelta(days=1)).isoformat()
-            yesterday = (_today_dt - datetime.timedelta(days=1)).isoformat()
+            # Phase 4k.7 hotfix #2: anchor to shift START date, not current
+            # calendar day. Between midnight and 7 AM ET we're mid-shift and
+            # the deployment we want is YESTERDAY's (shift started last
+            # night). After 7 AM we're between shifts; the upcoming one
+            # uses today's date. Mirrors _tonight_date_iso() above.
+            _now_et = datetime.datetime.now(tz=_ET)
+            _anchor = _now_et.date()
+            if _now_et.hour < 7:
+                _anchor = _anchor - datetime.timedelta(days=1)
+            today = _anchor.isoformat()
+            tomorrow = (_anchor + datetime.timedelta(days=1)).isoformat()
+            yesterday = (_anchor - datetime.timedelta(days=1)).isoformat()
             # Try in order of likelihood: today (shift-start convention),
             # tomorrow (shift-end convention), yesterday (mid-shift before 7am).
             night_id = ""
