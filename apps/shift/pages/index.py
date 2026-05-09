@@ -686,6 +686,7 @@ def _task_row(task) -> rx.Component:
         ),
         rx.el.div(
             "✓",
+            on_click=ShiftState.complete_task(task["id"]),
             style={
                 "width": "22px",
                 "height": "22px",
@@ -695,6 +696,13 @@ def _task_row(task) -> rx.Component:
                 "placeItems": "center",
                 "fontSize": "11px",
                 "color": "var(--ink3)",
+                "cursor": "pointer",
+                "transition": "all 0.15s ease",
+            },
+            _hover={
+                "background": "var(--green, #10b981)",
+                "borderColor": "var(--green, #10b981)",
+                "color": "white",
             },
         ),
         style={

@@ -20,7 +20,12 @@ import reflex as rx
 
 from apps.zds.state import ZdsState
 from apps.zds.database import ENGINE_SLOT_LABEL as _ENGINE_SLOT_LABEL
-from shared.db import get_tonight_tasks, get_activity_feed, ensure_shift_log_event
+from shared.db import (
+    complete_task,
+    ensure_shift_log_event,
+    get_activity_feed,
+    get_tonight_tasks,
+)
 from .utils import fmt_time
 from .types import (
     HudZoneSlot,
@@ -276,6 +281,24 @@ class ShiftState(rx.State):
             await self._build_activity()
         except Exception:
             print(f"[ShiftState.refresh] error:\n{traceback.format_exc()}")
+
+    @rx.event
+    async def complete_task(self, task_id: str):
+        """Mark a tonight-task as completed and refresh the panel.
+
+        Wired to the ✓ check button on each row in _task_row (apps/shift/
+        pages/index.py). Calls shared.db.complete_task which sets
+        status='completed' + completed_at on the tasks row, then
+        rebuilds the in-state list so the row drops out of view.
+        """
+        if not task_id:
+            return
+        try:
+            ok = complete_task(task_id)
+            if ok:
+                await self._build_tasks()
+        except Exception:
+            print(f"[ShiftState.complete_task] error:\n{traceback.format_exc()}")
 
     async def _build_header(self):
         now = datetime.datetime.now(tz=_ET)
