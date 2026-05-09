@@ -20,6 +20,7 @@ import reflex as rx
 
 from ..styles import CARD_BASE, C_ALERT
 from ..state import ZdsState
+from ..types import TaskItem
 from shared.components.context_menu import ContextMenuState
 from .task_popover import task_popover
 
@@ -243,7 +244,7 @@ def _trainee_chip(name) -> rx.Component:
     )
 
 
-def _task_section(slot_id, tasks, card_label) -> rx.Component:
+def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Component:
     """
     Shows the task list for a slot with per-task annotation popovers,
     remove buttons, and an inline add-task form.
@@ -251,6 +252,12 @@ def _task_section(slot_id, tasks, card_label) -> rx.Component:
     Phase 4k.6: clicking a task line opens an inline popover (task_popover.py)
     instead of the old right-click JS context menu.
     card_label is passed so open_task_popover knows which card the task is in.
+
+    Phase 4k.7 hotfix: explicit `rx.Var[list[TaskItem]]` annotation forces
+    Reflex's foreach to type the lambda's `task` arg as `Var[TaskItem]` —
+    without it, chained subscripts on `task["annot_id"]` were serializing
+    the whole dict to React (causing minified error #31 with keys
+    {id, name, annot_id} on initial render).
     """
     return rx.vstack(
         # ── Existing tasks ──
