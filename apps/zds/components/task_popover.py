@@ -80,8 +80,10 @@ def _color_swatch(color_name: str, css_val: str) -> rx.Component:
 
 
 def _symbol_pill(section: str, slug: str, label: str) -> rx.Component:
-    existing = ZdsState.task_popover_existing_symbol
-    is_active = (existing["section"] == section) & (existing["slug"] == slug)
+    is_active = (
+        (ZdsState.task_popover_existing_symbol_section == section)
+        & (ZdsState.task_popover_existing_symbol_slug == slug)
+    )
     icon_html = glcr_icon(section, slug, size=13)
     return rx.box(
         rx.html(icon_html),

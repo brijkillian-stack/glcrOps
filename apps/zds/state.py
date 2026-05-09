@@ -374,12 +374,25 @@ class ZdsState(rx.State):
         return ann.get("highlight", {}).get("color", "")
 
     @rx.var
-    def task_popover_existing_symbol(self) -> dict:
-        """Existing symbol annotation for the task open in the popover ({} = none)."""
+    def task_popover_existing_symbol_section(self) -> str:
+        """Existing symbol section for the task open in the popover ('' = none).
+
+        Split from a single dict return into two `-> str` computed vars
+        because Reflex 0.9 can't reliably subscript a bare-`dict:` Var
+        in a component body (renders as raw object → React error #31).
+        """
         if not self.task_popover_annot_id:
-            return {}
+            return ""
         ann = self.task_annotation_data.get(self.task_popover_annot_id, {})
-        return ann.get("symbol", {})
+        return (ann.get("symbol") or {}).get("section", "")
+
+    @rx.var
+    def task_popover_existing_symbol_slug(self) -> str:
+        """Existing symbol slug for the task open in the popover ('' = none)."""
+        if not self.task_popover_annot_id:
+            return ""
+        ann = self.task_annotation_data.get(self.task_popover_annot_id, {})
+        return (ann.get("symbol") or {}).get("slug", "")
 
     @rx.var
     def card_badge_classes(self) -> dict[str, str]:
