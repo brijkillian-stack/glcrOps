@@ -1475,42 +1475,71 @@ class ZdsState(rx.State):
 
     def open_print_night(self, night_id: str):
         """Generate and open a 2-page print view for a specific night (week overview cards)."""
+        import traceback, time as _t
         _PRINT_CACHE.mkdir(parents=True, exist_ok=True)
         from .print_renderer import render_night_html
+        ts = int(_t.time())
+        fname = f"night_{night_id}_{ts}.html"
         try:
-            html  = render_night_html(night_id)
-            fname = f"night_{night_id}.html"
+            html = render_night_html(night_id)
             (_PRINT_CACHE / fname).write_text(html, encoding="utf-8")
             url = f"/print_cache/{fname}"
             return rx.call_script(f"window.open('{url}', '_blank')")
         except Exception as e:
+            traceback.print_exc()
+            err_msg = str(e).replace("'", "\\'")
             self.error = f"Print error: {e}"
+            err_html = (f"<html><body style='font-family:monospace;padding:2em'>"
+                        f"<h2 style='color:#dc2626'>Print render failed</h2>"
+                        f"<pre>{err_msg}</pre></body></html>")
+            (_PRINT_CACHE / fname).write_text(err_html, encoding="utf-8")
+            return rx.call_script(f"window.open('/print_cache/{fname}', '_blank')")
 
     def open_print_current_night(self):
         """Generate and open a 2-page print view for the currently-loaded night."""
+        import traceback, time as _t
         _PRINT_CACHE.mkdir(parents=True, exist_ok=True)
         from .print_renderer import render_night_html
+        night_id = self.current_night_id
+        ts = int(_t.time())
+        fname = f"night_{night_id}_{ts}.html"
         try:
-            html  = render_night_html(self.current_night_id)
-            fname = f"night_{self.current_night_id}.html"
+            html = render_night_html(night_id)
             (_PRINT_CACHE / fname).write_text(html, encoding="utf-8")
             url = f"/print_cache/{fname}"
             return rx.call_script(f"window.open('{url}', '_blank')")
         except Exception as e:
+            traceback.print_exc()
+            err_msg = str(e).replace("'", "\\'")
             self.error = f"Print error: {e}"
+            err_html = (f"<html><body style='font-family:monospace;padding:2em'>"
+                        f"<h2 style='color:#dc2626'>Print render failed</h2>"
+                        f"<pre>{err_msg}</pre></body></html>")
+            (_PRINT_CACHE / fname).write_text(err_html, encoding="utf-8")
+            return rx.call_script(f"window.open('/print_cache/{fname}', '_blank')")
 
     def open_print_current_week(self):
         """Generate and open a 14-page print view for the current week."""
+        import traceback, time as _t
         _PRINT_CACHE.mkdir(parents=True, exist_ok=True)
         from .print_renderer import render_week_html
+        week_id = self.current_week_id
+        ts = int(_t.time())
+        fname = f"week_{week_id}_{ts}.html"
         try:
-            html  = render_week_html(self.current_week_id)
-            fname = f"week_{self.current_week_id}.html"
+            html = render_week_html(week_id)
             (_PRINT_CACHE / fname).write_text(html, encoding="utf-8")
             url = f"/print_cache/{fname}"
             return rx.call_script(f"window.open('{url}', '_blank')")
         except Exception as e:
+            traceback.print_exc()
+            err_msg = str(e).replace("'", "\\'")
             self.error = f"Print error: {e}"
+            err_html = (f"<html><body style='font-family:monospace;padding:2em'>"
+                        f"<h2 style='color:#dc2626'>Print render failed</h2>"
+                        f"<pre>{err_msg}</pre></body></html>")
+            (_PRINT_CACHE / fname).write_text(err_html, encoding="utf-8")
+            return rx.call_script(f"window.open('/print_cache/{fname}', '_blank')")
 
     def _load_night(self, night_id: str):
         self.current_night_id = night_id
@@ -2945,16 +2974,24 @@ class ZdsState(rx.State):
         night_id = self.current_night_id
         if not code or not night_id:
             return
+        import traceback, time as _t
         _PRINT_CACHE.mkdir(parents=True, exist_ok=True)
+        safe  = code.lower().replace(" ", "_").replace("+", "").replace("/", "")
+        fname = f"card_{safe}_{night_id[:8]}_{int(_t.time())}.html"
         try:
-            html  = render_single_card_html(night_id, code)
-            safe  = code.lower().replace(" ", "_").replace("+", "").replace("/", "")
-            fname = f"card_{safe}_{night_id[:8]}.html"
+            html = render_single_card_html(night_id, code)
             (_PRINT_CACHE / fname).write_text(html, encoding="utf-8")
             url = f"/print_cache/{fname}"
             return rx.call_script(f"window.open('{url}', '_blank')")
         except Exception as exc:
+            traceback.print_exc()
+            err_msg = str(exc).replace("'", "\\'")
             self.error = f"Print card error: {exc}"
+            err_html = (f"<html><body style='font-family:monospace;padding:2em'>"
+                        f"<h2 style='color:#dc2626'>Card print failed</h2>"
+                        f"<pre>{err_msg}</pre></body></html>")
+            (_PRINT_CACHE / fname).write_text(err_html, encoding="utf-8")
+            return rx.call_script(f"window.open('/print_cache/{fname}', '_blank')")
 
     # =========================================================================
     # Private slot-task helpers
