@@ -2571,10 +2571,10 @@ class ZdsState(rx.State):
     # =========================================================================
 
     @rx.event
-    def open_task_pool(self, slot_id: str, category: str = "porter"):
-        """Open the inline task pool panel for a given slot."""
+    def open_task_pool(self, slot_id: str):
+        """Open the inline task pool panel for a given slot. Always resets to porter tab."""
         self.task_pool_slot_id  = slot_id
-        self.task_pool_category = category
+        self.task_pool_category = "porter"
 
     @rx.event
     def close_task_pool(self):
