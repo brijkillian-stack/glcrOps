@@ -43,6 +43,21 @@ TASK_POOL: dict[str, list[str]] = {
         "Lobby vacuum",
         "Break room clean",
         "Elevator / escalator wipe",
+        # Sweepers
+        "Sweeper 5 / 8 / HL",
+        "Sweeper 9 / 10 / SR",
+        # Trash & laundry
+        "Empty Oasis trash (Fri & Sat)",
+        "Empty Annex trash",
+        "Pick up laundry (4AM)",
+        # Poker Room
+        "Vacuum carpet — Poker Room",
+        "Clean black trays — Poker Room",
+        "Clean table cup inserts — Poker Room",
+        "Remove gum — Poker Room",
+        "Clean under/behind/inside trash receptacles",
+        "Deep-clean Oasis (during shutdown)",
+        "Vacuum inside Table Games Pits",
     ],
     "pm_ol": [
         # Hand-off / transition
