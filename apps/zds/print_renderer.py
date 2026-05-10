@@ -113,12 +113,13 @@ _CARD_ANNOTATION_CSS = """
 
 _TASK_ANNOTATION_CSS = """
 /* Phase 4k.6 — task highlight tints (printed) */
-.task-hl-yellow { background: rgba(245, 200,  60, 0.30); border-radius: 3px; padding: 0 3px; }
-.task-hl-red    { background: rgba(228,  78,  78, 0.22); border-radius: 3px; padding: 0 3px; }
-.task-hl-green  { background: rgba( 80, 180, 110, 0.26); border-radius: 3px; padding: 0 3px; }
-.task-hl-blue   { background: rgba( 55, 145, 245, 0.26); border-radius: 3px; padding: 0 3px; }
-.task-hl-purple { background: rgba(155, 110, 215, 0.26); border-radius: 3px; padding: 0 3px; }
-.task-hl-orange { background: rgba(245, 145,  60, 0.26); border-radius: 3px; padding: 0 3px; }
+/* print-color-adjust forces Chrome to render background colors in print/PDF */
+.task-hl-yellow { background: rgba(245, 200,  60, 0.30); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.task-hl-red    { background: rgba(228,  78,  78, 0.22); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.task-hl-green  { background: rgba( 80, 180, 110, 0.26); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.task-hl-blue   { background: rgba( 55, 145, 245, 0.26); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.task-hl-purple { background: rgba(155, 110, 215, 0.26); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.task-hl-orange { background: rgba(245, 145,  60, 0.26); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 """
 
 # ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
@@ -929,7 +930,12 @@ def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
     # ── Zone ─────────────────────────────────────────────────────────────────
     zone_n = _zone_n()
     if zone_n is not None:
-        tasks = list(TASKS_ZONE.get(zone_n, []))
+        dt = tm_slot.get("display_tasks")
+        if dt is not None:
+            # Use live display_tasks so pool-added / custom tasks appear on break sheet
+            tasks = [item["name"] if isinstance(item, dict) else item for item in dt]
+        else:
+            tasks = list(TASKS_ZONE.get(zone_n, []))
         if sweeper_label and sweeper_label not in tasks:
             tasks.append(sweeper_label)
         badge = r if not r.startswith("Z") or " " in r else f"Zone {zone_n}"
@@ -944,7 +950,12 @@ def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
     rr_info = _rr_info()
     if rr_info is not None:
         n, side_label = rr_info
-        tasks = ([side_label] if side_label else []) + list(TASKS_RR.get(n, []))
+        dt = tm_slot.get("display_tasks")
+        if dt is not None:
+            rr_tasks = [item["name"] if isinstance(item, dict) else item for item in dt]
+        else:
+            rr_tasks = list(TASKS_RR.get(n, []))
+        tasks = ([side_label] if side_label else []) + rr_tasks
         if sweeper_label and sweeper_label not in tasks:
             tasks.append(sweeper_label)
         badge = "RR 1+2" if n == 1 else f"RR {n}"
@@ -979,7 +990,10 @@ def _break_row_meta(slot_ref: str, tm_name: str, slot_map: dict) -> dict:
             rdb_key = _aux_rdb_map.get(key)
             break
     tasks = []
-    if rdb_key:
+    dt = tm_slot.get("display_tasks")
+    if dt is not None:
+        tasks = [item["name"] if isinstance(item, dict) else item for item in dt]
+    elif rdb_key:
         _, sub = TASKS_AUX.get(rdb_key, ("", ""))
         if sub: tasks.append(sub)
     if sweeper_label and sweeper_label not in tasks:
