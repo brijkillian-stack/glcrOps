@@ -122,6 +122,15 @@ _TASK_ANNOTATION_CSS = """
 .task-hl-orange { background: rgba(245, 145,  60, 0.26); border-radius: 3px; padding: 0 3px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 """
 
+# ── Print layout overrides — no footer, tighter top/bottom ───────────────────
+# Hides the footer bar (GLCR · Grave + page numbers) and recovers the ~14px
+# it occupied by trimming the masthead top padding by ~6px. The remaining
+# space flows into the card body rows, which is where it's useful.
+_PRINT_LAYOUT_CSS = """
+.page-foot { display: none !important; }
+.mast      { padding-top: 8px !important; }
+"""
+
 # ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
 # day_idx is 1-based (Friday=1, Thursday=7). The 7-letter array maps directly:
 # [F]riday, [S]aturday, [S]unday, [M]onday, [T]uesday, [W]ednesday, [T]hursday.
@@ -1143,7 +1152,7 @@ def render_night_html(night_id: str) -> str:
                               page_base=1, page_total=2)
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS + _PRINT_LAYOUT_CSS,
         sprite=SVG_SPRITE,
         pages=pages,
     )
@@ -1170,7 +1179,7 @@ def render_week_html(week_id: str) -> str:
     title = week.get("label") or f"Week ending {week.get('week_ending', '')}"
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS + _PRINT_LAYOUT_CSS,
         sprite=SVG_SPRITE,
         pages="\n".join(pages),
     )
@@ -1334,6 +1343,7 @@ body { margin: 0; font-family: system-ui, sans-serif; }
 {_TM_ANNOTATION_CSS}
 {_CARD_ANNOTATION_CSS}
 {_TASK_ANNOTATION_CSS}
+{_PRINT_LAYOUT_CSS}
 {_SINGLE_CARD_CSS}
 </style>
 <script>window.addEventListener('load', function(){{window.print();}});</script>
