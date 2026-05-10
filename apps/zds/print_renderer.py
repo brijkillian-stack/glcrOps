@@ -131,6 +131,15 @@ _PRINT_LAYOUT_CSS = """
 .page-foot { display: none !important; }
 .mast      { padding-top: 8px !important; }
 
+/* Card label + shape size bump — "a titch" larger than engine defaults.
+   Zone/RR labels: 11.5px → 13px  |  shapes: 14–14.5px → 16px
+   Aux labels:     10.5px → 12px  (no shape on aux cards) */
+.zone-num                { font-size: 13px !important; }
+.zone-num .zone-shape    { width: 16px !important; height: 16px !important; }
+.rr-head                 { font-size: 13px !important; }
+.rr-head .zone-shape     { width: 16px !important; height: 16px !important; }
+.aux-label               { font-size: 12px !important; }
+
 /* Coverage card outline — applied when a card has an "and Zone N" /
    "and Restroom N" task. --card-color is set by each .c-* class so
    the border automatically matches the zone's own color. */
