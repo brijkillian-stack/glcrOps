@@ -2582,6 +2582,15 @@ class ZdsState(rx.State):
         self.task_pool_slot_id = ""
 
     @rx.event
+    def toggle_task_pool(self, slot_id: str):
+        """Toggle the pool panel for a slot — open if closed, close if already open."""
+        if self.task_pool_slot_id == slot_id:
+            self.task_pool_slot_id = ""
+        else:
+            self.task_pool_slot_id  = slot_id
+            self.task_pool_category = "porter"
+
+    @rx.event
     def set_task_pool_category(self, cat: str):
         self.task_pool_category = cat
 
