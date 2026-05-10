@@ -12,6 +12,7 @@ Exports:
 
 from __future__ import annotations
 import importlib.util
+import re
 import datetime as dt
 from pathlib import Path
 from typing import Optional
@@ -129,7 +130,47 @@ _TASK_ANNOTATION_CSS = """
 _PRINT_LAYOUT_CSS = """
 .page-foot { display: none !important; }
 .mast      { padding-top: 8px !important; }
+
+/* Coverage card outline — applied when a card has an "and Zone N" /
+   "and Restroom N" task. --card-color is set by each .c-* class so
+   the border automatically matches the zone's own color. */
+.card-coverage-outline {
+  border: 2px solid var(--card-color) !important;
+  print-color-adjust: exact !important;
+  -webkit-print-color-adjust: exact !important;
+}
 """
+
+
+def _inject_coverage_outline(card_html: str, display_tasks) -> str:
+    """Add card-coverage-outline class to the card root element if any task
+    is a coverage task ('and Zone N' or 'and Restroom N').
+
+    The engine renders cards as:
+        <div class="zone-card c-{color}...">
+        <div class="rr-card c-{color}...">
+        <div class="aux-card c-{color}...">   (aux)
+
+    CSS .card-coverage-outline uses --card-color (already set by .c-*)
+    to apply a 2px colored full-card border identical to the web UI.
+    """
+    if not display_tasks:
+        return card_html
+    has_coverage = any(
+        (t.get("name") if isinstance(t, dict) else t).strip().lower().startswith(
+            ("and zone", "and restroom")
+        )
+        for t in (display_tasks or [])
+    )
+    if not has_coverage:
+        return card_html
+    # Prepend class to the root card element's class attribute.
+    return re.sub(
+        r'(<div class=")(zone-card|rr-card|aux-card)',
+        r'\1card-coverage-outline \2',
+        card_html,
+        count=1,
+    )
 
 # ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
 # day_idx is 1-based (Friday=1, Thursday=7). The 7-letter array maps directly:
@@ -666,6 +707,7 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
             group=_grp(sk, slot_map),
         )
         card = _inject_task_highlights(card, raw_items, task_annots)
+        card = _inject_coverage_outline(card, raw_items)
         card = _apply_tm_annotations(card, tm_id_z, tm_nm, tm_annots)
         # card code matches ZONE_LABELS["zone_N"] = "Zone N" = slot["label"] in UI
         card = _apply_card_annotations(card, f"Zone {n}", card_annots)
@@ -690,8 +732,14 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
             mens_group=sm.get("group_num") or None,
             womens_group=sw.get("group_num") or None,
         )
+        # Task highlights — use mens slot display_tasks (authoritative for RR banks)
+        _rr_raw = list(sm.get("display_tasks") or [])
+        card = _inject_task_highlights(card, _rr_raw, task_annots)
         card = _apply_tm_annotations(card, m_id, m_name, tm_annots)
         card = _apply_tm_annotations(card, w_id, w_name, tm_annots)
+        # Coverage outline — check both mens and womens display_tasks
+        _rr_dt = list(sm.get("display_tasks") or []) + list(sw.get("display_tasks") or [])
+        card = _inject_coverage_outline(card, _rr_dt)
         # card code: ZONE_LABELS["rr_N"] = "RR N" or "RR 1 + 2" — matches slot["label"] in UI
         rr_label = "RR 1 + 2" if n == 1 else f"RR {n}"
         card = _apply_card_annotations(card, rr_label, card_annots)
@@ -719,6 +767,8 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
         )
         # card code: ZONE_LABELS[db_key] — matches slot["label"] in UI
         aux_label = database.ZONE_LABELS.get(db_key, db_key)
+        card = _inject_task_highlights(card, list(s.get("display_tasks") or []), task_annots)
+        card = _inject_coverage_outline(card, s.get("display_tasks"))
         card = _apply_tm_annotations(card, a_id, a_name, tm_annots)
         card = _apply_card_annotations(card, aux_label, card_annots)
         aux_cards.append(card)
@@ -732,6 +782,8 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
             group=_grp("support_3", slot_map),
             conditional=True,
         )
+        card = _inject_task_highlights(card, list(s3.get("display_tasks") or []), task_annots)
+        card = _inject_coverage_outline(card, s3.get("display_tasks"))
         card = _apply_tm_annotations(card, s3_id, s3_name, tm_annots)
         card = _apply_card_annotations(
             card, database.ZONE_LABELS.get("support_3", "Support 3"), card_annots
