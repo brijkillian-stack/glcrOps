@@ -103,6 +103,24 @@ _CARD_ANNOTATION_CSS = """
 }
 """
 
+# ── Phase 4k.6 — Task highlight print CSS ────────────────────────────────────
+# _inject_task_highlights() walks the card HTML and adds class="task-hl-{color}"
+# to <li> elements that have a highlight annotation. The classes are styled in
+# the live app via assets/ops_tokens.css, but the print HTML is self-contained
+# and never loads that file — so we inline the rules here. Hardcoded RGB tints
+# (no color-mix) for B&W-printer-safe rendering and to avoid CSS-var lookup
+# failures when the print HTML is rendered standalone by Chrome.
+
+_TASK_ANNOTATION_CSS = """
+/* Phase 4k.6 — task highlight tints (printed) */
+.task-hl-yellow { background: rgba(245, 200,  60, 0.30); border-radius: 3px; padding: 0 3px; }
+.task-hl-red    { background: rgba(228,  78,  78, 0.22); border-radius: 3px; padding: 0 3px; }
+.task-hl-green  { background: rgba( 80, 180, 110, 0.26); border-radius: 3px; padding: 0 3px; }
+.task-hl-blue   { background: rgba( 55, 145, 245, 0.26); border-radius: 3px; padding: 0 3px; }
+.task-hl-purple { background: rgba(155, 110, 215, 0.26); border-radius: 3px; padding: 0 3px; }
+.task-hl-orange { background: rgba(245, 145,  60, 0.26); border-radius: 3px; padding: 0 3px; }
+"""
+
 # ── Phase 4g.x — Week-dots strip (Brian wants it in upper-right of masthead) ──
 # day_idx is 1-based (Friday=1, Thursday=7). The 7-letter array maps directly:
 # [F]riday, [S]aturday, [S]unday, [M]onday, [T]uesday, [W]ednesday, [T]hursday.
@@ -775,7 +793,7 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     <section>
       <h2 class="section-label is-primary">
         <svg class="glyph"><use href="#g-zones"/></svg>
-        Zones <span class="meta">{zones_f} / 10 staffed</span>
+        Zones <span class="meta">{zones_f} / 10 filled</span>
       </h2>
       <div class="zones-grid">
 {zones_html}
@@ -784,7 +802,7 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     <section>
       <h2 class="section-label">
         <svg class="glyph"><use href="#g-restroom"/></svg>
-        Restrooms <span class="meta">{rr_f} / 10 staffed</span>
+        Restrooms <span class="meta">{rr_f} / 10 filled</span>
       </h2>
       <div class="rr-grid">
 {rr_html}
@@ -793,7 +811,7 @@ def _render_deployment_page(night: dict, day: dict, slot_map: dict,
     <section>
       <h2 class="section-label">
         <svg class="glyph"><use href="#g-aux"/></svg>
-        Auxiliary <span class="meta">{aux_f} / {aux_t} staffed</span>
+        Auxiliary <span class="meta">{aux_f} / {aux_t} filled</span>
       </h2>
       <div class="{aux_strip_cls}">
 {aux_html}
@@ -1050,7 +1068,6 @@ def _render_break_page(night: dict, day: dict, slot_map: dict,
     <div class="mast-context">
       <div class="shift">By Break Wave</div>
       {_week_dots_html(day_idx)}
-      <div class="group-key">Take breaks together</div>
     </div>
   </header>
   <div class="body">
@@ -1060,7 +1077,7 @@ def _render_break_page(night: dict, day: dict, slot_map: dict,
     <section class="overlaps-section">
       <h2 class="section-label">
         <svg class="glyph"><use href="#g-overlap"/></svg>
-        Overlaps <span class="meta">{ol_filled} / 12 staffed</span>
+        Overlaps <span class="meta">{ol_filled} / 12 filled</span>
       </h2>
       <div class="overlap-row">
         <div class="overlap-window">11p – 1a<span class="kind">Late evening</span></div>
@@ -1112,7 +1129,7 @@ def render_night_html(night_id: str) -> str:
                               page_base=1, page_total=2)
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS,
         sprite=SVG_SPRITE,
         pages=pages,
     )
@@ -1139,7 +1156,7 @@ def render_week_html(week_id: str) -> str:
     title = week.get("label") or f"Week ending {week.get('week_ending', '')}"
     return HTML_SHELL.format(
         week_end_short=title,
-        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS,
+        css=CSS + _TM_ANNOTATION_CSS + _CARD_ANNOTATION_CSS + _TASK_ANNOTATION_CSS,
         sprite=SVG_SPRITE,
         pages="\n".join(pages),
     )
@@ -1302,6 +1319,7 @@ body { margin: 0; font-family: system-ui, sans-serif; }
 {CSS}
 {_TM_ANNOTATION_CSS}
 {_CARD_ANNOTATION_CSS}
+{_TASK_ANNOTATION_CSS}
 {_SINGLE_CARD_CSS}
 </style>
 <script>window.addEventListener('load', function(){{window.print();}});</script>

@@ -1261,7 +1261,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
   <div class="body">
     <section>
       <h2 class="section-lbl">
-        Zones <span class="meta">{cs["zones"][0]} / {cs["zones"][1]} staffed</span>
+        Zones <span class="meta">{cs["zones"][0]} / {cs["zones"][1]} filled</span>
       </h2>
       <div class="zones-grid">
 {zones_html}
@@ -1269,7 +1269,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     </section>
     <section>
       <h2 class="section-lbl">
-        Restrooms <span class="meta">{cs["rr"][0]} / {cs["rr"][1]} staffed</span>
+        Restrooms <span class="meta">{cs["rr"][0]} / {cs["rr"][1]} filled</span>
       </h2>
       <div class="rr-grid">
 {rr_html}
@@ -1277,7 +1277,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     </section>
     <section>
       <h2 class="section-lbl">
-        Auxiliary <span class="meta">{cs["aux"][0]} / {cs["aux"][1]} staffed</span>
+        Auxiliary <span class="meta">{cs["aux"][0]} / {cs["aux"][1]} filled</span>
       </h2>
       <div class="{aux_strip_cls}">
 {aux_html}
@@ -1285,7 +1285,7 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     </section>
     <section>
       <h2 class="section-lbl">
-        Overlaps <span class="meta">{cs["overlaps"][0]} / {cs["overlaps"][1]} staffed</span>
+        Overlaps <span class="meta">{cs["overlaps"][0]} / {cs["overlaps"][1]} filled</span>
       </h2>
       <div class="overlap-row">
         <div class="overlap-time">11p – 1a<span class="kind">Late evening</span></div>
