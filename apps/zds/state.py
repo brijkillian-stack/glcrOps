@@ -2606,7 +2606,11 @@ class ZdsState(rx.State):
             return  # already on this card — pool item shows check state
         new_tasks = current + [text]
         database.update_slot_tasks(slot_id, new_tasks)
-        self._load_night()
+        # _load_night requires a night_id arg — every other call site passes
+        # self.current_night_id. Without it, this throws TypeError and Reflex
+        # surfaces "Contact admin" while silently completing the DB write.
+        if self.current_night_id:
+            self._load_night(self.current_night_id)
 
     @rx.event
     def set_task_popover_note_text(self, val: str):
@@ -2754,10 +2758,13 @@ class ZdsState(rx.State):
                 self.error = f"Edit task error: {exc}"
         self._load_task_annotations()
         # Force a night reload so the task name refreshes in display_tasks
-        try:
-            self._load_night()
-        except Exception:
-            pass
+        # (_load_night requires night_id; the bare-arg version threw silently
+        # under the try/except, leaving display_tasks stale until next reload)
+        if self.current_night_id:
+            try:
+                self._load_night(self.current_night_id)
+            except Exception:
+                pass
         self.task_popover_view = "root"
 
     @rx.event
