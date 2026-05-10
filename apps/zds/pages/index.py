@@ -5,27 +5,48 @@ from ..state import ZdsState
 from ..components.zds_header import zds_header
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Week cards
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _week_card(week: dict) -> rx.Component:
-    """A week row — title, status, linked schedule, primary + secondary actions.
-    Phase P: dense single-row layout with linked-schedule visibility + reset/unlink."""
-    title = rx.cond(week["label"] != "", week["label"], week["week_ending"])
+    """A week row — title, status, linked schedule, primary + secondary actions."""
+    title = rx.cond(week["label"] != "", week["label"], f"Week ending {week['week_ending']}")
     status_color = rx.cond(
         week["status"] == "published", "green",
         rx.cond(week["status"] == "archived", "gray", "yellow")
     )
     has_schedule = week["schedule_path"] != ""
+    is_current   = ZdsState.active_week_id == week["id"]
+
     return rx.box(
         rx.hstack(
-            # Left: title + week_ending + linked schedule
+            # Left: title + date range + linked schedule
             rx.vstack(
                 rx.hstack(
                     rx.icon("calendar-days", size=15, color="#0065BF"),
                     rx.text(title, weight="bold", size="3"),
+                    # Status badge
                     rx.badge(
                         week["status"],
                         color_scheme=status_color,
                         size="1",
                         style={"fontSize": "9px", "padding": "1px 6px"},
+                    ),
+                    # Current-week badge — only shown when this week contains today
+                    rx.cond(
+                        is_current,
+                        rx.badge(
+                            rx.hstack(
+                                rx.icon("radio", size=9),
+                                rx.text("current", style={"fontSize": "9px"}),
+                                gap="3px", align="center",
+                            ),
+                            color_scheme="blue",
+                            variant="solid",
+                            style={"padding": "1px 6px"},
+                        ),
+                        rx.fragment(),
                     ),
                     gap="6px", align="center",
                 ),
@@ -48,9 +69,9 @@ def _week_card(week: dict) -> rx.Component:
                             gap="3px", align="center",
                         ),
                         rx.hstack(
-                            rx.icon("unlink", size=10, color="#9ca3af"),
+                            rx.icon("unlink", size=10, color="#d1d5db"),
                             rx.text("no schedule linked", size="1",
-                                    color="#9ca3af", style={"fontStyle": "italic"}),
+                                    color="#d1d5db", style={"fontStyle": "italic"}),
                             gap="3px", align="center",
                         ),
                     ),
@@ -118,24 +139,32 @@ def _week_card(week: dict) -> rx.Component:
             ),
             width="100%", align="center", gap="10px",
         ),
-        background="white",
-        border="1px solid #e5e7eb",
+        background=rx.cond(is_current, "#eff6ff", "white"),
+        border=rx.cond(
+            is_current,
+            "1.5px solid #93c5fd",
+            "1px solid #e5e7eb",
+        ),
         border_radius="8px",
         padding="10px 14px",
         _hover={"box_shadow": "0 2px 8px rgba(0,0,0,0.06)",
-                "border_color": "#dbeafe"},
+                "border_color": rx.cond(is_current, "#60a5fa", "#dbeafe")},
         transition="all 0.15s ease",
         width="100%",
         class_name="week-night-card",
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# New week modal
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _new_week_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.dialog.title("New Deployment Week"),
             rx.vstack(
-                rx.text("Week ending (Wednesday)", size="2", weight="medium"),
+                rx.text("Week ending (Thursday)", size="2", weight="medium"),
                 rx.input(
                     type="date",
                     value=ZdsState.new_week_ending,
@@ -144,7 +173,7 @@ def _new_week_modal() -> rx.Component:
                 ),
                 rx.text("Label", size="2", weight="medium"),
                 rx.input(
-                    placeholder="e.g. Week of May 7",
+                    placeholder="e.g. Week ending May 14",
                     value=ZdsState.new_week_label,
                     on_change=ZdsState.set_new_week_label,
                     width="100%",
@@ -167,13 +196,12 @@ def _new_week_modal() -> rx.Component:
     )
 
 
-def _unlinked_schedule_row(item: dict) -> rx.Component:
-    """One row in the 'Schedules without Zone Sheet' list.
+# ─────────────────────────────────────────────────────────────────────────────
+# Schedules — unlinked (no zone sheet yet)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    Item shape (from database.list_unlinked_schedules):
-        filename, week_ending, dates[7], matching_week | None
-    """
-    # Button label adapts: link existing week vs create a new one.
+def _unlinked_schedule_row(item: dict) -> rx.Component:
+    """One row in the 'Schedules without a Zone Sheet' list."""
     btn_label = rx.cond(
         item["matching_week"],
         "Link to existing week",
@@ -211,7 +239,7 @@ def _unlinked_schedule_row(item: dict) -> rx.Component:
 
 
 def _unlinked_schedules_section() -> rx.Component:
-    """Phase H — surfaces schedules in Storage that aren't yet linked to a Week."""
+    """Surfaces schedules in Storage that aren't yet linked to a Week."""
     return rx.cond(
         ZdsState.unlinked_schedules.length() > 0,
         rx.box(
@@ -225,6 +253,7 @@ def _unlinked_schedules_section() -> rx.Component:
                     rx.spacer(),
                     rx.badge(
                         ZdsState.unlinked_schedules.length(),
+                        " unlinked",
                         color_scheme="blue",
                         variant="soft",
                     ),
@@ -242,7 +271,7 @@ def _unlinked_schedules_section() -> rx.Component:
                 gap="8px", width="100%",
             ),
             padding="14px 16px",
-            background="#eaf4ff",
+            background="#eff6ff",
             border="1px solid #bfdbfe",
             border_radius="10px",
             width="100%",
@@ -251,17 +280,35 @@ def _unlinked_schedules_section() -> rx.Component:
     )
 
 
-def _humanize_size(n: int) -> str:
-    """Reflex-side static helper — only used in component construction so
-    we can pass plain ints to a static formatter (Vars handle the rendering)."""
-    return f"{n:,} B"
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Schedules — storage manager
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _managed_schedule_row(item: dict) -> rx.Component:
-    """Phase P — single-row tight layout for a stored schedule."""
+    """Single-row layout for a stored schedule file."""
     is_delete_target  = ZdsState.delete_target_filename  == item["filename"]
     is_replace_target = ZdsState.replace_target_filename == item["filename"]
     is_linked         = item["linked_week_id"] != ""
+
+    # Format the secondary line: "Week ending YYYY-MM-DD · Uploaded YYYY-MM-DD"
+    # Byte sizes are intentionally omitted — not meaningful to supervisors.
+    secondary = rx.cond(
+        item["week_ending"] != "",
+        rx.fragment(
+            "Week ending ", item["week_ending"],
+            rx.cond(
+                item["updated_at"] != "",
+                rx.fragment("  ·  Uploaded ", item["updated_at"]),
+                rx.fragment(),
+            ),
+        ),
+        rx.cond(
+            item["updated_at"] != "",
+            rx.fragment("Uploaded ", item["updated_at"]),
+            rx.fragment("—"),
+        ),
+    )
+
     return rx.box(
         rx.hstack(
             rx.icon("file-spreadsheet", size=14, color="#0065BF"),
@@ -287,19 +334,11 @@ def _managed_schedule_row(item: dict) -> rx.Component:
                     ),
                     gap="6px", align="center", flex_wrap="wrap",
                 ),
-                rx.text(
-                    rx.cond(
-                        item["week_ending"] != "",
-                        rx.fragment("Week ending ", item["week_ending"], "  ·  ",
-                                    item["size_bytes"].to_string(), " bytes"),
-                        rx.fragment(item["size_bytes"].to_string(), " bytes"),
-                    ),
-                    size="1", color="#9ca3af",
-                ),
+                rx.text(secondary, size="1", color="#9ca3af"),
                 gap="0", align="start", flex="1",
             ),
             rx.spacer(),
-            # Action buttons OR delete confirmation
+            # Actions — delete confirmation OR normal action row
             rx.cond(
                 is_delete_target,
                 rx.hstack(
@@ -317,6 +356,7 @@ def _managed_schedule_row(item: dict) -> rx.Component:
                     gap="6px", align="center",
                 ),
                 rx.hstack(
+                    # Replace
                     rx.cond(
                         is_replace_target,
                         rx.button(
@@ -330,7 +370,7 @@ def _managed_schedule_row(item: dict) -> rx.Component:
                             on_click=ZdsState.request_replace_schedule(item["filename"]),
                         ),
                     ),
-                    # Phase P — Unlink action (only when this file is linked to a week)
+                    # Unlink — only when linked; separated from delete by a gap
                     rx.cond(
                         is_linked,
                         rx.button(
@@ -343,11 +383,16 @@ def _managed_schedule_row(item: dict) -> rx.Component:
                         ),
                         rx.fragment(),
                     ),
-                    rx.button(
-                        rx.icon("trash-2", size=12),
+                    # Divider before delete so it reads as distinct / destructive
+                    rx.separator(orientation="vertical", size="2",
+                                 style={"height": "16px", "margin": "0 4px"}),
+                    # Delete — visually distinct from non-destructive actions
+                    rx.icon_button(
+                        rx.icon("trash-2", size=13),
                         size="1", variant="ghost", color_scheme="red",
                         on_click=ZdsState.request_delete_schedule(item["filename"]),
-                        title="Delete this schedule",
+                        title="Delete this schedule from Storage",
+                        style={"opacity": "0.7", "_hover": {"opacity": "1"}},
                     ),
                     gap="4px", align="center",
                 ),
@@ -366,7 +411,7 @@ def _managed_schedule_row(item: dict) -> rx.Component:
 
 
 def _managed_schedules_section() -> rx.Component:
-    """Phase N.1 — Manage Schedules panel."""
+    """Manage Schedules panel — all xlsx files in Storage."""
     return rx.cond(
         ZdsState.managed_schedules.length() > 0,
         rx.box(
@@ -375,9 +420,13 @@ def _managed_schedules_section() -> rx.Component:
                     rx.icon("layers", size=15, color="#6b7280"),
                     rx.text("Schedules in Storage", size="2", weight="bold"),
                     rx.spacer(),
-                    rx.badge(
-                        ZdsState.managed_schedules.length(),
-                        color_scheme="gray", variant="soft",
+                    rx.hstack(
+                        rx.badge(
+                            ZdsState.managed_schedules.length(),
+                            color_scheme="gray", variant="soft",
+                        ),
+                        rx.text("files", size="1", color="#9ca3af"),
+                        gap="4px", align="center",
                     ),
                     width="100%", align="center",
                 ),
@@ -398,8 +447,7 @@ def _managed_schedules_section() -> rx.Component:
 
 
 def _schedule_upload_section() -> rx.Component:
-    """Phase P — compact single-row upload widget. The full management lives
-    in the Schedules in Storage panel below."""
+    """Compact upload widget — shows linked schedule state or upload prompt."""
     return rx.box(
         rx.hstack(
             rx.icon("calendar-check", size=14, color="#6b7280"),
@@ -449,9 +497,12 @@ def _schedule_upload_section() -> rx.Component:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Reset week modal
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _reset_week_modal() -> rx.Component:
-    """Phase P — drop a fresh xlsx and reset the week to it. Wipes existing
-    placements + overrides on confirm."""
+    """Drop a fresh xlsx and reset the week. Wipes existing placements + overrides."""
     return rx.dialog.root(
         rx.dialog.content(
             rx.dialog.title("Reset week from new upload"),
@@ -521,6 +572,26 @@ def _reset_week_modal() -> rx.Component:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Section divider
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _section_divider(label: str) -> rx.Component:
+    """Visual separator between the schedule-management area and the weeks list."""
+    return rx.hstack(
+        rx.separator(flex="1", style={"borderColor": "#e5e7eb"}),
+        rx.text(label, size="1", color="#9ca3af", weight="medium",
+                style={"whiteSpace": "nowrap", "letterSpacing": "0.05em",
+                       "textTransform": "uppercase", "padding": "0 10px"}),
+        rx.separator(flex="1", style={"borderColor": "#e5e7eb"}),
+        width="100%", align="center",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Page root
+# ─────────────────────────────────────────────────────────────────────────────
+
 def index() -> rx.Component:
     return rx.box(
         zds_header(
@@ -543,12 +614,16 @@ def index() -> rx.Component:
                         rx.callout(ZdsState.error, color_scheme="red", icon="triangle-alert"),
                         rx.fragment(),
                     ),
-                    # Schedule upload card
+
+                    # ── Schedule file management ───────────────────────────
                     _schedule_upload_section(),
-                    # Phase N.1 — full Manage Schedules panel
                     _managed_schedules_section(),
-                    # Phase H — schedules with no Zone Sheet yet (creatable)
                     _unlinked_schedules_section(),
+
+                    # ── Section break before week list ─────────────────────
+                    _section_divider("Deployment Weeks"),
+
+                    # ── Week list ──────────────────────────────────────────
                     rx.cond(
                         ZdsState.weeks.length() == 0,
                         rx.vstack(
@@ -559,9 +634,10 @@ def index() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.foreach(ZdsState.weeks, _week_card),
-                            gap="12px", width="100%",
+                            gap="8px", width="100%",
                         ),
                     ),
+
                     gap="12px", width="100%",
                 ),
             ),
@@ -571,7 +647,6 @@ def index() -> rx.Component:
             width="100%",
         ),
         _new_week_modal(),
-        # Phase P — Reset week from new upload modal
         _reset_week_modal(),
         background="#f9fafb",
         min_height="100vh",

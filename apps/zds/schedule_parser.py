@@ -43,7 +43,16 @@ def _is_5am(v) -> bool:
 
 
 def _is_1am(v) -> bool:
-    return v is not None and "1:00A" in str(v)
+    """True if the cell represents a shift ending at 1am (PM overlap / swing).
+
+    Uses a leading-space guard (" 1:00A") to avoid matching "11:00A" strings.
+    ADP typically formats these as e.g. "5:00P - 1:00A".
+    """
+    if v is None:
+        return False
+    s = str(v)
+    # Require a non-digit before "1:00A" so "11:00A" (11am) doesn't match.
+    return " 1:00A" in s or s.startswith("1:00A")
 
 
 # ── Schedule file discovery ───────────────────────────────────────────────────
@@ -186,49 +195,6 @@ def get_active_schedule_path(week_id: str) -> Optional[Path]:
         )
     return fallback
 
-
-# ── Name matching ─────────────────────────────────────────────────────────────
-
-def _build_name_lookup(entities: list[dict]) -> dict[str, list[str]]:
-    """
-    {first_name_lower: [display_name, ...]}
-    Built from the Supabase entities list so name resolution is consistent
-    with the rest of the web app.
-    """
-    lookup: dict[str, list[str]] = {}
-    for e in entities:
-        dn = e.get("display_name", "").strip()
-        if not dn:
-            continue
-        first = dn.split()[0].lower()
-        lookup.setdefault(first, []).append(dn)
-    return lookup
-
-
-def _match_name(first: str, last: str, lookup: dict[str, list[str]]) -> Optional[str]:
-    """
-    Match a schedule row's (first, last) to a display_name.
-    Uses last-name initial when first name is ambiguous.
-    Returns None if no match is found.
-    """
-    if not first or first.lower() in ("first name", "none", ""):
-        return None
-    fn = first.strip().lower()
-    candidates = lookup.get(fn, [])
-    if not candidates:
-        return None
-    if len(candidates) == 1:
-        return candidates[0]
-    # Multiple display names share this first name — use last initial to pick
-    ln = (last or "").strip()
-    if ln:
-        ln_initial = ln[0].upper()
-        for dn in candidates:
-            parts = dn.split()
-            # display_name format is either "First" or "First L"
-            if len(parts) > 1 and parts[-1].upper().startswith(ln_initial):
-                return dn
-    return candidates[0]   # fallback: first match
 
 
 # ── Per-shift roster extractor (Phase L.2 enhancement) ───────────────────────

@@ -105,6 +105,19 @@ def solve_constrained_block(
     if not _SCIPY_OK:
         # scipy not installed — degrade to None assignments so fill_engine
         # falls back to greedy for every slot individually.
+        import sys
+        print(
+            "\n"
+            "┌─────────────────────────────────────────────────────────────┐\n"
+            "│  LAP SOLVER DISABLED — scipy not installed                  │\n"
+            "│                                                             │\n"
+            "│  All 22 constrained-block slots will return None and fall   │\n"
+            "│  back to greedy fill, which degrades Z8 fill rate to ~69%.  │\n"
+            "│                                                             │\n"
+            "│  Fix:  pip install scipy                                    │\n"
+            "└─────────────────────────────────────────────────────────────┘\n",
+            file=sys.stderr,
+        )
         return {s.slot_code: None for s in specs}, [
             {"slot_code": s.slot_code, "reason": "scipy not available — LAP disabled"}
             for s in specs

@@ -196,45 +196,62 @@ def ensure_zone_slots_for_night(night_id: str) -> int:
     Called by sync_engine_to_week before building the slot_lookup so new
     weeks have rows to update rather than silently dropping placements as
     'unmapped'.
+
+    TIP: When seeding multiple nights at once, prefer ensure_zone_slots_for_nights()
+    (plural) — it does a single batch SELECT + INSERT instead of N round-trips.
     """
     if not night_id:
         return 0
+    return ensure_zone_slots_for_nights([night_id])
+
+
+def ensure_zone_slots_for_nights(night_ids: list[str]) -> int:
+    """Batched version of ensure_zone_slots_for_night — seeds all missing slot
+    rows for an arbitrary list of nights in a single SELECT and at most one
+    INSERT, rather than 2×N round-trips.
+
+    Returns the total number of rows inserted across all nights.
+    """
+    night_ids = [n for n in night_ids if n]
+    if not night_ids:
+        return 0
     try:
         sb = _client()
-        # 1. Fetch existing (slot_key, rr_side) pairs for this night
+        # 1. Fetch all existing (night_id, slot_key, rr_side) tuples in one query
         res = (
             sb.table("zone_assignments")
-            .select("slot_key, rr_side")
-            .eq("night_id", night_id)
+            .select("night_id, slot_key, rr_side")
+            .in_("night_id", night_ids)
             .execute()
         )
         existing: set[tuple] = set()
         for row in (res.data or []):
-            existing.add((row["slot_key"], row.get("rr_side")))
+            existing.add((row["night_id"], row["slot_key"], row.get("rr_side")))
 
-        # 2. Insert missing slots
+        # 2. Build the full expected set across all nights and collect gaps
         to_insert = []
-        for slot_type, slot_key, rr_side, sort_order in _SLOT_TEMPLATE:
-            if (slot_key, rr_side) in existing:
-                continue
-            payload: dict = {
-                "night_id":   night_id,
-                "slot_type":  slot_type,
-                "slot_key":   slot_key,
-                "sort_order": sort_order,
-                "is_filled":  False,
-                "is_empty":   True,
-                "is_locked":  False,
-            }
-            if rr_side:
-                payload["rr_side"] = rr_side
-            to_insert.append(payload)
+        for nid in night_ids:
+            for slot_type, slot_key, rr_side, sort_order in _SLOT_TEMPLATE:
+                if (nid, slot_key, rr_side) in existing:
+                    continue
+                payload: dict = {
+                    "night_id":   nid,
+                    "slot_type":  slot_type,
+                    "slot_key":   slot_key,
+                    "sort_order": sort_order,
+                    "is_filled":  False,
+                    "is_empty":   True,
+                    "is_locked":  False,
+                }
+                if rr_side:
+                    payload["rr_side"] = rr_side
+                to_insert.append(payload)
 
         if to_insert:
             sb.table("zone_assignments").insert(to_insert).execute()
         return len(to_insert)
     except Exception as exc:
-        print(f"[ensure_zone_slots_for_night] {exc}")
+        print(f"[ensure_zone_slots_for_nights] {exc}")
         return 0
 
 
@@ -267,6 +284,14 @@ def reset_week_placements(week_id: str) -> int:
     except Exception as e:
         print(f"[reset_week_placements] {e}")
         return 0
+
+
+# Module-level cache for schedule peek results (date extraction from xlsx).
+# Key: (filename, updated_at_str)  →  peek dict returned by peek_schedule_dates().
+# This avoids re-downloading and re-parsing every xlsx on each index-page load.
+# The cache is never explicitly invalidated — the (filename, updated_at) key
+# naturally busts itself whenever a file is re-uploaded (updated_at changes).
+_SCHEDULE_PEEK_CACHE: dict[tuple[str, str], dict] = {}
 
 
 def list_unlinked_schedules() -> list[dict]:
@@ -309,13 +334,20 @@ def list_unlinked_schedules() -> list[dict]:
         if name in linked_paths:
             continue   # this xlsx is already the canonical schedule for some week
 
-        # Download just enough bytes to peek the dates. The whole file is
-        # only ~30KB so just fetch it all rather than range-requesting.
-        try:
-            blob: bytes = sb.storage.from_("schedules").download(name)
-        except Exception:
-            continue
-        peek = schedule_parser.peek_schedule_dates(blob)
+        # Use (filename, updated_at) as cache key so re-uploads bust themselves.
+        cache_key = (name, s.get("updated_at") or "")
+        if cache_key in _SCHEDULE_PEEK_CACHE:
+            peek = _SCHEDULE_PEEK_CACHE[cache_key]
+        else:
+            # Download just enough bytes to peek the dates. The whole file is
+            # only ~30KB so just fetch it all rather than range-requesting.
+            try:
+                blob: bytes = sb.storage.from_("schedules").download(name)
+            except Exception:
+                continue
+            peek = schedule_parser.peek_schedule_dates(blob)
+            if peek:
+                _SCHEDULE_PEEK_CACHE[cache_key] = peek
         if not peek:
             continue
 
@@ -402,8 +434,14 @@ def fetch_week(week_id: str) -> dict:
     return res.data or {}
 
 
-def update_week_status(week_id: str, status: str) -> None:
-    _client().table("weeks").update({"status": status}).eq("id", week_id).execute()
+def update_week_status(week_id: str, status: str) -> bool:
+    """Update a week's status. Returns True on success, False on failure."""
+    try:
+        _client().table("weeks").update({"status": status}).eq("id", week_id).execute()
+        return True
+    except Exception as e:
+        print(f"[update_week_status] week_id={week_id!r} status={status!r}: {e}")
+        return False
 
 
 # ── NIGHTS ────────────────────────────────────────────────────────────────────
@@ -647,6 +685,7 @@ def insert_tm_entity(
         "metadata":     metadata,
     }
     res = _client().table("entities").insert(row).execute()
+    invalidate_tm_cache()
     return (res.data or [row])[0]
 
 
@@ -688,6 +727,7 @@ def set_tm_status(tm_id: str, status: str) -> bool:
             .eq("id", tm_id)
             .execute()
         )
+        invalidate_tm_cache()
         return True
     except Exception as e:
         print(f"[set_tm_status] {e}")
@@ -758,6 +798,7 @@ def update_tm_display_name(tm_id: str, display_name: str, full_name: Optional[st
             .eq("id", tm_id)
             .execute()
         )
+        invalidate_tm_cache()
         return {"ok": True, "error": ""}
     except Exception as e:
         return {"ok": False, "error": f"Save failed: {e}"}
@@ -862,12 +903,32 @@ def merge_tm(keep_id: str, drop_id: str) -> dict:
             except Exception as ex:
                 # Continue on failure of any single table — partial merge is
                 # better than total failure.
-                print(f"[merge_tm] {table}.{col}: {ex}")
+                print(f"[merge_tm] WARNING: FK repoint failed for {table}.{col}: {ex}")
                 moved[table] = -1
 
-        # 4. Delete drop entity
-        sb.table("entities").delete().eq("id", drop_id).execute()
+        # 4. Delete drop entity — but only if no FK repoints failed.
+        #    If any table returned -1, the drop entity may still be referenced
+        #    by orphaned rows, so deleting it would break referential integrity.
+        failed_tables = [t for t, count in moved.items() if count == -1]
+        if failed_tables:
+            print(
+                f"[merge_tm] WARNING: Skipping delete of drop_id={drop_id!r} because "
+                f"FK repoint failed for: {failed_tables}. Merged metadata was written "
+                f"to keep_id={keep_id!r} but the drop entity was NOT deleted. "
+                f"Manual cleanup required."
+            )
+            return {
+                "ok": False,
+                "error": (
+                    f"Partial merge: metadata merged but drop entity was NOT deleted "
+                    f"because FK repoints failed for: {', '.join(failed_tables)}. "
+                    f"Manual cleanup required."
+                ),
+                "moved": moved,
+            }
 
+        sb.table("entities").delete().eq("id", drop_id).execute()
+        invalidate_tm_cache()
         return {"ok": True, "error": "", "moved": moved}
     except Exception as e:
         return {"ok": False, "error": f"Merge failed: {e}", "moved": {}}
@@ -896,6 +957,7 @@ def update_entity_aliases(entity_id: str, aliases: list[str]) -> bool:
             .eq("id", entity_id)
             .execute()
         )
+        invalidate_tm_cache()
         return True
     except Exception as e:
         print(f"[update_entity_aliases] {e}")
@@ -1085,10 +1147,10 @@ def format_week_date_range(week_ending: str) -> str:
         y, m, d = (int(p) for p in week_ending.split("-"))
         end = _date(y, m, d)
         start = end - _td(days=6)
-        # Same month: "Fri May 1 – Thu May 7"
+        # Same month: "Fri May 1 – Thu 7"  (omit repeated month)
         # Cross month: "Fri Apr 25 – Thu May 1"
         if start.month == end.month:
-            return f"{start.strftime('%a %b %-d')} – {end.strftime('%a %b %-d')}"
+            return f"{start.strftime('%a %b %-d')} – {end.strftime('%a %-d')}"
         return f"{start.strftime('%a %b %-d')} – {end.strftime('%a %b %-d')}"
     except Exception:
         return week_ending or ""
@@ -1443,7 +1505,24 @@ def fetch_overlap_assignments(night_id: str) -> list[dict]:
 
 # ── TM ROSTER (for picker) ────────────────────────────────────────────────────
 
-def fetch_all_tms() -> list[dict]:
+# Module-level TTL cache for fetch_all_tms(). Avoids a full entity-table scan
+# on every picker open (which can fire 5–10 times per shift if the supervisor
+# is reassigning TMs). Default TTL is 60 seconds — short enough that TM edits
+# made elsewhere in the session show up quickly, long enough to absorb rapid
+# repeated picker opens. Call invalidate_tm_cache() after any write that
+# modifies entity rows (save_entity_metadata, merge_tm, etc.).
+import time as _time
+_TM_CACHE: dict = {"data": None, "ts": 0.0}
+_TM_CACHE_TTL: float = 60.0   # seconds
+
+
+def invalidate_tm_cache() -> None:
+    """Force the next fetch_all_tms() call to re-query Supabase."""
+    _TM_CACHE["data"] = None
+    _TM_CACHE["ts"]   = 0.0
+
+
+def fetch_all_tms(*, _bypass_cache: bool = False) -> list[dict]:
     """All active TMs with their eligibility maps, EXCLUDING utility porters.
 
     Filters to entity_type='tm' so areas and other entity types are excluded.
@@ -1464,7 +1543,19 @@ def fetch_all_tms() -> list[dict]:
     The roles filter above uses entities.metadata.roles for backwards compat.
     See shared.db.get_people() for the full dual-storage migration plan.
     ─────────────────────────────────────────────────────────────────────────
+
+    Results are cached for _TM_CACHE_TTL seconds so rapid consecutive picker
+    opens (common during shift reassignments) don't hammer Supabase.  Pass
+    _bypass_cache=True or call invalidate_tm_cache() to force a re-fetch.
     """
+    now = _time.monotonic()
+    if (
+        not _bypass_cache
+        and _TM_CACHE["data"] is not None
+        and (now - _TM_CACHE["ts"]) < _TM_CACHE_TTL
+    ):
+        return list(_TM_CACHE["data"])   # return a copy — callers may mutate
+
     res = (
         _client()
         .table("entities")
@@ -1513,7 +1604,10 @@ def fetch_all_tms() -> list[dict]:
             "on_schedule":  False,
             "schedule_pool": "off",
         })
-    return tms
+
+    _TM_CACHE["data"] = tms
+    _TM_CACHE["ts"]   = _time.monotonic()
+    return list(tms)   # return a copy — callers may mutate
 
 
 def fetch_eligible_tms_for_slot(slot_key: str, rr_side: Optional[str] = None) -> list[dict]:
@@ -1585,8 +1679,8 @@ def sync_engine_to_week(
     # 2a. Ensure every night in this week has its 27 slot rows seeded.
     #     No-op if rows already exist; creates them on first engine run for a
     #     new week so sync_engine_to_week doesn't silently drop placements.
-    for nid in night_ids:
-        ensure_zone_slots_for_night(nid)
+    #     Uses the batched variant to avoid N×2 Supabase round-trips.
+    ensure_zone_slots_for_nights(night_ids)
 
     # 2b. Fetch all zone_assignments for the week: build lookup
     #    Key: (night_id, slot_key, rr_side)  →  {id, is_locked}

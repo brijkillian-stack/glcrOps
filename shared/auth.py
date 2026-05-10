@@ -247,8 +247,14 @@ class AuthState(rx.State):
 
         self.persisted_site_token = token
         self.is_authenticated = True
-        # DEV MODE: PIN unlock auto-elevates to full editor.
-        self.editor_role = ROLE_EDITOR
+        # DEV MODE: PIN unlock auto-elevates to full editor when ZDS_DEV_MODE=1.
+        # Without the env var, PIN auth grants viewer access only (normal three-
+        # tier flow) and a separate magic-link sign-in is required for editor
+        # privileges. Set ZDS_DEV_MODE=1 in .env for local development only —
+        # never set it in production.
+        import os
+        if os.environ.get("ZDS_DEV_MODE") == "1":
+            self.editor_role = ROLE_EDITOR
         self.pin_input = ""
         self.failed_attempts = 0
         self.error = ""

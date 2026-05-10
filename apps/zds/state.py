@@ -866,6 +866,32 @@ class ZdsState(rx.State):
         """Phase N.2 — Link to the dedicated Week Schedule editor."""
         return f"/zds/week/{self.current_week_id}/schedule"
 
+    @rx.var
+    def active_week_id(self) -> str:
+        """Return the id of whichever week in self.weeks contains today's date.
+
+        Used by the index page to highlight the current-shift week with a
+        'current' badge. Returns "" if no week covers today (e.g. between
+        scheduled weeks or if weeks haven't loaded yet).
+
+        Week cadence is Fri–Thu ending on Thursday (week_ending). A week
+        starting on a given Friday ends 6 days later on Thursday.
+        """
+        from datetime import date, timedelta
+        today = date.today().isoformat()
+        for w in self.weeks:
+            we = (w.get("week_ending") or "")
+            if not we:
+                continue
+            try:
+                end   = date.fromisoformat(we)
+                start = (end - timedelta(days=6)).isoformat()
+                if start <= today <= we:
+                    return w.get("id") or ""
+            except Exception:
+                pass
+        return ""
+
     # =========================================================================
     # Week list
     # =========================================================================
