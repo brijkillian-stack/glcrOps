@@ -254,22 +254,32 @@ def _pool_items_for(category_key: str) -> rx.Component:
 def _task_pool_panel(slot_id) -> rx.Component:
     """Floating panel above the add-task row — category tabs + pool items + custom input."""
     return rx.box(
-        # ── Category tabs ──
+        # ── Category tabs + close button ──
         rx.hstack(
-            *[
-                rx.box(
-                    label,
-                    class_name=rx.cond(
-                        ZdsState.task_pool_category == key,
-                        "task-pool-tab task-pool-tab-active",
-                        "task-pool-tab",
-                    ),
-                    on_click=ZdsState.set_task_pool_category(key),
-                )
-                for key, label in POOL_CATEGORIES
-            ],
+            rx.hstack(
+                *[
+                    rx.box(
+                        label,
+                        class_name=rx.cond(
+                            ZdsState.task_pool_category == key,
+                            "task-pool-tab task-pool-tab-active",
+                            "task-pool-tab",
+                        ),
+                        on_click=ZdsState.set_task_pool_category(key),
+                    )
+                    for key, label in POOL_CATEGORIES
+                ],
+                gap="0", flex="1",
+            ),
+            rx.icon_button(
+                rx.icon("x", size=9),
+                size="1", variant="ghost", color_scheme="gray",
+                on_click=ZdsState.close_task_pool,
+                flex_shrink="0",
+            ),
+            width="100%", align="center",
             class_name="task-pool-tabs",
-            gap="0", width="100%",
+            gap="0",
         ),
         # ── Item list (only active category shown) ──
         rx.box(
@@ -301,7 +311,6 @@ def _task_pool_panel(slot_id) -> rx.Component:
             padding="4px 6px",
         ),
         class_name="task-pool-panel",
-        on_click=rx.stop_propagation,
     )
 
 
@@ -404,59 +413,19 @@ def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Comp
             ),
             rx.fragment(),
         ),
-        # ── Add-task row / input / pool panel ──
-        rx.box(
-            rx.cond(
-                ZdsState.task_edit_slot_id == slot_id,
-                # Input mode
-                rx.hstack(
-                    rx.input(
-                        value=ZdsState.task_edit_text,
-                        on_change=ZdsState.set_task_edit_text,
-                        placeholder="New task…",
-                        size="1",
-                        flex="1",
-                        auto_focus=True,
-                    ),
-                    rx.icon_button(
-                        rx.icon("check", size=10),
-                        size="1", variant="soft", color_scheme="blue",
-                        on_click=ZdsState.submit_task(slot_id),
-                    ),
-                    rx.icon_button(
-                        rx.icon("x", size=10),
-                        size="1", variant="ghost",
-                        on_click=ZdsState.close_task_input,
-                    ),
-                    gap="4px", align="center", width="100%",
-                ),
-                # Button mode — add + pool trigger side by side
-                rx.hstack(
-                    rx.button(
-                        rx.icon("plus", size=10),
-                        rx.text("task", size="1"),
-                        size="1", variant="ghost",
-                        class_name="task-add-btn",
-                        on_click=ZdsState.open_task_input(slot_id),
-                    ),
-                    rx.icon_button(
-                        rx.icon("library", size=10),
-                        size="1", variant="ghost",
-                        class_name="task-pool-btn",
-                        on_click=ZdsState.open_task_pool(slot_id),
-                        title="Pick from pool",
-                    ),
-                    gap="4px", align="center",
-                ),
-            ),
-            # Pool panel — floats above the add row
-            rx.cond(
-                ZdsState.task_pool_slot_id == slot_id,
-                _task_pool_panel(slot_id),
-                rx.fragment(),
-            ),
-            position="relative",
-            width="100%",
+        # ── Pool panel (inline, expands card) ──
+        rx.cond(
+            ZdsState.task_pool_slot_id == slot_id,
+            _task_pool_panel(slot_id),
+            rx.fragment(),
+        ),
+        # ── Add-task button ──
+        rx.button(
+            rx.icon("plus", size=10),
+            rx.text("task", size="1"),
+            size="1", variant="ghost",
+            class_name="task-add-btn",
+            on_click=ZdsState.toggle_task_pool(slot_id),
         ),
         gap="1", width="100%",
         class_name="card-task-section",

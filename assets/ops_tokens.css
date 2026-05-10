@@ -767,20 +767,17 @@ details > summary::-webkit-details-marker {
 /* ── Task pool panel — inline card overlay ───────────────────────────────── */
 
 .task-pool-panel {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  right: 0;
+  /* Inline — expands the card rather than floating above it.
+     This avoids overflow:hidden clipping on the card container. */
+  width: 100%;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.14);
-  z-index: 120;
+  border-radius: 8px;
   overflow: hidden;
-  min-width: 240px;
-  max-height: 320px;
+  max-height: 300px;
   display: flex;
   flex-direction: column;
+  margin-bottom: 4px;
 }
 
 /* Category tab strip */
