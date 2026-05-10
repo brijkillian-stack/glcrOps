@@ -948,6 +948,73 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   TASK SYSTEM DARK MODE (2026-05-10)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] .task-pool-panel {
+  background: var(--zds-bg-2) !important;
+  border-color: var(--zds-border) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
+}
+[data-theme="dark"] .task-pool-tabs {
+  border-bottom-color: var(--zds-border) !important;
+}
+[data-theme="dark"] .task-pool-tab {
+  color: var(--zds-t3) !important;
+}
+[data-theme="dark"] .task-pool-tab:hover { color: var(--zds-t1) !important; }
+[data-theme="dark"] .task-pool-tab.active {
+  color: var(--zds-blue) !important;
+  border-bottom-color: var(--zds-blue) !important;
+  background: rgba(48,178,255,0.06) !important;
+}
+[data-theme="dark"] .task-pool-item {
+  color: var(--zds-t1) !important;
+}
+[data-theme="dark"] .task-pool-item:hover {
+  background: rgba(48,178,255,0.08) !important;
+  color: var(--zds-blue) !important;
+}
+[data-theme="dark"] .task-pool-item.done { color: var(--zds-t3) !important; }
+[data-theme="dark"] .task-pool-custom {
+  border-top-color: var(--zds-border) !important;
+}
+
+[data-theme="dark"] .task-duplicate-badge {
+  background: rgba(234,179,8,0.12) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(234,179,8,0.3) !important;
+}
+
+[data-theme="dark"] .task-popover-action-row:hover,
+[data-theme="dark"] .task-popover-action-row:active {
+  background: rgba(255,255,255,0.06) !important;
+}
+[data-theme="dark"] .task-popover-action-row.danger:hover,
+[data-theme="dark"] .task-popover-action-row.danger:active {
+  background: rgba(239,68,68,0.12) !important;
+}
+[data-theme="dark"] .task-popover-action-row.active {
+  background: rgba(48,178,255,0.10) !important;
+}
+[data-theme="dark"] .task-interactive-dot {
+  background: rgba(48,178,255,0.4);
+}
+[data-theme="dark"] .task-line-li:hover .task-interactive-dot {
+  background: var(--zds-blue);
+}
+[data-theme="dark"] .task-add-btn:hover,
+[data-theme="dark"] .task-add-btn:active {
+  color: var(--zds-blue) !important;
+  background: rgba(48,178,255,0.10) !important;
+}
+[data-theme="dark"] .task-pool-btn:hover,
+[data-theme="dark"] .task-pool-btn:active {
+  color: var(--zds-violet) !important;
+  background: rgba(167,139,250,0.10) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    DEPLOYMENT PAGE — PAGE TITLE & SUBTITLE (Phase 2026-05-10)
    Replaces hardcoded inline colors so theme can control them.
    ══════════════════════════════════════════════════════════════════════════════ */

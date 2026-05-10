@@ -142,33 +142,41 @@ def _root_view() -> rx.Component:
             cursor="pointer",
             on_click=ZdsState.set_task_popover_view("note"),
             gap="6px", align="center", width="100%",
-            padding="3px 0",
-            _hover={"background": "#f3f4f6"},
-            border_radius="4px",
+            class_name="task-popover-action-row",
         ),
-        # ── Skip tonight row ─────────────────────────────────────────────
+        # ── Skip tonight row — shows active/toggle state ──────────────────
         rx.hstack(
             rx.html(glcr_icon("status", "clock-pending", size=13)),
-            rx.text("Skip tonight", size="2"),
+            rx.text(
+                rx.cond(ZdsState.task_popover_is_skipped, "Unskip tonight", "Skip tonight"),
+                size="2",
+                class_name=rx.cond(ZdsState.task_popover_is_skipped,
+                                   "task-popover-skip-active", ""),
+            ),
+            rx.cond(
+                ZdsState.task_popover_is_skipped,
+                rx.icon("check", size=11, color="#ea580c"),
+                rx.fragment(),
+            ),
             cursor="pointer",
             on_click=ZdsState.toggle_task_skip,
             gap="6px", align="center", width="100%",
-            padding="3px 0",
-            _hover={"background": "#f3f4f6"},
-            border_radius="4px",
+            class_name=rx.cond(
+                ZdsState.task_popover_is_skipped,
+                "task-popover-action-row active",
+                "task-popover-action-row",
+            ),
         ),
-        # ── Edit text row ─────────────────────────────────────────────────
+        # ── Edit text row ────────────────────────────────────────────────────
         rx.hstack(
             rx.html(glcr_icon("ui", "tag-label", size=13)),
             rx.text("Edit text", size="2"),
             cursor="pointer",
             on_click=ZdsState.set_task_popover_view("edit_text"),
             gap="6px", align="center", width="100%",
-            padding="3px 0",
-            _hover={"background": "#f3f4f6"},
-            border_radius="4px",
+            class_name="task-popover-action-row",
         ),
-        # ── Delete (adhoc only) ───────────────────────────────────────────
+        # ── Delete (adhoc only) ──────────────────────────────────────────────
         rx.cond(
             is_adhoc,
             rx.hstack(
@@ -177,24 +185,20 @@ def _root_view() -> rx.Component:
                 cursor="pointer",
                 on_click=ZdsState.delete_adhoc_task_from_popover,
                 gap="6px", align="center", width="100%",
-                padding="3px 0",
-                _hover={"background": "#fef2f2"},
-                border_radius="4px",
+                class_name="task-popover-action-row danger",
             ),
             rx.fragment(),
         ),
-        # ── Clear all ────────────────────────────────────────────────────
+        # ── Clear all ────────────────────────────────────────────────────────
         rx.hstack(
             rx.html(glcr_icon("ui", "close-x", size=13)),
             rx.text("Clear all", size="2", color="#9ca3af"),
             cursor="pointer",
             on_click=ZdsState.clear_task_annotation,
             gap="6px", align="center", width="100%",
-            padding="3px 0",
-            _hover={"background": "#f3f4f6"},
-            border_radius="4px",
+            class_name="task-popover-action-row",
         ),
-        gap="4px", align="start", width="100%",
+        gap="2px", align="start", width="100%",
     )
 
 
@@ -234,9 +238,18 @@ def _edit_text_view() -> rx.Component:
     return rx.el.form(
         rx.vstack(
             rx.text("Edit task text", weight="bold", size="2"),
+            rx.cond(
+                ZdsState.task_popover_is_canonical,
+                rx.text(
+                    "Updates the permanent task name for all weeks.",
+                    size="1", color="#6b7280", font_style="italic",
+                ),
+                rx.fragment(),
+            ),
             rx.input(
                 name="text",
                 placeholder="Task name…",
+                default_value=ZdsState.task_popover_existing_name,
                 size="2",
                 width="100%",
                 auto_focus=True,

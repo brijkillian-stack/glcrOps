@@ -290,12 +290,14 @@ def _card_options_section() -> rx.Component:
             rx.vstack(
                 rx.text("Card note", size="1", color="#374151", weight="medium"),
                 rx.text_area(
+                    # picker_card_note_input is the live typing buffer;
+                    # falls back to the saved note text when the input is empty.
                     value=rx.cond(
-                        ZdsState.picker_note_text != "",
-                        ZdsState.picker_note_text,
+                        ZdsState.picker_card_note_input != "",
+                        ZdsState.picker_card_note_input,
                         ZdsState.picker_card_saved_note_text,
                     ),
-                    on_change=ZdsState.set_picker_note_text,
+                    on_change=ZdsState.set_picker_card_note,
                     placeholder="Note about this card tonight…",
                     rows="2",
                     width="100%",
@@ -356,12 +358,9 @@ def _card_options_section() -> rx.Component:
                 ),
                 rx.hstack(
                     rx.input(
-                        value=rx.cond(
-                            ZdsState.picker_card_adhoc_tasks.length() == 0,
-                            ZdsState.picker_note_text,
-                            ZdsState.picker_note_text,
-                        ),
-                        on_change=ZdsState.set_picker_note_text,
+                        # Dedicated input var — no longer shares with card/TM note.
+                        value=ZdsState.picker_adhoc_input,
+                        on_change=ZdsState.set_picker_adhoc_input,
                         placeholder="Add a task…",
                         size="1",
                         flex="1",
@@ -416,12 +415,14 @@ def _tm_options_section() -> rx.Component:
             # ── Pre-shift note ────────────────────────────────────────────
             rx.vstack(
                 rx.text_area(
+                    # picker_tm_note_input is the live typing buffer;
+                    # falls back to the saved TM note text when empty.
                     value=rx.cond(
-                        ZdsState.picker_note_text != "",
-                        ZdsState.picker_note_text,
+                        ZdsState.picker_tm_note_input != "",
+                        ZdsState.picker_tm_note_input,
                         ZdsState.picker_tm_note_text,
                     ),
-                    on_change=ZdsState.set_picker_note_text,
+                    on_change=ZdsState.set_picker_tm_note,
                     placeholder=rx.cond(
                         ZdsState.picker_tm_has_note,
                         "Update pre-shift note…",

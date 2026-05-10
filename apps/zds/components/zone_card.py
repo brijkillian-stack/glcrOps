@@ -21,6 +21,7 @@ import reflex as rx
 from ..styles import CARD_BASE, C_ALERT
 from ..state import ZdsState
 from ..types import TaskItem
+from ..task_pool_config import TASK_POOL, POOL_CATEGORIES
 from shared.components.context_menu import ContextMenuState
 from .task_popover import task_popover
 
@@ -228,6 +229,82 @@ def _group_badge(group_num) -> rx.Component:
 
 # ── Task section (shared by all card types) ───────────────────────────────────
 
+def _pool_items_for(category_key: str) -> rx.Component:
+    """Static pool item list for one category (compiled at build time)."""
+    tasks = TASK_POOL[category_key]
+    return rx.vstack(
+        *[
+            rx.hstack(
+                rx.cond(
+                    ZdsState.task_pool_slot_task_names.contains(task),
+                    rx.icon("check", size=9, color="#16a34a", flex_shrink="0"),
+                    rx.box(width="9px", flex_shrink="0"),
+                ),
+                rx.text(task, size="1", line_height="1.3", flex="1"),
+                width="100%", align="center", gap="5px",
+                class_name="task-pool-item",
+                on_click=ZdsState.add_task_from_pool(task),
+            )
+            for task in tasks
+        ],
+        gap="0", width="100%", align="start",
+    )
+
+
+def _task_pool_panel(slot_id) -> rx.Component:
+    """Floating panel above the add-task row — category tabs + pool items + custom input."""
+    return rx.box(
+        # ── Category tabs ──
+        rx.hstack(
+            *[
+                rx.box(
+                    label,
+                    class_name=rx.cond(
+                        ZdsState.task_pool_category == key,
+                        "task-pool-tab task-pool-tab-active",
+                        "task-pool-tab",
+                    ),
+                    on_click=ZdsState.set_task_pool_category(key),
+                )
+                for key, label in POOL_CATEGORIES
+            ],
+            class_name="task-pool-tabs",
+            gap="0", width="100%",
+        ),
+        # ── Item list (only active category shown) ──
+        rx.box(
+            rx.match(
+                ZdsState.task_pool_category,
+                ("porter", _pool_items_for("porter")),
+                ("pm_ol",  _pool_items_for("pm_ol")),
+                ("am_ol",  _pool_items_for("am_ol")),
+                _pool_items_for("porter"),
+            ),
+            class_name="task-pool-list",
+        ),
+        # ── Custom task input ──
+        rx.hstack(
+            rx.input(
+                value=ZdsState.task_edit_text,
+                on_change=ZdsState.set_task_edit_text,
+                placeholder="Custom task…",
+                size="1",
+                flex="1",
+                class_name="task-pool-custom",
+            ),
+            rx.icon_button(
+                rx.icon("plus", size=10),
+                size="1", variant="soft", color_scheme="blue",
+                on_click=ZdsState.submit_task(slot_id),
+            ),
+            gap="4px", align="center", width="100%",
+            padding="4px 6px",
+        ),
+        class_name="task-pool-panel",
+        on_click=rx.stop_propagation,
+    )
+
+
 def _trainee_chip(name) -> rx.Component:
     """Small amber chip showing the trainee's name."""
     return rx.hstack(
@@ -265,7 +342,7 @@ def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Comp
             tasks,
             lambda task: rx.box(
                 rx.hstack(
-                    # Symbol icon (via static asset URL) when annotated; bullet otherwise
+                    # Symbol icon when annotated; interactive dot otherwise
                     rx.cond(
                         ZdsState.task_symbol_url.contains(task["annot_id"]),
                         rx.image(
@@ -275,7 +352,7 @@ def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Comp
                             margin_right="2px",
                             alt="",
                         ),
-                        rx.text("·", size="1", color="#9ca3af", flex_shrink="0"),
+                        rx.box(class_name="task-interactive-dot", flex_shrink="0"),
                     ),
                     rx.text(
                         task["name"],
@@ -300,14 +377,12 @@ def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Comp
                         ),
                         rx.fragment(),
                     ),
-                    rx.text(
-                        "×",
-                        size="1", color="#c4c4c4",
-                        cursor="pointer",
-                        _hover={"color": "#ef4444"},
+                    # Remove button — upgraded for Pencil tap target
+                    rx.icon_button(
+                        rx.icon("x", size=9),
+                        size="1", variant="ghost", color_scheme="gray",
+                        class_name="task-remove-btn",
                         on_click=ZdsState.remove_task(slot_id, task["name"]),
-                        flex_shrink="0",
-                        padding="0 2px",
                     ),
                     width="100%", align="center", gap="3px", padding="1px 0",
                 ),
@@ -318,39 +393,70 @@ def _task_section(slot_id, tasks: rx.Var[list[TaskItem]], card_label) -> rx.Comp
                 width="100%",
             ),
         ),
-        # ── Add-task row / input ──
+        # ── Duplicate task warning ──
         rx.cond(
-            ZdsState.task_edit_slot_id == slot_id,
-            # Input mode
+            ZdsState.cards_with_duplicate_tasks.contains(card_label),
             rx.hstack(
-                rx.input(
-                    value=ZdsState.task_edit_text,
-                    on_change=ZdsState.set_task_edit_text,
-                    placeholder="New task…",
-                    size="1",
-                    flex="1",
-                    auto_focus=True,
-                ),
-                rx.icon_button(
-                    rx.icon("check", size=10),
-                    size="1", variant="soft", color_scheme="blue",
-                    on_click=ZdsState.submit_task(slot_id),
-                ),
-                rx.icon_button(
-                    rx.icon("x", size=10),
-                    size="1", variant="ghost",
-                    on_click=ZdsState.close_task_input,
-                ),
-                gap="4px", align="center", width="100%",
+                rx.icon("triangle-alert", size=9, color="#92400e"),
+                rx.text("Duplicate task", size="1", color="#92400e"),
+                gap="3px", align="center",
+                class_name="task-duplicate-badge",
             ),
-            # Button mode
-            rx.text(
-                "+ task",
-                size="1", color="#d1d5db",
-                cursor="pointer",
-                _hover={"color": "#3b82f6"},
-                on_click=ZdsState.open_task_input(slot_id),
+            rx.fragment(),
+        ),
+        # ── Add-task row / input / pool panel ──
+        rx.box(
+            rx.cond(
+                ZdsState.task_edit_slot_id == slot_id,
+                # Input mode
+                rx.hstack(
+                    rx.input(
+                        value=ZdsState.task_edit_text,
+                        on_change=ZdsState.set_task_edit_text,
+                        placeholder="New task…",
+                        size="1",
+                        flex="1",
+                        auto_focus=True,
+                    ),
+                    rx.icon_button(
+                        rx.icon("check", size=10),
+                        size="1", variant="soft", color_scheme="blue",
+                        on_click=ZdsState.submit_task(slot_id),
+                    ),
+                    rx.icon_button(
+                        rx.icon("x", size=10),
+                        size="1", variant="ghost",
+                        on_click=ZdsState.close_task_input,
+                    ),
+                    gap="4px", align="center", width="100%",
+                ),
+                # Button mode — add + pool trigger side by side
+                rx.hstack(
+                    rx.button(
+                        rx.icon("plus", size=10),
+                        rx.text("task", size="1"),
+                        size="1", variant="ghost",
+                        class_name="task-add-btn",
+                        on_click=ZdsState.open_task_input(slot_id),
+                    ),
+                    rx.icon_button(
+                        rx.icon("library", size=10),
+                        size="1", variant="ghost",
+                        class_name="task-pool-btn",
+                        on_click=ZdsState.open_task_pool(slot_id),
+                        title="Pick from pool",
+                    ),
+                    gap="4px", align="center",
+                ),
             ),
+            # Pool panel — floats above the add row
+            rx.cond(
+                ZdsState.task_pool_slot_id == slot_id,
+                _task_pool_panel(slot_id),
+                rx.fragment(),
+            ),
+            position="relative",
+            width="100%",
         ),
         gap="1", width="100%",
         class_name="card-task-section",

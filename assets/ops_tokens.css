@@ -471,11 +471,12 @@ details > summary::-webkit-details-marker {
 .task-hl-purple { background: color-mix(in srgb, var(--c-purple) 16%, transparent); border-radius: 3px; padding: 1px 4px; }
 .task-hl-orange { background: color-mix(in srgb, var(--c-orange) 16%, transparent); border-radius: 3px; padding: 1px 4px; }
 
-/* Skip-tonight — greyed-out strikethrough in the live grid  */
+/* Skip-tonight — greyed-out strikethrough in the live grid.
+   pointer-events intentionally NOT set to none so the popover can be
+   reopened to un-skip (Bug fix 2026-05-10). */
 .task-skip {
   opacity: 0.38;
   text-decoration: line-through;
-  pointer-events: none;
 }
 
 /* Symbol prefix glyph */
@@ -644,4 +645,210 @@ details > summary::-webkit-details-marker {
   text-transform: uppercase;
   color: var(--ink-500, #6b7280);
   margin-bottom: 6px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TASK SYSTEM — 2026-05-10 iPad/Apple Pencil pass
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tap target upgrades ─────────────────────────────────────────────────── */
+
+/* "+" add-task button — was tiny gray text, now a ghost icon-button */
+.task-add-btn {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  color: var(--ink3, #9ca3af) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+.task-add-btn:hover, .task-add-btn:active {
+  color: var(--c-blue, #2563eb) !important;
+  background: color-mix(in srgb, var(--c-blue, #2563eb) 8%, transparent) !important;
+}
+
+/* "pool" task-from-pool button — sits next to the add button */
+.task-pool-btn {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  color: var(--ink3, #9ca3af) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+.task-pool-btn:hover, .task-pool-btn:active {
+  color: var(--c-violet, #7c3aed) !important;
+  background: color-mix(in srgb, var(--c-violet, #7c3aed) 8%, transparent) !important;
+}
+
+/* "×" remove-task button — was single-char text, now ghost icon-button */
+.task-remove-btn {
+  min-width: 22px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+  flex-shrink: 0 !important;
+  opacity: 0.45;
+}
+.task-remove-btn:hover, .task-remove-btn:active {
+  opacity: 1;
+  color: #ef4444 !important;
+  background: #fef2f2 !important;
+}
+
+/* ── Tappable indicator on task lines ────────────────────────────────────── */
+
+/* Small blue dot prefix — always visible, communicates interactivity */
+.task-interactive-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c-blue, #2563eb) 45%, transparent);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: background 0.1s;
+}
+.task-line-li:hover .task-interactive-dot,
+.task-line-li:active .task-interactive-dot {
+  background: var(--c-blue, #2563eb);
+}
+
+/* ── Task popover — larger action rows for Apple Pencil ──────────────────── */
+
+.task-popover-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+  min-height: 38px;
+  font-size: 13px;
+}
+.task-popover-action-row:hover, .task-popover-action-row:active {
+  background: rgba(0,0,0,0.04);
+}
+.task-popover-action-row.danger:hover, .task-popover-action-row.danger:active {
+  background: #fef2f2;
+}
+.task-popover-action-row.active {
+  background: color-mix(in srgb, var(--c-blue, #2563eb) 8%, transparent);
+}
+
+/* Skip row active state */
+.task-popover-skip-active {
+  color: var(--c-orange, #ea580c) !important;
+  font-weight: 600;
+}
+
+/* ── Duplicate task warning badge ────────────────────────────────────────── */
+
+.task-duplicate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Task pool panel — inline card overlay ───────────────────────────────── */
+
+.task-pool-panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+  z-index: 120;
+  overflow: hidden;
+  min-width: 240px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Category tab strip */
+.task-pool-tabs {
+  display: flex;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+  padding: 4px 4px 0;
+  gap: 2px;
+}
+.task-pool-tab {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  color: #9ca3af;
+  border-bottom: 2px solid transparent;
+  transition: color 0.1s, border-color 0.1s;
+}
+.task-pool-tab:hover { color: #374151; }
+.task-pool-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: rgba(37,99,235,0.04);
+}
+
+/* Scrollable item list */
+.task-pool-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px;
+}
+
+/* Individual pool item */
+.task-pool-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+  transition: background 0.1s;
+  text-align: left;
+  min-height: 36px;
+}
+.task-pool-item:hover, .task-pool-item:active {
+  background: #f0f9ff;
+  color: #1d4ed8;
+}
+.task-pool-item.done {
+  color: #9ca3af;
+  pointer-events: none;
+}
+.task-pool-item.done .task-pool-check { color: #059669; }
+
+/* Custom "etc." entry at bottom */
+.task-pool-custom {
+  border-top: 1px solid #f3f4f6;
+  padding: 6px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
 }

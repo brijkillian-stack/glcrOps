@@ -250,18 +250,28 @@ class ZdsState(rx.State):
     # ── Task popover (Phase 4k.6) ─────────────────────────────────────────────
     # Click on a task line opens an inline popover anchored below the row.
     # Replaces the right-click JS context menu (4k.3–4k.5).
-    task_popover_open:      bool = False
-    task_popover_annot_id:   str  = ""   # stable annot_id (UUID or "custom:{lbl}:{hash}")
-    task_popover_card_code: str  = ""   # card code the task lives in
-    task_popover_view:      str  = "root"  # root | note | edit_text
-    task_popover_note_text: str  = ""   # live text for note/edit-text subviews
+    task_popover_open:          bool = False
+    task_popover_annot_id:      str  = ""      # stable annot_id (UUID or "custom:{lbl}:{hash}")
+    task_popover_card_code:     str  = ""      # card code the task lives in
+    task_popover_view:          str  = "root"  # root | note | edit_text
+    task_popover_note_text:     str  = ""      # live text for note/edit-text subviews
+    task_popover_existing_name: str  = ""      # current task name (for edit-text pre-fill)
 
     # ── Extended picker state — drawer annotation sections (Phase 4k.6) ──────
     # Set by open_picker alongside the existing picker_slot_* vars.
     picker_card_code: str = ""   # card code (= slot label) of the currently open slot
     picker_tm_id:     str = ""   # tm_id of TM currently assigned to that slot ("" if empty)
     picker_tm_name:   str = ""   # display name of that TM
-    picker_note_text: str = ""   # shared text input for card note / TM note / profile log
+    # Three separate input vars — previously a single shared picker_note_text
+    # caused silent cross-contamination between card note, TM note, and adhoc
+    # task inputs (bug fixed 2026-05-10).
+    picker_card_note_input: str = ""  # card note textarea in picker drawer
+    picker_tm_note_input:   str = ""  # TM pre-shift note textarea in picker drawer
+    picker_adhoc_input:     str = ""  # ad-hoc task name input in picker drawer
+
+    # Task pool picker (2026-05-10) — inline panel inside zone cards
+    task_pool_slot_id:   str = ""       # slot whose pool panel is open ("" = closed)
+    task_pool_category:  str = "porter" # "porter" | "am_ol" | "pm_ol"
     # Annotation data for current night: {task_uuid: {annotation_kind: value_dict}}
     # Reloaded each time _load_night runs or after any annotation write.
     task_annotation_data: dict = {}
@@ -353,6 +363,72 @@ class ZdsState(rx.State):
         """
         aid = self.task_popover_annot_id
         return ":" in aid and not aid.startswith("custom:")
+
+    @rx.var
+    def task_popover_is_canonical(self) -> bool:
+        """True when the open popover is on a canonical zone_task (UUID-keyed).
+
+        Canonical tasks live in the zone_tasks table — editing their text
+        changes the name permanently for ALL weeks. Used to show a warning
+        in the edit-text subview.
+        """
+        aid = self.task_popover_annot_id
+        return bool(aid) and ":" not in aid
+
+    @rx.var
+    def task_popover_is_skipped(self) -> bool:
+        """True when the task open in the popover has an active skip annotation."""
+        if not self.task_popover_annot_id:
+            return False
+        return bool(
+            self.task_annotation_data.get(self.task_popover_annot_id, {}).get("skip")
+        )
+
+    @rx.var
+    def task_pool_slot_task_names(self) -> list[str]:
+        """Task names currently on the pool-open slot.
+        Used to show 'already added' indicators in the task pool panel.
+        """
+        if not self.task_pool_slot_id:
+            return []
+        sid = self.task_pool_slot_id
+        for s in self.zone_slots + self.aux_slots:
+            if s.get("id") == sid:
+                return [t.get("name", "") for t in (s.get("display_tasks") or [])]
+        for rr in self.rr_slots:
+            if rr.get("mens_slot_id") == sid or rr.get("womens_slot_id") == sid:
+                return [t.get("name", "") for t in (rr.get("display_tasks") or [])]
+        return []
+
+    @rx.var
+    def duplicate_task_slots(self) -> dict[str, list[str]]:
+        """Map task-name (lowercased) → list of slot labels that have it.
+        Only entries with 2+ slots are included.
+        Used to build duplicate warning badges.
+        """
+        name_to_slots: dict[str, list[str]] = {}
+        for slot in list(self.zone_slots) + list(self.aux_slots):
+            label = slot.get("label") or ""
+            for t in (slot.get("display_tasks") or []):
+                name = (t.get("name") or "").strip().lower()
+                if name:
+                    name_to_slots.setdefault(name, []).append(label)
+        for rr in self.rr_slots:
+            label = rr.get("label") or ""
+            for t in (rr.get("display_tasks") or []):
+                name = (t.get("name") or "").strip().lower()
+                if name:
+                    name_to_slots.setdefault(name, []).append(label)
+        return {k: v for k, v in name_to_slots.items() if len(v) > 1}
+
+    @rx.var
+    def cards_with_duplicate_tasks(self) -> list[str]:
+        """Slot labels that have at least one task also assigned to another slot."""
+        result: set[str] = set()
+        for slots in self.duplicate_task_slots.values():
+            for s in slots:
+                result.add(s)
+        return list(result)
 
     @rx.var
     def task_popover_existing_note(self) -> str:
@@ -1628,8 +1704,10 @@ class ZdsState(rx.State):
         self.picker_slot_key = slot_key
         self.picker_rr_side  = rr_side
         self.picker_label    = label
-        self.tm_search       = ""
-        self.picker_note_text = ""
+        self.tm_search            = ""
+        self.picker_card_note_input = ""
+        self.picker_tm_note_input   = ""
+        self.picker_adhoc_input     = ""
         # Phase 4k.6 — resolve card code (= slot label) and currently-assigned TM.
         # The card code is the label itself (e.g. "Zone 1", "RR 1 + 2", "Admin").
         # For RR sides the label is e.g. "RR 1 + 2 M" — strip the side suffix so
@@ -1798,11 +1876,13 @@ class ZdsState(rx.State):
         self.show_picker = False
         self.picker_slot_id   = ""
         self.picker_card_code = ""
-        self.picker_tm_id     = ""
-        self.picker_tm_name   = ""
-        self.picker_note_text = ""
-        self.tm_search        = ""
-        self.picker_tasks     = []
+        self.picker_tm_id           = ""
+        self.picker_tm_name         = ""
+        self.picker_card_note_input = ""
+        self.picker_tm_note_input   = ""
+        self.picker_adhoc_input     = ""
+        self.tm_search              = ""
+        self.picker_tasks           = []
 
     def set_tm_search(self, val: str):
         self.tm_search = val
@@ -2453,27 +2533,94 @@ class ZdsState(rx.State):
             self.task_annotation_data.get(annot_id, {}).get("note", {}).get("text", "")
             if annot_id else ""
         )
+        # Pre-populate the edit-text field with the current task display name.
+        self.task_popover_existing_name = self._find_task_name_by_annot_id(annot_id)
         self.task_popover_open = True
 
     @rx.event
     def close_task_popover(self):
         """Dismiss the task popover (also fired by the overlay click)."""
-        self.task_popover_open      = False
-        self.task_popover_view      = "root"
-        self.task_popover_note_text = ""
+        self.task_popover_open          = False
+        self.task_popover_view          = "root"
+        self.task_popover_note_text     = ""
+        self.task_popover_existing_name = ""
+
+    def _find_task_name_by_annot_id(self, annot_id: str) -> str:
+        """Scan all loaded slots to find a task's current display name by annot_id.
+        Returns "" if not found (e.g. popover opened before night data loaded).
+        """
+        if not annot_id:
+            return ""
+        all_slots = list(self.zone_slots) + list(self.aux_slots)
+        for slot in all_slots:
+            for t in (slot.get("display_tasks") or []):
+                if t.get("annot_id") == annot_id:
+                    return t.get("name", "")
+        for rr in self.rr_slots:
+            for t in (rr.get("display_tasks") or []):
+                if t.get("annot_id") == annot_id:
+                    return t.get("name", "")
+        return ""
 
     @rx.event
     def set_task_popover_view(self, view: str):
         self.task_popover_view = view
+
+    # =========================================================================
+    # Task pool handlers (2026-05-10)
+    # =========================================================================
+
+    @rx.event
+    def open_task_pool(self, slot_id: str, category: str = "porter"):
+        """Open the inline task pool panel for a given slot."""
+        self.task_pool_slot_id  = slot_id
+        self.task_pool_category = category
+
+    @rx.event
+    def close_task_pool(self):
+        """Close the task pool panel."""
+        self.task_pool_slot_id = ""
+
+    @rx.event
+    def set_task_pool_category(self, cat: str):
+        self.task_pool_category = cat
+
+    @rx.event
+    def add_task_from_pool(self, task_name: str):
+        """Add a predefined pool task to the currently open pool slot. Skips duplicates."""
+        slot_id = self.task_pool_slot_id
+        text = task_name.strip()
+        if not text or not slot_id:
+            return
+        current = self._get_slot_tasks(slot_id)
+        if text in current:
+            return  # already on this card — pool item shows check state
+        target_label, _, _ = self._describe_slot(slot_id)
+        new_tasks = current + [text]
+        database.update_slot_tasks(
+            slot_id, new_tasks, target_label,
+            self.current_week_id, self.current_night_id,
+        )
+        self._load_night()
 
     @rx.event
     def set_task_popover_note_text(self, val: str):
         self.task_popover_note_text = val
 
     @rx.event
-    def set_picker_note_text(self, val: str):
-        """Live update for the note/log text input inside the picker drawer."""
-        self.picker_note_text = val
+    def set_picker_card_note(self, val: str):
+        """Live update for the card note textarea in the picker drawer."""
+        self.picker_card_note_input = val
+
+    @rx.event
+    def set_picker_tm_note(self, val: str):
+        """Live update for the TM pre-shift note textarea in the picker drawer."""
+        self.picker_tm_note_input = val
+
+    @rx.event
+    def set_picker_adhoc_input(self, val: str):
+        """Live update for the ad-hoc task name input in the picker drawer."""
+        self.picker_adhoc_input = val
 
     @rx.event
     def set_task_highlight(self, color: str):
@@ -2639,14 +2786,14 @@ class ZdsState(rx.State):
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        text        = self.picker_note_text.strip()
+        text        = self.picker_tm_note_input.strip()
         if text:
             upsert_annotation(week_ending, day, "tm", self.picker_tm_id,
                               "note", {"text": text})
         else:
             delete_annotation(week_ending, day, "tm", self.picker_tm_id, "note")
         self._load_task_annotations()
-        self.picker_note_text = ""
+        self.picker_tm_note_input = ""
 
     @rx.event
     def log_tm_to_profile(self):
@@ -2659,7 +2806,7 @@ class ZdsState(rx.State):
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        text        = self.picker_note_text.strip()
+        text        = self.picker_tm_note_input.strip()
         if not text:
             return
         note_id = insert_note(
@@ -2677,7 +2824,7 @@ class ZdsState(rx.State):
             {"note_id": note_id or "", "preview": text[:80]},
         )
         self._load_task_annotations()
-        self.picker_note_text = ""
+        self.picker_tm_note_input = ""
 
     @rx.event
     def navigate_to_tm_profile(self):
@@ -2703,7 +2850,7 @@ class ZdsState(rx.State):
 
     @rx.event
     def add_card_adhoc_task(self):
-        """Save picker_note_text as a new adhoc task annotation on the open card.
+        """Save picker_adhoc_input as a new adhoc task annotation on the open card.
 
         Uses a composite target_ref = "{card_code}:{8-hex}" to allow multiple
         adhoc tasks per card while satisfying the DB unique constraint.
@@ -2711,14 +2858,14 @@ class ZdsState(rx.State):
         from shared.db import upsert_annotation
         if not self.picker_card_code:
             return
-        text = self.picker_note_text.strip()
+        text = self.picker_adhoc_input.strip()
         if not text:
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
         task_ref    = f"{self.picker_card_code}:{uuid.uuid4().hex[:8]}"
         upsert_annotation(week_ending, day, "card", task_ref, "adhoc", {"name": text})
-        self.picker_note_text = ""
+        self.picker_adhoc_input = ""
         self._load_task_annotations()
 
     @rx.event
@@ -2738,14 +2885,14 @@ class ZdsState(rx.State):
             return
         week_ending = self.week_info.get("week_ending", "")
         day         = self._current_day_key()
-        text        = self.picker_note_text.strip()
+        text        = self.picker_card_note_input.strip()
         if text:
             upsert_annotation(week_ending, day, "card", self.picker_card_code,
                               "note", {"text": text})
         else:
             delete_annotation(week_ending, day, "card", self.picker_card_code, "note")
         self._load_task_annotations()
-        self.picker_note_text = ""
+        self.picker_card_note_input = ""
 
     @rx.event
     def clear_card_note(self):
