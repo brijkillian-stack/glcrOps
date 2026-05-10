@@ -2604,12 +2604,8 @@ class ZdsState(rx.State):
         current = self._get_slot_tasks(slot_id)
         if text in current:
             return  # already on this card — pool item shows check state
-        target_label, _, _ = self._describe_slot(slot_id)
         new_tasks = current + [text]
-        database.update_slot_tasks(
-            slot_id, new_tasks, target_label,
-            self.current_week_id, self.current_night_id,
-        )
+        database.update_slot_tasks(slot_id, new_tasks)
         self._load_night()
 
     @rx.event
