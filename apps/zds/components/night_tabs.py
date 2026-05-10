@@ -6,6 +6,7 @@ from ..state import ZdsState
 
 def _night_tab(night: dict) -> rx.Component:
     is_active = ZdsState.current_night_id == night["id"]
+    is_today  = ZdsState.today_iso == night["night_date"]
     # Drop the Chakra variant/color_scheme — those inject inline text colors
     # that override our .night-tab / .night-tab-active CSS classes. Use a
     # plain rx.button with cursor pointer and let the CSS in zds_dark.css +
@@ -17,6 +18,12 @@ def _night_tab(night: dict) -> rx.Component:
                     class_name="night-tab-day"),
             rx.text(night["night_date"], size="1",
                     class_name="night-tab-date"),
+            # Today dot — only visible on the current calendar date
+            rx.cond(
+                is_today,
+                rx.box(class_name="night-tab-today-dot"),
+                rx.fragment(),
+            ),
             gap="0", align="center",
         ),
         variant="ghost",

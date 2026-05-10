@@ -892,6 +892,16 @@ class ZdsState(rx.State):
                 pass
         return ""
 
+    @rx.var
+    def today_iso(self) -> str:
+        """Today's date as YYYY-MM-DD string.
+
+        Used by night_tabs to show a dot indicator on the tab that
+        corresponds to tonight's shift.
+        """
+        from datetime import date
+        return date.today().isoformat()
+
     # =========================================================================
     # Week list
     # =========================================================================

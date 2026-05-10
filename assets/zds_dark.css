@@ -77,7 +77,7 @@
 
 /* Hidden on light-mode surface — light should feel clean */
 [data-theme="light"] .zds-casino-bg {
-  display: none;
+  display: none !important;
 }
 
 
@@ -945,4 +945,200 @@
 [data-theme="light"] .zds-theme-toggle:hover {
   background: rgba(0,101,191,0.08) !important;
   border-color: rgba(0,101,191,0.40) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DEPLOYMENT PAGE — PAGE TITLE & SUBTITLE (Phase 2026-05-10)
+   Replaces hardcoded inline colors so theme can control them.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.zds-page-title {
+  color: var(--zds-t1) !important;
+}
+
+.zds-page-subtitle {
+  color: var(--zds-t3) !important;
+  letter-spacing: 0.06em;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BREAK SHEET — TM NAME COLORS (Phase 2026-05-10)
+   Replaces inline #111827 (invisible on dark) with theme tokens.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Filled TM name in break sheet rows */
+.break-tm-name {
+  color: var(--zds-t1) !important;
+}
+
+/* Empty / unfilled slot em dash */
+.break-tm-empty {
+  color: var(--zds-t3) !important;
+  font-style: italic;
+}
+
+/* Overlap sheet filled TM name */
+.overlap-tm-name {
+  color: var(--zds-t1) !important;
+  font-weight: 700;
+}
+
+/* Overlap sheet unfilled */
+.overlap-tm-empty {
+  color: var(--zds-t3) !important;
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BREAK SHEET — INACTIVE WAVE BUTTON (Phase 2026-05-10)
+   #f3f4f6 (near-white) is invisible in dark mode. Transparent works both ways.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.wave-btn-inactive {
+  background: transparent !important;
+  color: var(--zds-t3) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BREAK SHEET — VIOLET SOFT BUTTON (Set Break Waves)
+   Chakra injects inline background for variant="soft"; override for dark.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] .chakra-button[data-color-scheme="violet"][data-variant="soft"] {
+  background: rgba(167,139,250,0.12) !important;
+  color: #a78bfa !important;
+  border-color: rgba(167,139,250,0.25) !important;
+}
+[data-theme="dark"] .chakra-button[data-color-scheme="violet"][data-variant="soft"]:hover {
+  background: rgba(167,139,250,0.22) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SEGMENTED CONTROL — DARK MODE OVERRIDE
+   Chakra inlines white background and dark text; beat it for dark theme.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] [role="radiogroup"].chakra-segmented-control,
+[data-theme="dark"] .chakra-segmented-control__root {
+  background: var(--zds-bg-3) !important;
+  border-color: var(--zds-border) !important;
+}
+
+[data-theme="dark"] [role="radiogroup"].chakra-segmented-control [role="radio"],
+[data-theme="dark"] .chakra-segmented-control__item {
+  color: var(--zds-t2) !important;
+}
+
+[data-theme="dark"] [role="radiogroup"].chakra-segmented-control [role="radio"][data-state="checked"],
+[data-theme="dark"] .chakra-segmented-control__item[data-state="checked"] {
+  background: var(--zds-bg-4) !important;
+  color: var(--zds-t1) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BREAK WAVE LEGEND (Phase 2026-05-10)
+   Pill row shown above zones grid: Break 1 · Break 2 · Break 3
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.wave-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.wave-legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wave-legend-pill-1 {
+  background: rgba(37,99,235,0.12);
+  color: #2563eb;
+  border: 1px solid rgba(37,99,235,0.30);
+}
+.wave-legend-pill-2 {
+  background: rgba(5,150,105,0.12);
+  color: #059669;
+  border: 1px solid rgba(5,150,105,0.30);
+}
+.wave-legend-pill-3 {
+  background: rgba(124,58,237,0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(124,58,237,0.30);
+}
+
+[data-theme="dark"] .wave-legend-pill-1 {
+  background: rgba(48,178,255,0.10);
+  color: #30b2ff;
+  border-color: rgba(48,178,255,0.28);
+}
+[data-theme="dark"] .wave-legend-pill-2 {
+  background: rgba(52,211,153,0.10);
+  color: #34d399;
+  border-color: rgba(52,211,153,0.28);
+}
+[data-theme="dark"] .wave-legend-pill-3 {
+  background: rgba(167,139,250,0.10);
+  color: #a78bfa;
+  border-color: rgba(167,139,250,0.28);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TODAY DOT — Night tab "today" indicator
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.night-tab-today-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .night-tab-today-dot {
+  background: var(--zds-blue);
+  box-shadow: 0 0 4px rgba(48,178,255,0.8);
+}
+[data-theme="light"] .night-tab-today-dot {
+  background: #2563eb;
+  box-shadow: 0 0 4px rgba(37,99,235,0.6);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SCHEDULE TAB — BREATHING ROOM
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.schedule-pool-section {
+  padding: 6px 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BREAK SHEET — COLUMN DIVIDER
+   Make the vertical dividers between wave columns more visible on dark.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] .break-sheet-col-divider {
+  background: var(--zds-border) !important;
+  width: 1px !important;
+  align-self: stretch;
+}
+
+[data-theme="light"] .break-sheet-col-divider {
+  background: #e5e7eb !important;
+  width: 1px !important;
+  align-self: stretch;
+}
+
+/* Break sheet row separator */
+[data-theme="dark"] .break-row-separator {
+  border-bottom-color: var(--zds-border) !important;
+}
+[data-theme="light"] .break-row-separator {
+  border-bottom-color: #f3f4f6 !important;
 }

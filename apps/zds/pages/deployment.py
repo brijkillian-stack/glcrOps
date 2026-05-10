@@ -425,8 +425,22 @@ def _tasks_panel() -> rx.Component:
     )
 
 
+def _wave_legend() -> rx.Component:
+    """Compact Break 1 / Break 2 / Break 3 legend above the zones grid."""
+    return rx.hstack(
+        rx.text("Breaks:", size="1", color="#9ca3af", weight="medium",
+                letter_spacing="0.05em"),
+        rx.box("Break 1", class_name="wave-legend-pill wave-legend-pill-1"),
+        rx.box("Break 2", class_name="wave-legend-pill wave-legend-pill-2"),
+        rx.box("Break 3", class_name="wave-legend-pill wave-legend-pill-3"),
+        align="center", gap="6px", padding="4px 0 8px",
+        class_name="wave-legend-row",
+    )
+
+
 def deployment_body() -> rx.Component:
     return rx.vstack(
+        _wave_legend(),
         _zones_section(),
         _rr_section(),
         _aux_section(),
@@ -456,8 +470,11 @@ def _wave_buttons(row: dict) -> rx.Component:
                 width="15px", height="15px",
                 display="flex", align_items="center", justify_content="center",
                 border_radius="full",
-                background=rx.cond(row["break_wave"] == w, active_bg, "#f3f4f6"),
-                color=rx.cond(row["break_wave"] == w, "white", "#9ca3af"),
+                # Phase 1 dark-mode: inactive bg was #f3f4f6 (invisible on dark).
+                # Use class_name for inactive state so CSS controls the color.
+                background=rx.cond(row["break_wave"] == w, active_bg, "transparent"),
+                color=rx.cond(row["break_wave"] == w, "white", ""),
+                class_name=rx.cond(row["break_wave"] == w, "", "wave-btn-inactive"),
                 cursor=rx.cond(row["is_wave_locked"], "not-allowed", "pointer"),
                 opacity=rx.cond(row["is_wave_locked"], "0.4", "1"),
                 _hover=rx.cond(row["is_wave_locked"], {}, {"opacity": "0.75"}),
@@ -486,11 +503,23 @@ def _wave_buttons(row: dict) -> rx.Component:
 def _break_col(wave: int, rows: list) -> rx.Component:
     color = _WAVE_COLORS.get(wave, "#6b7280")
     return rx.vstack(
-        rx.text(
-            f"Break {wave}",
-            size="2", weight="bold", color=color,
-            border_top=f"3px solid {color}",
-            padding_top="10px",
+        # Column header: wave label + wave picker hint
+        rx.hstack(
+            rx.text(
+                f"Break {wave}",
+                size="2", weight="bold", color=color,
+                border_top=f"3px solid {color}",
+                padding_top="10px",
+                flex="1",
+            ),
+            rx.text(
+                "1 · 2 · 3",
+                size="1", color="#9ca3af",
+                padding_top="10px",
+                flex_shrink="0",
+                title="Wave picker buttons",
+            ),
+            width="100%", align="end", gap="4px",
         ),
         rx.vstack(
             rx.foreach(
@@ -527,13 +556,19 @@ def _break_col(wave: int, rows: list) -> rx.Component:
                         rx.text(
                             rx.cond(row["tm_name"] != "", row["tm_name"], "—"),
                             size="2", weight="medium", flex="1",
-                            color=rx.cond(row["tm_name"] != "", "#111827", "#d1d5db"),
-                            font_style=rx.cond(row["tm_name"] != "", "normal", "italic"),
+                            # Phase 1 dark-mode: class drives color per theme;
+                            # removing inline color lets CSS win.
+                            class_name=rx.cond(
+                                row["tm_name"] != "",
+                                "break-tm-name",
+                                "break-tm-empty",
+                            ),
                         ),
                         _wave_buttons(row),
                         width="100%", align="center", gap="5px",
                         padding="3px 0",
-                        border_bottom="1px solid #f3f4f6",
+                        border_bottom="1px solid",
+                        class_name="break-row-separator",
                     ),
                     gap="0", width="100%",
                 ),
@@ -560,8 +595,12 @@ def _overlap_row_comp(rows: list, label: str, time_range: str) -> rx.Component:
                         rx.text(
                             rx.cond(row["tm_name"] != "", row["tm_name"], "Unfilled"),
                             weight=rx.cond(row["is_filled"], "bold", "normal"),
-                            color=rx.cond(row["is_filled"], "#111827", "#d1d5db"),
-                            font_style=rx.cond(row["is_filled"], "normal", "italic"),
+                            # Phase 1 dark-mode: class drives color; no inline color.
+                            class_name=rx.cond(
+                                row["is_filled"],
+                                "overlap-tm-name",
+                                "overlap-tm-empty",
+                            ),
                             size="2",
                         ),
                         rx.text(
@@ -592,9 +631,9 @@ def break_sheet_body() -> rx.Component:
         # Break waves
         rx.hstack(
             _break_col(1, ZdsState.break_wave_1),
-            rx.divider(orientation="vertical"),
+            rx.box(class_name="break-sheet-col-divider"),
             _break_col(2, ZdsState.break_wave_2),
-            rx.divider(orientation="vertical"),
+            rx.box(class_name="break-sheet-col-divider"),
             _break_col(3, ZdsState.break_wave_3),
             gap="16px", width="100%", align="start",
         ),
@@ -705,6 +744,35 @@ def _schedule_pool_section(
             ),
         ),
         width="100%", gap="4px",
+        class_name="schedule-pool-section",
+    )
+
+
+def _schedule_legend() -> rx.Component:
+    """One-line legend: colored chip = scheduled, strikethrough = called off."""
+    return rx.hstack(
+        rx.box(
+            rx.text("Name", size="1", weight="medium", color="#065f46"),
+            background="#d1fae5",
+            border="1px solid #065f46",
+            border_radius="999px",
+            padding="1px 8px",
+        ),
+        rx.text("= scheduled", size="1", color="#9ca3af"),
+        rx.separator(orientation="vertical"),
+        rx.hstack(
+            rx.icon("octagon-x", size=10, color="#dc2626"),
+            rx.text("Name", size="1", color="#9ca3af",
+                    text_decoration="line-through"),
+            gap="3px", align="center",
+            background="#fef2f2",
+            border="1px solid #fecaca",
+            border_radius="999px",
+            padding="1px 8px",
+        ),
+        rx.text("= called off  (tap to toggle)", size="1", color="#9ca3af"),
+        align="center", gap="6px", flex_wrap="wrap",
+        padding="0 0 8px",
     )
 
 
@@ -718,8 +786,9 @@ def schedule_body() -> rx.Component:
                 rx.icon("file-spreadsheet", size=13, color="#6b7280"),
                 rx.text(ZdsState.schedule_file_label, size="1", color="#6b7280"),
                 gap="5px", align="center",
-                padding="2px 0 10px",
+                padding="2px 0 6px",
             ),
+            _schedule_legend(),
             _schedule_pool_section(
                 ZdsState.night_grave_pool,
                 "grave",
@@ -782,9 +851,11 @@ def deployment() -> rx.Component:
                 _hover={"color": "#111827"},
             ),
             rx.vstack(
-                rx.heading("Zone Deployment", size="5"),
+                rx.heading("Zone Deployment", size="5",
+                           class_name="zds-page-title"),
                 rx.text("GLCR · Grave  ·  11PM – 7AM",
-                        size="1", color="#9ca3af", letter_spacing="0.06em"),
+                        size="1", letter_spacing="0.06em",
+                        class_name="zds-page-subtitle"),
                 gap="0",
             ),
             rx.spacer(),
@@ -864,6 +935,8 @@ def deployment() -> rx.Component:
                 cursor="pointer",
                 title="Reset break wave assignments from defaults (respects locked waves)",
             ),
+            # Visual separator before view toggle
+            rx.separator(orientation="vertical", size="2"),
             # Deployment / Break Sheet / Schedule toggle
             rx.segmented_control.root(
                 rx.segmented_control.item("Deployment", value="deployment"),
@@ -1046,7 +1119,7 @@ def deployment() -> rx.Component:
                             rx.icon("circle-dashed", size=12, color="#6b7280"),
                             rx.text(
                                 (ZdsState.night_total_count - ZdsState.night_filled_count).to_string(),
-                                " open",
+                                " unfilled",
                                 size="1", color="#374151", weight="bold",
                             ),
                             gap="3px", align="center",
@@ -1078,7 +1151,7 @@ def deployment() -> rx.Component:
                     rx.icon("user-round-search", size=14, color="#0369a1"),
                     rx.text(
                         ZdsState.unplaced_scheduled_count.to_string(),
-                        " scheduled, not yet placed:",
+                        " scheduled, not yet placed — tap a card to assign:",
                         size="2", weight="bold", color="#0369a1",
                     ),
                     rx.foreach(
