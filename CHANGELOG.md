@@ -4,6 +4,61 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-11 — GLC-11: POST /v1/planning/simulate (what-if endpoint) (Opus)
+
+Phase 5 pre-shift planning surface. New non-destructive endpoint that lets
+planners try staffing changes against a baseline week or single night and see
+the coverage / fatigue / overlap impact without touching the database.
+
+- `POST /v1/planning/simulate` (apps/zds/api/routers/planning.py) — accepts
+  exactly one of `week_id` or `night_id`, plus a list of staffing changes
+  and constraints. Returns `{baseline, scenario, delta, elapsed_ms}`.
+- Supported `staffing_changes.kind` values:
+  - `mark_unavailable` — clear every assignment for a TM (week or single night)
+  - `remove_assignment` — clear one specific slot
+  - `add_assignment` — fill a currently-empty slot with a TM
+  - `reassign` — move a TM from one slot to another (or just clear the source)
+- Supported `constraints.kind` values: `max_consecutive_nights`,
+  `max_nights_per_week`, `min_coverage`, `exclude_zone`, `require_skill_min`.
+  Violations come back per-scope under `baseline.violations` /
+  `scenario.violations` so the UI can show "fixed N issues" and "introduced M".
+- Coverage metrics: total / filled / unfilled, fill_rate, breakdown by
+  `slot_type` (zone / rr / aux) and per-night.
+- Fatigue metrics: per-TM nights worked, slot count, longest consecutive
+  streak, average skill; plus week-level summary stats.
+- Overlap metrics: PM and AM windows separately (filled / total / fill_rate).
+- `GET /v1/planning/simulate/kinds` — small introspection endpoint that
+  returns the allow-lists above so clients don't have to hard-code them.
+
+### Implementation notes
+
+- `apps/zds/api/services/simulation_service.py` is pure read-only over the
+  existing `PlacementService`. Baseline rows are deep-copied before any
+  mutation runs, so the cached read can never be poisoned by a buggy
+  scenario. Nothing in the service writes to Supabase.
+- Speed: a warm week answers in tens of ms (dict transforms over already
+  cached reads). Cold path is bounded by the existing PlacementService
+  fetches the print pipeline already uses.
+- Engine subprocess (used by `simulate_weeks.py`) is intentionally NOT
+  invoked here — interactive planning needs a sub-second response, so we
+  evaluate metrics on the existing placement state rather than re-running
+  the placement engine. A future "engine-driven what-if" mode can be added
+  alongside this without changing the request/response shape.
+
+### Tests
+
+`apps/zds/api/tests/`:
+- `test_simulation_service.py` (21 tests) — coverage / fatigue / overlap
+  computation, every change kind, every constraint kind, error paths,
+  and an explicit non-destructive assertion that the source fixtures are
+  untouched after a `mark_unavailable` run.
+- `test_planning_router.py` (6 tests) — FastAPI route smoke test with
+  `dependency_overrides`, validating happy path, 422 on missing/dual
+  scope, 422 on invalid `kind`, 400 on `SimulationError`, and the kinds
+  introspection endpoint.
+
+---
+
 ## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
 
 Two issues from live deployment testing of Phase 4k.6:
