@@ -42,18 +42,6 @@ class HudAuxSlot(TypedDict):
     status: str         # "ok" | "open"
 
 
-class HudBreakWave(TypedDict):
-    """One break wave panel in the HUD break strip. DEPRECATED — use BreakGroup/BreakSlot."""
-
-    wave_num: int       # 1 | 2 | 3
-    wave_label: str     # "W1" | "W2" | "W3"
-    time_range: str     # "01:00 – 01:30"
-    state: str          # "done" | "active" | "queue"
-    on_count: int       # how many TMs currently on break
-    total_count: int    # how many TMs in this wave
-    names: list[str]    # TM display names in this wave
-
-
 class BreakSlot(TypedDict):
     """One wave cell within a break group (Phase 4d 3×3 model)."""
 
