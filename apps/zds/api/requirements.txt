@@ -1,0 +1,11 @@
+# ZDS Forge API — separate from the Reflex app's requirements so the
+# FastAPI surface can be deployed/installed independently if needed.
+#
+# Note: starlette and redis are already in the root .venv; listing
+# them here keeps the API self-describing.
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+supabase>=2.4.0
+redis>=5.0.0
+python-dotenv>=1.0.0
