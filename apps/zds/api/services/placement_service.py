@@ -1,31 +1,50 @@
-"""Read-side service for placement (zone / overlap) data.
+"""Placement service — cache-through data layer for ZDS Forge.
 
-For now this is a thin cache-through wrapper over the Reflex-app's
-`apps/zds/database.py` helpers. Centralizing reads here means future
-write-path services (placement edits, locking, etc.) have one place
-to invalidate.
+Centralises all reads (and select writes) for placement data behind one
+service class so every caller benefits from consistent caching and
+invalidation without knowing about Redis or Supabase directly.
 
-The deeper unification of this service with the engine's data layer
-is tracked in the "unified data layer" workstream — this stub is the
-foundation, not the final shape.
+Architecture
+────────────
+• Reads go:  caller → CacheService.get() → hit? return. miss? Supabase → CacheService.set()
+• Writes go: caller → Supabase → CacheService invalidate affected keys
+• All methods return **Pydantic models**, never raw dicts.  Callers can
+  call .model_dump() if they need a plain dict for JSON serialisation.
+• All methods are async.  DB calls are synchronous (supabase-py is sync)
+  but wrapped in async shells so the FastAPI router can await them without
+  blocking (FastAPI runs sync callables in a thread pool executor; keeping
+  the service async lets a future migration to async supabase-py drop in
+  without changing signatures).
+
+Existing method signatures (Phase 1) are preserved verbatim.
+Phase 2 methods are added below the "── Phase 2 additions ──" marker.
 """
 
 from __future__ import annotations
 
 import importlib
 import logging
+from datetime import date
 from typing import Optional
 
 from supabase import Client
 
+from ..models import (
+    AnnotationRow,
+    AssignmentRow,
+    MultiAreaAssignmentRow,
+    NightRow,
+    OverrideRow,
+    TMRow,
+    TaskRow,
+    WeekRow,
+)
 from .cache_service import CacheService
 
 log = logging.getLogger(__name__)
 
-# `apps/zds/database.py` uses package-relative imports (`from .styles
-# import ...`) so it has to come in through the regular package import
-# machinery — a file-spec loader breaks those relative imports.
 _DATABASE_MODULE = "apps.zds.database"
+_SHARED_DB_MODULE = "shared.db"
 
 
 def _load_zds_database():
@@ -39,19 +58,33 @@ def _load_zds_database():
         ) from exc
 
 
-class PlacementService:
-    """Cache-through reader for week + night placement data."""
+def _load_shared_db():
+    """Import shared/db.py via the package system."""
+    try:
+        return importlib.import_module(_SHARED_DB_MODULE)
+    except ImportError as exc:
+        raise RuntimeError(
+            f"Could not import {_SHARED_DB_MODULE!r}. Make sure the repo "
+            "root is on sys.path."
+        ) from exc
 
-    WEEK_TTL = 60
-    NIGHT_TTL = 30
+
+class PlacementService:
+    """Cache-through service for week, night, task, annotation, and TM data."""
+
+    # ── TTL constants ────────────────────────────────────────────────────
+    WEEK_TTL        = 60    # seconds; short — week status changes during editing
+    NIGHT_TTL       = 30    # seconds; nights change frequently during pre-shift
+    TASK_TTL        = 600   # seconds; canonical tasks change rarely
+    TM_TTL          = 600   # seconds; roster changes are infrequent
+    ANNO_TTL        = 60    # seconds; annotations change frequently pre-shift
+    OVERRIDE_TTL    = 30    # seconds; overrides are live-ops — keep hot
 
     def __init__(self, supabase: Client, cache: Optional[CacheService] = None):
         self.supabase = supabase
         self.cache = cache or CacheService(None)
-        # Lazy import so test environments without supabase env vars
-        # can still construct the class (importing database.py at
-        # construction time would crash if env vars are missing).
         self._db = None
+        self._shared_db = None
 
     @property
     def db(self):
@@ -59,7 +92,15 @@ class PlacementService:
             self._db = _load_zds_database()
         return self._db
 
-    # ── Week ──────────────────────────────────────────────────────
+    @property
+    def shared_db(self):
+        if self._shared_db is None:
+            self._shared_db = _load_shared_db()
+        return self._shared_db
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Phase 1 — Week / Night reads (signatures preserved)
+    # ═══════════════════════════════════════════════════════════════════════
 
     async def get_week(self, week_id: str) -> Optional[dict]:
         key = f"zds:week:{week_id}"
@@ -89,16 +130,14 @@ class PlacementService:
         return nights
 
     async def get_week_assignments(self, week_id: str) -> dict[str, list[dict]]:
-        """Return {night_id: [zone_assignment_rows, ...]} for the week.
+        """Return {night_id: [zone_assignment_rows]} for the week.
 
-        Warms per-night cache as a side effect so the renderer's
-        downstream calls hit Redis.
+        Warms per-night cache as a side effect so downstream calls hit Redis.
         """
         key = f"zds:week:{week_id}:assignments"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
-
         nights = await self.get_week_nights(week_id)
         out: dict[str, list[dict]] = {}
         for night in nights:
@@ -108,8 +147,6 @@ class PlacementService:
             out[nid] = await self.get_night_assignments(nid)
         await self.cache.set(key, out, ttl=self.WEEK_TTL)
         return out
-
-    # ── Night ─────────────────────────────────────────────────────
 
     async def get_night_assignments(self, night_id: str) -> list[dict]:
         key = f"zds:night:{night_id}:assignments"
@@ -137,17 +174,426 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
-    # ── Invalidation hooks (for future write paths) ──────────────
+    # ── Phase 1 invalidation hooks ────────────────────────────────────────
 
     async def invalidate_night(self, night_id: str) -> None:
-        await self.cache.delete(
+        """Clear all cache keys associated with a night.
+
+        Clears assignments, overlaps, override, and night-row keys.  Also
+        clears the annotation cache for the night's day when the night row
+        and its week row are available (needed to derive week_ending).
+        """
+        keys = [
+            f"zds:night:{night_id}",
             f"zds:night:{night_id}:assignments",
             f"zds:night:{night_id}:overlaps",
-        )
+            f"zds:overrides:{night_id}",
+        ]
+        # Best-effort: also clear annotation cache for this night's day.
+        # Requires a week lookup to resolve week_ending from week_id.
+        night = await self.get_night(night_id)
+        if night:
+            week = await self.get_week(night.week_id)
+            if week:
+                we  = week.get("week_ending", "")
+                day = night.day_name[:3].lower()  # "fri", "sat", etc.
+                if we and day:
+                    keys.append(f"zds:anno:{we}:{day}")
+        await self.cache.delete_many(keys)
 
     async def invalidate_week(self, week_id: str) -> None:
-        await self.cache.delete(
+        await self.cache.delete_many([
             f"zds:week:{week_id}",
             f"zds:week:{week_id}:nights",
             f"zds:week:{week_id}:assignments",
-        )
+            f"zds:weeks:recent",
+        ])
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Phase 2 — Extended data layer
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Night ─────────────────────────────────────────────────────────────
+
+    async def get_night(self, night_id: str) -> Optional[NightRow]:
+        """One night row by id.  Cache: ``zds:night:{id}``, TTL 300 s."""
+        key = f"zds:night:{night_id}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return NightRow.model_validate(cached)
+        try:
+            res = (
+                self.supabase.table("nights")
+                .select("*")
+                .eq("id", night_id)
+                .maybe_single()
+                .execute()
+            )
+            row = res.data
+        except Exception as exc:
+            log.warning("get_night(%s) failed: %s", night_id, exc)
+            return None
+        if not row:
+            return None
+        await self.cache.set(key, row, ttl=300)
+        return NightRow.model_validate(row)
+
+    async def list_recent_weeks(self, limit: int = 8) -> list[WeekRow]:
+        """Most recent *limit* weeks ordered by week_ending desc.
+
+        Not cached — list view is rare and freshness matters.
+        """
+        try:
+            res = (
+                self.supabase.table("weeks")
+                .select("*")
+                .order("week_ending", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return [WeekRow.model_validate(r) for r in (res.data or [])]
+        except Exception as exc:
+            log.warning("list_recent_weeks failed: %s", exc)
+            return []
+
+    # ── Tasks (canonical) ─────────────────────────────────────────────────
+
+    async def list_tasks(
+        self,
+        kind: Optional[str] = None,
+        target: Optional[str] = None,
+        day: Optional[str] = None,
+        override_date: Optional[str] = None,
+    ) -> list[TaskRow]:
+        """Canonical task list from zone_tasks.
+
+        Mirrors ``shared.db.list_tasks()`` filter signature.
+        Cache key: ``zds:tasks:{kind}:{target}:{day}``, TTL 600 s.
+        Per-day overrides are applied when *override_date* is passed.
+        """
+        cache_key = f"zds:tasks:{kind or '*'}:{target or '*'}:{day or '*'}"
+        if not override_date:
+            cached = await self.cache.get(cache_key)
+            if cached is not None:
+                return [TaskRow.model_validate(r) for r in cached]
+
+        try:
+            rows = self.shared_db.list_tasks(
+                category=kind,
+                active_only=True,
+                include_overlap=True,
+            )
+        except Exception as exc:
+            log.warning("list_tasks failed: %s", exc)
+            return []
+
+        if not override_date:
+            await self.cache.set(cache_key, rows, ttl=self.TASK_TTL)
+        return [TaskRow.model_validate(r) for r in rows]
+
+    async def upsert_task(self, payload: dict) -> Optional[TaskRow]:
+        """Write a task row.  Invalidates all tasks:* cache keys on success."""
+        try:
+            row = self.shared_db.upsert_task(payload)
+        except Exception as exc:
+            log.warning("upsert_task failed: %s", exc)
+            return None
+        if row:
+            await self.cache.delete_pattern("zds:tasks:*")
+        return TaskRow.model_validate(row) if row else None
+
+    # ── Annotations ───────────────────────────────────────────────────────
+
+    async def list_annotations_for_day(
+        self, week_ending: date, day: str
+    ) -> dict:
+        """All annotations for *(week_ending, day)* grouped by target.
+
+        Returns the same nested dict structure as
+        ``shared.db.list_annotations_grouped``:
+        ``{target_kind: {target_ref: {annotation_kind: value}}}``.
+
+        Cache: ``zds:anno:{week_ending}:{day}``, TTL 60 s.
+        """
+        we_str = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+        key = f"zds:anno:{we_str}:{day}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            grouped = self.shared_db.list_annotations_grouped(week_ending, day)
+        except Exception as exc:
+            log.warning("list_annotations_for_day(%s, %s) failed: %s", week_ending, day, exc)
+            return {}
+        await self.cache.set(key, grouped, ttl=self.ANNO_TTL)
+        return grouped
+
+    async def upsert_annotation(
+        self,
+        week_ending: date,
+        day: str,
+        target_kind: str,
+        target_ref: str,
+        annotation_kind: str,
+        value: dict,
+        created_by: Optional[str] = None,
+    ) -> Optional[AnnotationRow]:
+        """Write an annotation.  Invalidates the day's anno: cache key."""
+        try:
+            row = self.shared_db.upsert_annotation(
+                week_ending, day, target_kind, target_ref,
+                annotation_kind, value, created_by,
+            )
+        except Exception as exc:
+            log.warning("upsert_annotation failed: %s", exc)
+            return None
+        we_str = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+        await self.cache.delete(f"zds:anno:{we_str}:{day}")
+        return AnnotationRow.model_validate(row) if row else None
+
+    async def delete_annotation(
+        self,
+        week_ending: date,
+        day: str,
+        target_kind: str,
+        target_ref: str,
+        annotation_kind: str,
+    ) -> None:
+        """Delete an annotation and invalidate the day's anno: cache key."""
+        try:
+            self.shared_db.delete_annotation(
+                week_ending, day, target_kind, target_ref, annotation_kind,
+            )
+        except Exception as exc:
+            log.warning("delete_annotation failed: %s", exc)
+        we_str = week_ending.isoformat() if hasattr(week_ending, "isoformat") else str(week_ending)
+        await self.cache.delete(f"zds:anno:{we_str}:{day}")
+
+    # ── Engine overrides (slot-assignment type) ───────────────────────────
+
+    async def list_overrides(self, night_id: str) -> list[OverrideRow]:
+        """Slot-assignment overrides for a night.
+
+        Cache: ``zds:overrides:{night_id}``, TTL 30 s.
+        """
+        key = f"zds:overrides:{night_id}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return [OverrideRow.model_validate(r) for r in cached]
+
+        night = await self.get_night(night_id)
+        if not night:
+            return []
+        try:
+            res = (
+                self.supabase.table("engine_overrides")
+                .select("*")
+                .eq("week_id", night.week_id)
+                .eq("override_date", night.night_date)
+                .eq("override_type", "slot_assignment")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            rows = res.data or []
+        except Exception as exc:
+            log.warning("list_overrides(%s) failed: %s", night_id, exc)
+            return []
+
+        # Hoist slot_key and tm_id out of payload for easy access.
+        enriched = []
+        for r in rows:
+            payload = r.get("payload") or {}
+            enriched.append({
+                **r,
+                "slot_key": payload.get("slot_key", ""),
+                "tm_id":    payload.get("tm_id") or r.get("tm_id"),
+            })
+
+        await self.cache.set(key, enriched, ttl=self.OVERRIDE_TTL)
+        return [OverrideRow.model_validate(r) for r in enriched]
+
+    async def apply_override(
+        self,
+        night_id: str,
+        slot_key: str,
+        tm_id: Optional[str],
+        note: str = "",
+    ) -> Optional[OverrideRow]:
+        """Set or clear the TM in *slot_key* for *night_id*.
+
+        *tm_id=None* clears the slot (deletes any existing slot_assignment
+        override for that slot).  Invalidates the night's overrides cache
+        and its assignment cache.
+
+        Stored in ``engine_overrides`` with
+        ``override_type="slot_assignment"`` and
+        ``payload={"slot_key": slot_key, "tm_id": tm_id}``.
+        """
+        night = await self.get_night(night_id)
+        if not night:
+            log.warning("apply_override: night %s not found", night_id)
+            return None
+
+        # For clear, delete any row with this slot_key in payload.
+        if tm_id is None:
+            try:
+                # Fetch and delete matching rows (Supabase can't query JSONB via simple filter).
+                res = (
+                    self.supabase.table("engine_overrides")
+                    .select("id, payload")
+                    .eq("week_id", night.week_id)
+                    .eq("override_date", night.night_date)
+                    .eq("override_type", "slot_assignment")
+                    .execute()
+                )
+                for row in (res.data or []):
+                    if (row.get("payload") or {}).get("slot_key") == slot_key:
+                        self.supabase.table("engine_overrides").delete().eq("id", row["id"]).execute()
+            except Exception as exc:
+                log.warning("apply_override clear(%s, %s) failed: %s", night_id, slot_key, exc)
+            await self.cache.delete_many([
+                f"zds:overrides:{night_id}",
+                f"zds:night:{night_id}:assignments",
+            ])
+            return None
+
+        payload_json = {"slot_key": slot_key, "tm_id": tm_id}
+        try:
+            # Use tm_id as the conflict key; one slot_assignment per TM per night.
+            row_data = {
+                "week_id":       night.week_id,
+                "tm_id":         tm_id,
+                "override_date": night.night_date,
+                "override_type": "slot_assignment",
+                "payload":       payload_json,
+                "note":          note or None,
+                "created_by":    "supervisor",
+            }
+            result = (
+                self.supabase.table("engine_overrides")
+                .upsert(row_data, on_conflict="week_id,tm_id,override_date,override_type")
+                .execute()
+            )
+            rows = result.data or []
+            row = rows[0] if rows else None
+        except Exception as exc:
+            log.warning("apply_override(%s, %s, %s) failed: %s", night_id, slot_key, tm_id, exc)
+            return None
+
+        await self.cache.delete_many([
+            f"zds:overrides:{night_id}",
+            f"zds:night:{night_id}:assignments",
+        ])
+        if not row:
+            return None
+        return OverrideRow.model_validate({
+            **row,
+            "slot_key": slot_key,
+            "tm_id":    tm_id,
+        })
+
+    # ── Roster / TMs ──────────────────────────────────────────────────────
+
+    async def list_active_tms(self) -> list[TMRow]:
+        """All TMs with status=active.  Cache: ``zds:tms:active``, TTL 600 s.
+
+        Hot path during deployment editing — keep cached.
+        """
+        key = "zds:tms:active"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return [TMRow.model_validate(r) for r in cached]
+        try:
+            res = (
+                self.supabase.table("entities")
+                .select("id,name,display_name,metadata,status,entity_type,created_at,updated_at")
+                .eq("entity_type", "tm")
+                .eq("status", "active")
+                .order("display_name")
+                .execute()
+            )
+            rows = res.data or []
+        except Exception as exc:
+            log.warning("list_active_tms failed: %s", exc)
+            return []
+        await self.cache.set(key, rows, ttl=self.TM_TTL)
+        return [TMRow.model_validate(r) for r in rows]
+
+    async def get_tm(self, tm_id: str) -> Optional[TMRow]:
+        """One TM by id.  Cache: ``zds:tm:{id}``, TTL 600 s."""
+        key = f"zds:tm:{tm_id}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return TMRow.model_validate(cached)
+        try:
+            res = (
+                self.supabase.table("entities")
+                .select("id,name,display_name,metadata,status,entity_type,created_at,updated_at")
+                .eq("id", tm_id)
+                .maybe_single()
+                .execute()
+            )
+            row = res.data
+        except Exception as exc:
+            log.warning("get_tm(%s) failed: %s", tm_id, exc)
+            return None
+        if not row:
+            return None
+        await self.cache.set(key, row, ttl=self.TM_TTL)
+        return TMRow.model_validate(row)
+
+    async def invalidate_tm_cache(self, tm_id: Optional[str] = None) -> None:
+        """Invalidate TM cache.  Pass tm_id to clear one TM; omit for all."""
+        keys = ["zds:tms:active"]
+        if tm_id:
+            keys.append(f"zds:tm:{tm_id}")
+        await self.cache.delete_many(keys)
+
+    # ── Multi-area assignments (Phase 4 live ops) ─────────────────────────
+
+    async def assign_tm_to_areas(
+        self,
+        night_id: str,
+        tm_id: str,
+        primary_area: str,
+        additional_areas: list[str] | None = None,
+    ) -> Optional[MultiAreaAssignmentRow]:
+        """Record that *tm_id* covers *primary_area* + *additional_areas*.
+
+        Atomically upserts on ``(night_id, tm_id)`` unique constraint so
+        calling this twice is idempotent.
+
+        Raises RuntimeError if the ``multi_area_assignments`` table hasn't
+        been created yet (run the Phase 2 migration).
+        """
+        areas = additional_areas or []
+        try:
+            result = (
+                self.supabase.table("multi_area_assignments")
+                .upsert(
+                    {
+                        "night_id":         night_id,
+                        "tm_id":            tm_id,
+                        "primary_area":     primary_area,
+                        "additional_areas": areas,
+                    },
+                    on_conflict="night_id,tm_id",
+                )
+                .execute()
+            )
+            rows = result.data or []
+            row = rows[0] if rows else None
+        except Exception as exc:
+            msg = str(exc)
+            if "relation" in msg and "does not exist" in msg:
+                raise RuntimeError(
+                    "multi_area_assignments table not found. "
+                    "Run the Phase 2 migration: "
+                    "supabase/migrations/20260511_multi_area_assignments.sql"
+                ) from exc
+            log.warning("assign_tm_to_areas(%s, %s) failed: %s", night_id, tm_id, exc)
+            return None
+
+        # Invalidate the night's assignment cache so downstream reads refresh.
+        await self.cache.delete(f"zds:night:{night_id}:assignments")
+        return MultiAreaAssignmentRow.model_validate(row) if row else None

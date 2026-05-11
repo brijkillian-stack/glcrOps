@@ -1,0 +1,53 @@
+[
+  {
+    "id": "task-sweep-001",
+    "name": "Sweep",
+    "code": "sweep",
+    "description": "Floor sweeping task",
+    "default_zone": "Z1",
+    "category": "zone",
+    "active": true,
+    "target_codes": ["Z1", "Z2"],
+    "days_active": null,
+    "display_order": 10,
+    "archived_at": null,
+    "estimated_duration_min": 30,
+    "notes": null,
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "task-vacuum-002",
+    "name": "Vacuum",
+    "code": "vacuum",
+    "description": "Carpet vacuuming",
+    "default_zone": "Z2",
+    "category": "zone",
+    "active": true,
+    "target_codes": ["Z2"],
+    "days_active": null,
+    "display_order": 20,
+    "archived_at": null,
+    "estimated_duration_min": 45,
+    "notes": null,
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "task-overlap-001",
+    "name": "PM Overlap — Slot 1",
+    "code": "overlap_pm_1",
+    "description": null,
+    "default_zone": null,
+    "category": "overlap_pm",
+    "active": true,
+    "target_codes": null,
+    "days_active": null,
+    "display_order": 100,
+    "archived_at": null,
+    "estimated_duration_min": null,
+    "notes": null,
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  }
+]

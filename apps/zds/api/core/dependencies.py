@@ -6,6 +6,12 @@ single Supabase client (one connection pool) and a single Redis pool.
 Redis is optional: if `REDIS_URL` is unset OR the import fails OR a
 connection cannot be opened, `get_redis_client` returns `None` and
 downstream code (e.g. `CacheService`) is expected to no-op.
+
+Design rule
+───────────
+Route handlers must consume services via `Depends(get_*)` — never
+construct service instances inline in route functions.  This gives tests
+a clean override point and ensures the whole app shares singletons.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ from supabase import Client, create_client
 from .config import get_settings
 
 
-# ── Supabase ────────────────────────────────────────────────────────
+# ── Supabase ────────────────────────────────────────────────────────────────
 
 @lru_cache(maxsize=1)
 def _supabase_singleton() -> Client:
@@ -36,7 +42,7 @@ def get_supabase_client() -> Client:
     return _supabase_singleton()
 
 
-# ── Redis (optional) ────────────────────────────────────────────────
+# ── Redis (optional) ────────────────────────────────────────────────────────
 
 @lru_cache(maxsize=1)
 def _redis_singleton() -> Optional[object]:
@@ -64,3 +70,35 @@ def get_redis_client() -> Optional[object]:
     None — see `CacheService` for the no-op pattern.
     """
     return _redis_singleton()
+
+
+# ── Higher-level service singletons ─────────────────────────────────────────
+
+@lru_cache(maxsize=1)
+def _cache_service_singleton():
+    from ..services.cache_service import CacheService
+    return CacheService(redis_client=get_redis_client())
+
+
+def get_cache_service():
+    """FastAPI dependency — shared CacheService instance."""
+    return _cache_service_singleton()
+
+
+@lru_cache(maxsize=1)
+def _placement_service_singleton():
+    from ..services.placement_service import PlacementService
+    return PlacementService(
+        supabase=get_supabase_client(),
+        cache=get_cache_service(),
+    )
+
+
+def get_placement_service():
+    """FastAPI dependency — shared PlacementService instance.
+
+    Uses module-level lru_cache so the same instance (with its warm
+    Redis connection) is returned on every request.  Tests override this
+    via app.dependency_overrides[get_placement_service] = lambda: FakeService().
+    """
+    return _placement_service_singleton()
