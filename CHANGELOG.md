@@ -4,6 +4,63 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-11 — GLC-9: live On-Shift Status endpoint + multi-area tracking (Opus)
+
+First slice of the live Shift Dash backend. Splits *pre-shift planning*
+(ZDS Forge) from *live operations* by reading the same Supabase tables
+through a fresh FastAPI surface.
+
+### New routes
+- `GET  /v1/shift/on-shift-status[?night_id=…]` — returns the
+  `OnShiftStatusResponse` snapshot: per-TM coverage, slot heatmap, and
+  aggregate stats. Auto-resolves tonight via the shift-start anchor
+  (mid-shift before 7am ET pulls last night's deployment) when
+  `night_id` is omitted.
+- `PATCH /v1/shift/assignments/{assignment_id}` — mutates one
+  `zone_assignments` or `overlap_assignments` row (occupant + lock).
+  Body is `MultiAreaAssignmentPatch`. Invalidates the Redis snapshot
+  for the affected night on every write.
+
+### Models (`apps/zds/api/models/shift_status.py`)
+- `MultiAreaAssignment` — slot + reason (`primary` / `secondary_zone`
+  / `overlap_pm` / `overlap_am` / `coverage` / `training` / `other`)
+  carrying `(source_table, assignment_id)` for write-back.
+- `TmCoverage` — per-TM rollup with derived `total_slots` /
+  `is_multi_area` and the TM's live `fatigue_index`.
+- `CoverageHeatmapCell` + `HeatLevel` enum (open / ok-light / ok /
+  stretched / warn) — one per slot.
+- `CoverageStats` — counters + fatigue avg / max.
+- `OnShiftStatusResponse` — top-level envelope.
+
+### Services
+- `OnShiftStatusService` — reconciles `zone_assignments` +
+  `overlap_assignments` + `call_offs`, picks the lowest-sort_order
+  zone row per TM as `primary`, surfaces the rest (and overlap rows)
+  as `additional_zones`. Caches the full snapshot for 15 s.
+- `FatigueService` — query-only port of
+  `glcr_engine.scorecard.fatigue_index`. Walks the trailing
+  `fatigue_index_window_days` (read from `scorecard_config`, default 7)
+  of `zone_assignments`, dedupes per (tm, slot), sums
+  `slot_load_scores.load` (fallback 2 to match engine). RR slot keys
+  are canonicalized to the `rr_N_M`/`rr_N_W` form used by the engine.
+
+### Tests (`apps/zds/api/tests/`)
+- 15 tests, all isolated behind a `FakeSupabase` builder/mutator. Covers
+  fatigue parity (recent-only sum, per-slot dedup, missing-load
+  fallback, RR canonicalization), primary/secondary split,
+  overlap-only TMs, called-off warn tier, stretched-heat threshold,
+  multi-area-TM count, and PATCH semantics (assign / clear / unknown
+  row / invalid table).
+
+### Operational separation
+- All new code lives under `apps/zds/api/` — the Reflex `apps/shift/`
+  HUD remains read-side only and is untouched. Live edits and
+  pre-shift planning both write to `zone_assignments` /
+  `overlap_assignments`, so plan + live stay coherent without a new
+  schema migration.
+
+---
+
 ## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
 
 Two issues from live deployment testing of Phase 4k.6:
