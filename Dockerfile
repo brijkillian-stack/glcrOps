@@ -24,6 +24,13 @@ RUN apt-get update \
          debian-archive-keyring \
          apt-transport-https \
          gnupg \
+         libpango-1.0-0 \
+         libpangoft2-1.0-0 \
+         libharfbuzz0b \
+         libcairo2 \
+         libgdk-pixbuf-2.0-0 \
+         shared-mime-info \
+         fonts-liberation \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
          | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
