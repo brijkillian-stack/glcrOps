@@ -12,11 +12,21 @@ are ISO strings, JSONB columns are dicts, arrays are lists.
 from .annotation import AnnotationRow
 from .assignment import AssignmentRow, MultiAreaAssignmentRow
 from .override import OverrideRow
+from .planning import (
+    NightPlanningSnapshot,
+    OverrideSummary,
+    PlanningLinks,
+    PlanningNote,
+    WeeklyPlanningOverviewResponse,
+    WeekMeta,
+    WeekMetrics,
+)
 from .task import TaskRow
 from .tm import TMRow
 from .week import NightRow, WeekRow
 
 __all__ = [
+    # Row models
     "WeekRow",
     "NightRow",
     "TaskRow",
@@ -25,4 +35,12 @@ __all__ = [
     "TMRow",
     "AssignmentRow",
     "MultiAreaAssignmentRow",
+    # Planning models (GLC-12)
+    "WeekMeta",
+    "NightPlanningSnapshot",
+    "WeekMetrics",
+    "PlanningNote",
+    "OverrideSummary",
+    "PlanningLinks",
+    "WeeklyPlanningOverviewResponse",
 ]

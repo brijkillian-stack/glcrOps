@@ -116,3 +116,19 @@ def _print_service_singleton():
 def get_print_service():
     """FastAPI dependency — shared PrintService instance."""
     return _print_service_singleton()
+
+
+@lru_cache(maxsize=1)
+def _planning_service_singleton():
+    from ..services.planning_service import PlanningService
+    return PlanningService(placement=get_placement_service())
+
+
+def get_planning_service():
+    """FastAPI dependency — shared PlanningService instance (GLC-12).
+
+    PlanningService wraps PlacementService; it does not touch Supabase or
+    Redis directly.  Tests override via
+    ``app.dependency_overrides[get_planning_service] = lambda: FakePlanningService()``.
+    """
+    return _planning_service_singleton()

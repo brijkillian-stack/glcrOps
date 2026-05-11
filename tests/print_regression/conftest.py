@@ -10,9 +10,12 @@ Configuration via environment variables
                               Defaults to the week_key recorded in manifest.json.
   PRINT_SERVICE_URL           Base URL of a running ZDS Forge API server,
                               e.g. http://localhost:8001
-                              Required for fresh_html_via_api fixture.
+                              Required for integration + fresh_html_via_api fixtures.
   PRINT_SERVICE_WEEK_ID       DB UUID of the golden week (from public.weeks).
-                              Required for fresh_html_via_api fixture.
+                              Required for integration + fresh_html_via_api fixtures.
+  PRINT_SERVICE_NIGHT_ID      DB UUID of one night in the golden week (public.nights).
+                              Required for night-endpoint integration tests only.
+                              Skipped automatically if absent.
   SUPABASE_URL                Required for Tier 2 (direct renderer path).
   SUPABASE_SERVICE_KEY        Required for Tier 2 (direct renderer path).
 """
@@ -63,8 +66,9 @@ SOURCE_XLSX  = INPUTS_DIR / f"Week Overview - Filled - {WEEK_KEY}.xlsx"
 
 # ── PrintService integration config ──────────────────────────────────────────
 
-PRINT_SERVICE_URL     = os.environ.get("PRINT_SERVICE_URL", "").rstrip("/")
-PRINT_SERVICE_WEEK_ID = os.environ.get("PRINT_SERVICE_WEEK_ID", "").strip()
+PRINT_SERVICE_URL      = os.environ.get("PRINT_SERVICE_URL",      "").rstrip("/")
+PRINT_SERVICE_WEEK_ID  = os.environ.get("PRINT_SERVICE_WEEK_ID",  "").strip()
+PRINT_SERVICE_NIGHT_ID = os.environ.get("PRINT_SERVICE_NIGHT_ID", "").strip()
 
 # ── Tolerance constants ───────────────────────────────────────────────────────
 
@@ -80,8 +84,13 @@ def has_db_env() -> bool:
 
 
 def has_print_service_env() -> bool:
-    """Return True if PrintService integration env vars are set."""
+    """Return True if PrintService week integration env vars are set."""
     return bool(PRINT_SERVICE_URL and PRINT_SERVICE_WEEK_ID)
+
+
+def has_night_service_env() -> bool:
+    """Return True if PRINT_SERVICE_NIGHT_ID is also set (enables night-endpoint tests)."""
+    return has_print_service_env() and bool(PRINT_SERVICE_NIGHT_ID)
 
 
 def normalise_text(text: str) -> str:
@@ -102,6 +111,12 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "tier1: always-runs golden-integrity checks (no external deps)")
     config.addinivalue_line("markers", "tier2: text regression — requires source xlsx + Supabase env vars")
     config.addinivalue_line("markers", "tier3: SSIM visual regression — requires tier2 + weasyprint")
+    config.addinivalue_line(
+        "markers",
+        "integration: live-server integration tests — requires PRINT_SERVICE_URL + "
+        "PRINT_SERVICE_WEEK_ID (and optionally PRINT_SERVICE_NIGHT_ID for night endpoints). "
+        "Start the Forge API first: uvicorn apps.zds.api.main:app --port 8001",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +163,7 @@ def fresh_html(tmp_path_factory) -> Path:
     if not SOURCE_XLSX.exists():
         pytest.skip(
             f"Source xlsx not found at {SOURCE_XLSX}. "
-            "Place 'Week Overview - Filled - 2026-05-14.xlsx' in "
+            f"Place 'Week Overview - Filled - {WEEK_KEY}.xlsx' in "
             "tests/print_regression/golden/inputs/ to enable renderer tests."
         )
     if not _has_db_env():
