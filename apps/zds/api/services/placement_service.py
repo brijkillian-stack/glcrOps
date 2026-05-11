@@ -137,12 +137,76 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
+    async def get_night_notices(self, night_id: str) -> list[dict]:
+        key = f"zds:night:{night_id}:notices"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            rows = self.db.fetch_notices(night_id) or []
+        except Exception as exc:
+            log.warning("fetch_notices(%s) failed: %s", night_id, exc)
+            return []
+        await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
+        return rows
+
+    async def get_night_call_offs(self, night_date: str) -> list[dict]:
+        """Fetch call_offs keyed by night_date (not night_id — call_offs are
+        date-scoped, mirroring the underlying schema)."""
+        if not night_date:
+            return []
+        key = f"zds:call_offs:{night_date}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            rows = self.db.fetch_call_offs_for_night(night_date) or []
+        except Exception as exc:
+            log.warning("fetch_call_offs_for_night(%s) failed: %s", night_date, exc)
+            return []
+        await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
+        return rows
+
+    # ── Week-level rollups ───────────────────────────────────────
+
+    async def get_week_night_stats(self, week_id: str) -> dict[str, dict]:
+        """{night_id: {filled, total, unfilled, locked, called_off}} for week."""
+        key = f"zds:week:{week_id}:night_stats"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            stats = self.db.fetch_week_night_stats(week_id) or {}
+        except Exception as exc:
+            log.warning("fetch_week_night_stats(%s) failed: %s", week_id, exc)
+            return {}
+        await self.cache.set(key, stats, ttl=self.WEEK_TTL)
+        return stats
+
+    async def get_schedule_overrides(self, schedule_path: str) -> list[dict]:
+        if not schedule_path:
+            return []
+        key = f"zds:schedule_overrides:{schedule_path}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            rows = self.db.fetch_schedule_overrides(schedule_path) or []
+        except Exception as exc:
+            log.warning(
+                "fetch_schedule_overrides(%s) failed: %s", schedule_path, exc
+            )
+            return []
+        await self.cache.set(key, rows, ttl=self.WEEK_TTL)
+        return rows
+
     # ── Invalidation hooks (for future write paths) ──────────────
 
     async def invalidate_night(self, night_id: str) -> None:
         await self.cache.delete(
             f"zds:night:{night_id}:assignments",
             f"zds:night:{night_id}:overlaps",
+            f"zds:night:{night_id}:notices",
         )
 
     async def invalidate_week(self, week_id: str) -> None:
@@ -150,4 +214,5 @@ class PlacementService:
             f"zds:week:{week_id}",
             f"zds:week:{week_id}:nights",
             f"zds:week:{week_id}:assignments",
+            f"zds:week:{week_id}:night_stats",
         )
