@@ -150,6 +150,15 @@ if _CONFIG_OVERRIDE.get("simulated_unavailable"):
     if _SIMULATED_UNAVAILABLE:
         print(f"  [sim] {len(_SIMULATED_UNAVAILABLE)} TM(s) simulated as unavailable")
 
+# ── FORCE Z9 (Phase 5 — reoptimize planning toggle) ──────────────────
+# Default skip priority drops Zone 9 first when the night is short-staffed.
+# When the planner sets force_z9=True (via /v1/planning/reoptimize) the engine
+# moves Zone 9 ahead of the skippable zones so it fills before Z2/Z3/Z6/Z7/Z10.
+# Must-fill zones (Z1/Z4/Z5/Z8) still come first.
+_FORCE_Z9: bool = bool(_CONFIG_OVERRIDE.get("force_z9"))
+if _FORCE_Z9:
+    print("  [plan] force_z9=True — Zone 9 will fill before skippable zones")
+
 # ── AUTO-DETECT SCHEDULE FILE ─────────────────────────────────────────
 # Default: most recently modified .xlsx in Weekly Schedules.
 # Override: pass the filename as a CLI arg, e.g.:
@@ -1559,6 +1568,9 @@ for day in DAYS:
             ("Zone6",  "Zone 6",  None),            # skip 2nd
             ("Zone9",  "Zone 9",  None),            # skip 1st (no specialist pref)
         ]
+        if _FORCE_Z9:
+            zone_order_skip = [t for t in zone_order_skip if t[0] != "Zone9"]
+            zone_order_skip.insert(0, ("Zone9", "Zone 9", None))
         for slot, ec, pref in zone_order_skip:
             avoid = AVOID_PHYSICAL if slot == "Zone9" else None
             place(day, slot, ec, gpool, placed, priority="Zone",
@@ -1622,6 +1634,11 @@ for day in DAYS:
             ("Zone6",  "Zone 6",  None),            # skip 2nd
             ("Zone9",  "Zone 9",  None),            # skip 1st (no specialist pref)
         ]
+        if _FORCE_Z9:
+            # Promote Zone 9 to fill right after the must-fill zones so a
+            # short-staffed night doesn't drop it first.
+            zone_order = [t for t in zone_order if t[0] != "Zone9"]
+            zone_order.insert(4, ("Zone9", "Zone 9", None))
         for slot, ec, pref in zone_order:
             avoid = AVOID_PHYSICAL if slot == "Zone9" else None
             place(day, slot, ec, gpool, placed, priority="Zone",
