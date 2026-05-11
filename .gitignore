@@ -38,3 +38,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Print regression diffs (generated on test failure; not committed)
+tests/print_regression/diffs/*.png

@@ -1,0 +1,89 @@
+name: Visual regression — Zone Deployment Book
+
+on:
+  pull_request:
+    paths:
+      - 'apps/zds/engine/render_deployment_book.py'
+      - 'apps/zds/print_renderer.py'
+      - 'tests/print_regression/**'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/zds/engine/render_deployment_book.py'
+      - 'apps/zds/print_renderer.py'
+      - 'tests/print_regression/**'
+  # Allow manual trigger for golden verification
+  workflow_dispatch:
+
+jobs:
+  tier1_golden_integrity:
+    name: "Tier 1 — Golden integrity"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (poppler for pdf2image)
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python deps
+        run: pip install pdf2image Pillow scikit-image pypdf pytest
+
+      - name: Run Tier 1 — Golden integrity
+        run: pytest tests/print_regression/ -v -k tier1 --tb=short
+
+      # Tier 1 failures are always a problem — upload the manifest for triage
+      - name: Upload manifest on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-manifest
+          path: tests/print_regression/golden/manifest.json
+          retention-days: 14
+
+  tier2_text_regression:
+    name: "Tier 2 — Text regression"
+    runs-on: ubuntu-latest
+    # Tier 2 needs DB access — only run when secrets are available.
+    # On PRs from forks, secrets are not injected for security; those PRs
+    # only get Tier 1 coverage, which is sufficient to catch golden drift.
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python deps
+        run: pip install pdf2image Pillow scikit-image pypdf pytest python-dotenv supabase openpyxl httpx bcrypt scipy
+
+      - name: Run Tier 1 + Tier 2
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: pytest tests/print_regression/ -v -k "tier1 or tier2" --tb=short
+        # Tier 2 auto-skips if source xlsx is absent; a skip is not a failure.
+        # The test is gated on the xlsx being committed to golden/inputs/.
+
+      - name: Upload diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: print-regression-diffs-${{ github.run_id }}
+          path: tests/print_regression/diffs/
+          retention-days: 30
+          if-no-files-found: ignore
