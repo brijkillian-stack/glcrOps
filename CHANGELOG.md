@@ -4,6 +4,46 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-11 — GLC-7: unified data layer (PlacementService + CacheService)
+
+### CacheService — observable, no-op-safe Redis facade
+- `apps/zds/api/services/cache_service.py`: rewritten as the central
+  read-cache facade. Adds structured `zds.cache` logger (hit/miss/error
+  at DEBUG/WARNING), in-process `stats` counters (hits, misses, sets,
+  deletes, errors, bypass), configurable `default_ttl` + `namespace`,
+  and a `key(*parts)` helper for namespaced keys.
+- New `get_or_set(key, loader, ttl=)` consolidates the cache-through
+  pattern; accepts sync or async loaders, never caches `None`/failures.
+- When `redis_client is None` every method is a graceful no-op —
+  ``bypass`` counter increments and the loader still runs.
+
+### PlacementService — single source of truth for placement reads
+- `apps/zds/api/services/placement_service.py`: expanded into the
+  unified reader. New methods: `list_weeks`, `get_night_notices`,
+  `get_schedule_overrides`, `get_week_package` (one-shot fetch of
+  week + nights + assignments + overlaps + overrides used by print).
+- All reads go through a private `_read_through` helper that logs
+  hit/miss via the `zds.placement` logger, returns documented defaults
+  on db failure, and only caches truthy payloads.
+- Added `invalidate_overrides(schedule_path)` alongside the existing
+  `invalidate_week` / `invalidate_night` write-path hooks.
+- `supabase.Client` import moved behind `TYPE_CHECKING` so the service
+  module is importable in test environments without `supabase`.
+
+### Tests
+- `apps/zds/api/tests/test_cache_service.py` (15 tests) — no-op when
+  Redis is None, hit/miss counters, JSON round-trip, `get_or_set`
+  with sync + async loaders, `invalidate_prefix`, and error-path
+  resilience under a simulated Redis outage.
+- `apps/zds/api/tests/test_placement_service.py` (8 tests) — cache
+  hits short-circuit the db, week_assignments warms per-night cache,
+  `get_week_package` returns the full bundle including overrides,
+  invalidate clears the right keys, and the service still serves
+  data when the cache is disabled (Redis down).
+- 23 tests pass under `python3 -m unittest`.
+
+---
+
 ## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
 
 Two issues from live deployment testing of Phase 4k.6:
