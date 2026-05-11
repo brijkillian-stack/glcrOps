@@ -1,73 +1,49 @@
 """
-brijkillian_stack.py — Unified app entry point
+brijkillian_stack.py — ZDS-only app entry point (Phase A)
 
-Registers routes from GLCR Memory, ZDS, Shift HUD, and Admin into a single
-Reflex application with shared state, authentication, and infrastructure.
+Phase A (2026-05-12): narrowed scope. The ZDS app is the first Reflex app
+being migrated to Next.js (FastAPI + Next.js). admin, glcr, and shift are
+parked in apps/_archive/ for systematic rebuild later.
 
-The app serves:
-  - /login, /auth/callback (public, GLCR auth)
-  - / (GLCR Today dashboard, protected)
-  - /shift (Shift HUD, viewer-OK)
-  - /search, /logs, /people, /threads, /tasks, /patterns, /health, /recap, /floor, /areas, /writeups, /deployment (protected)
-  - /zds/* (Zone Deployment System, viewer-OK)
+The app now serves:
+  - /unlock, /login, /auth/callback  (public — auth pages lifted from GLCR)
+  - /zds, /zds/week/*, /zds/week/*/day/*, /zds/week/*/schedule  (viewer-OK)
+
+Pre-archive the app served six more route groups; those are documented in
+apps/_archive/README.md and can be revived via the pre-archive-2026-05-12 tag.
 """
 
 import reflex as rx
 from shared.auth import AuthState
-from shared.grok_state import GrokState
-from shared.components.grok_panel import grok_panel, grok_fab
-from shared.components.area_check import area_check_modal
 from shared.components.context_menu import global_context_menu
 from shared.components.highlight_toolbar import global_highlight_toolbar
 from shared.components.undo_toast import global_undo_toast
 from shared.components.audit_strip import audit_strip
 from shared.components.nav_rail import nav_rail
 
-from apps.glcr.routes import (
-    ROUTES as GLCR_ROUTES,
-    PUBLIC_ROUTES as GLCR_PUBLIC,
-    VIEWER_OK_ROUTES as GLCR_VIEWER_OK,
-)
+# Auth pages: self-contained (only depend on shared.auth + reflex).
+# Lifted from apps/_archive/glcr/pages/ which is where their history lives.
+from apps._archive.glcr.pages.unlock import unlock_page
+from apps._archive.glcr.pages.login import login_page
+from apps._archive.glcr.pages.auth_callback import auth_callback_page
+
 from apps.zds.routes import ROUTES as ZDS_ROUTES, PUBLIC_ROUTES as ZDS_PUBLIC
-from apps.shift.routes import ROUTES as SHIFT_ROUTES
-from apps.admin.routes import ROUTES as ADMIN_ROUTES
 
 # ── Keyboard shortcut script ──────────────────────────────────────────────────
-# Injected once at app level. ⌘K → palette, ⌘N → capture, ⌘J → toggle Grok, Esc → close all
+# ⌘K → ZDS context actions (future), ⌘J reserved for Grok when re-added, Esc → close overlays.
+# Shift HUD and GLCR palette dispatches are kept as no-ops — they fire into thin air
+# on ZDS pages (no matching state) and are harmless.
 
 _KBD_SCRIPT = """
 document.addEventListener('keydown', function(e) {
   const cmd = e.metaKey || e.ctrlKey;
-  // Ignore shortcuts when focus is inside a text input / textarea
-  const tag = document.activeElement ? document.activeElement.tagName : '';
-  const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-  if (cmd && e.key === 'k') {
-    e.preventDefault();
-    // GLCR Memory pages: open their command palette
-    window._reflexDispatch && window._reflexDispatch('app_state.open_palette', {});
-    // Shift HUD: toggle its command palette (no-op on non-Shift pages)
-    window._reflexDispatch && window._reflexDispatch('command_palette_state.toggle', {});
-  } else if (cmd && e.key === 'n') {
-    e.preventDefault();
-    window._reflexDispatch && window._reflexDispatch('app_state.open_capture', {});
-  } else if (cmd && e.key === 'j') {
-    e.preventDefault();
-    window._reflexDispatch && window._reflexDispatch('grok_state.toggle_panel', {});
-  } else if (e.key === 'Escape') {
+  if (e.key === 'Escape') {
     window._reflexDispatch && window._reflexDispatch('app_state.close_palette', {});
     window._reflexDispatch && window._reflexDispatch('app_state.close_capture', {});
     window._reflexDispatch && window._reflexDispatch('grok_state.close_panel', {});
-    // Shift HUD: close command palette + all capture modals
-    window._reflexDispatch && window._reflexDispatch('command_palette_state.close', {});
   }
 });
 """
-
-# ── (removed) Session keep-alive ──────────────────────────────────────────────
-# Path A's Supabase magic-link auth was replaced by Path C's site-PIN gate
-# (2026-05-05). The site-session token is HMAC-signed, lives in localStorage,
-# and is valid for ~1 year. No periodic refresh is needed; verification is a
-# pure HMAC check on every protected-page mount via AuthState.require_unlock.
 
 # ── Service Worker registration ───────────────────────────────────────────────
 
@@ -79,7 +55,7 @@ if ('serviceWorker' in navigator) {
 }
 """
 
-# ── Theme initializer (GShiftPage Phase 1) ───────────────────────────────────
+# ── Theme initializer ─────────────────────────────────────────────────────────
 # Runs synchronously in <head> before first paint to prevent FOUC.
 # Reads localStorage["glcr-theme"] and stamps data-theme on <html>.
 # Also migrates users who still have the old Reflex-default key "theme"
@@ -96,35 +72,7 @@ _THEME_INIT_SCRIPT = """
 })();
 """
 
-# ── Page wrapper: inject Grok panel + FAB ────────────────────────────────────
-# (for GLCR protected pages; ZDS pages don't need Grok yet)
-
-def _with_grok(page_fn):
-    """Wrap a GLCR Memory page with the unified nav rail + Grok panel/FAB
-    + Area Check modal + global overlays.
-
-    Layout: 60px rail | 1fr page content  (CSS grid via .app-shell).
-    The page_fn() result goes in the right column; overlays are portalled
-    at the top level so they float above the rail.
-    """
-    def wrapped() -> rx.Component:
-        return rx.el.div(
-            nav_rail(),
-            rx.el.div(
-                page_fn(),
-                grok_fab(),
-                grok_panel(),
-                area_check_modal(),
-                global_context_menu(),
-                global_highlight_toolbar(),
-                global_undo_toast(),
-                style={"minHeight": "100vh", "position": "relative"},
-            ),
-            class_name="app-shell",
-        )
-    wrapped.__name__ = f"{page_fn.__name__}_with_grok"
-    return wrapped
-
+# ── ZDS page wrapper ──────────────────────────────────────────────────────────
 
 def _with_zds_chrome(page_fn):
     """Wrap a ZDS page with the unified nav rail + theme system + ZDS overlays.
@@ -159,8 +107,6 @@ def _with_zds_chrome(page_fn):
 # ── App initialization ────────────────────────────────────────────────────────
 
 app = rx.App(
-    # Note: show_built_with_reflex was removed in Reflex 0.9.2.
-    # Badge suppression is no longer a constructor arg.
     stylesheets=[
         # Google Fonts
         "https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap",
@@ -184,11 +130,7 @@ app = rx.App(
         rx.el.link(rel="apple-touch-icon", href="/icons/apple-touch-icon-180.png"),
         rx.el.script(_SW_REGISTRATION_SCRIPT),
         # ── Phase K.1: PencilCanvas component assets ──────────────────────
-        # CSS loaded before JS so styles are ready when the canvas renders.
         rx.el.link(rel="stylesheet", href="/pencil_canvas.css"),
-        # JS loaded once at boot; exposes window.PencilCanvas and auto-inits
-        # via MutationObserver when <script type="application/json" id="pc-config-*">
-        # data-islands appear in the DOM (rendered by pencil_canvas() component).
         rx.el.script(src="/pencil_canvas.js"),
         # ── Homepage three-card launchpad styles ──────────────────────────
         rx.el.link(rel="stylesheet", href="/homepage.css"),
@@ -208,76 +150,23 @@ app = rx.App(
         # ── Nav rail (Phase 2: 60px unified left rail) ────────────────────
         rx.el.link(rel="stylesheet", href="/nav_rail.css"),
         rx.el.script(src="/avatar_menu.js"),
-        # ── Shift HUD (Phase 3: /shift page) ──────────────────────────────
-        rx.el.link(rel="stylesheet", href="/shift_hud.css"),
-        # ── Sudo Admin hub (Phase 4b: /admin hub + sub-pages) ─────────────
-        rx.el.link(rel="stylesheet", href="/admin_hub.css"),
-        # ── Engine Configurator (Phase 4c: /admin/engine) ─────────────────
-        rx.el.link(rel="stylesheet", href="/engine_config.css"),
     ],
 )
 
 # ── Route registration ────────────────────────────────────────────────────────
-# Three auth tiers for GLCR routes:
-#
-#   TIER 1 — PUBLIC      No guard.  /unlock, /login, /auth/callback.
-#   TIER 2 — VIEWER_OK   PIN required; role is irrelevant. /, /today.
-#   TIER 3 — EDITOR_ANY  PIN + any editor role required. All other Memory pages.
-#                        Viewers see a redirect-to-home toast.
-#
-# ZDS routes all run at TIER 2 (viewer-OK). Per-action write gating for ZDS
-# lives at the event-handler level — see docs/role_gating_spec.md.
+# Auth routes: public (no guard), lifted from archived GLCR pages.
+# ZDS routes: viewer-OK (PIN unlock required).
 
-ALL_PUBLIC_ROUTES = GLCR_PUBLIC + ZDS_PUBLIC
+AUTH_PUBLIC = ["/unlock", "/login", "/auth/callback"]
+ALL_PUBLIC_ROUTES = AUTH_PUBLIC + ZDS_PUBLIC
 
+# Auth routes (public — no on_load guard needed)
+app.add_page(unlock_page,        route="/unlock",        title="Unlock · Graves Ops")
+app.add_page(login_page,         route="/login",         title="Sign in as editor")
+app.add_page(auth_callback_page, route="/auth/callback", title="Signing in…")
 
-def _on_load_for(route: str, base_on_load: list | None) -> list | None:
-    """Return the on_load chain for a GLCR route based on its auth tier.
-
-    Returns None for public routes (no on_load needed).
-    Returns a list with the appropriate auth guard prepended for protected routes.
-    """
-    base = base_on_load or []
-    if route in GLCR_PUBLIC:
-        return None                                              # TIER 1 — no guard
-    if route in GLCR_VIEWER_OK:
-        return [AuthState.require_unlock] + base                # TIER 2 — PIN only
-    return [AuthState.require_editor_any] + base                # TIER 3 — PIN + role
-
-
-# Register GLCR routes
-for entry in GLCR_ROUTES:
-    page_fn, route, title, on_load = entry
-    computed_on_load = _on_load_for(route, on_load)
-
-    if route in GLCR_PUBLIC:
-        app.add_page(page_fn, route=route, title=title)
-    else:
-        kwargs: dict = {"route": route, "title": title, "on_load": computed_on_load}
-        app.add_page(_with_grok(page_fn), **kwargs)
-
-# Register Shift HUD routes (TIER 2 — viewer-OK)
-for entry in SHIFT_ROUTES:
-    page_fn, route, title, on_load = entry
-    kwargs = {
-        "route":   route,
-        "title":   title,
-        "on_load": [AuthState.require_unlock] + (on_load or []),
-    }
-    app.add_page(_with_zds_chrome(page_fn), **kwargs)
-
-# Register ZDS routes (all TIER 2 — viewer-OK)
+# ZDS routes (all TIER 2 — viewer-OK, PIN required)
 for entry in ZDS_ROUTES:
-    page_fn, route, title, on_load = entry
-    kwargs = {
-        "route":   route,
-        "title":   title,
-        "on_load": [AuthState.require_unlock] + (on_load or []),
-    }
-    app.add_page(_with_zds_chrome(page_fn), **kwargs)
-
-# Register Admin stub routes (TIER 2 — viewer-OK for now)
-for entry in ADMIN_ROUTES:
     page_fn, route, title, on_load = entry
     kwargs = {
         "route":   route,

@@ -6,7 +6,7 @@ type of item access — e.g. `night["day_color"]` returns a `Var[str]`, so
 f-strings, `+` concatenation, and equality checks work without manual
 `.to(str)` casts inside `rx.foreach`.
 
-These shapes mirror the dicts produced by `glcr_zone_app.database` (with a
+These shapes mirror the dicts produced by `apps.zds.database` (with a
 few display fields layered on by `state.py`). Keep them in sync if a
 database function adds, removes, or renames a field.
 """

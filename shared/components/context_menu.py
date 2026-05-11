@@ -201,11 +201,22 @@ class ContextMenuState(rx.State):
 
     @rx.event
     async def view_profile(self):
-        """Open the TM drawer for the menu's target. No-op if target isn't a TM."""
+        """Open the TM drawer for the menu's target. No-op if target isn't a TM.
+
+        Phase A (2026-05-12): PeopleState lives in apps.glcr which is archived
+        during the ZDS → Next.js migration.  Import is guarded so ZDS boots and
+        operates normally; the profile drawer is simply unavailable until the
+        GLCR People page is rebuilt on the new stack.
+        """
         if self.target_type not in ("tm", "assignment", "pool_tm", "picker_tm"):
             self.open = False
             return
-        from apps.glcr.state.people import PeopleState
+        try:
+            from apps.glcr.state.people import PeopleState
+        except ImportError:
+            # GLCR is archived — people drawer not available in ZDS-only mode.
+            self.open = False
+            return
         self.open = False
         return PeopleState.open_drawer(self.target_id)
 

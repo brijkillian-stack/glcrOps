@@ -1,1 +1,1 @@
-# glcr_zone_app package
+# ZDS — Zone Deployment System

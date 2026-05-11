@@ -131,10 +131,19 @@ class AppState(rx.State):
 
     @rx.event
     async def save_capture(self):
-        """Write the capture form to Supabase, then refresh Today data."""
+        """Write the capture form to Supabase, then refresh Today data.
+
+        Phase A (2026-05-12): TodayState lives in apps.glcr which is archived.
+        Import is guarded; save still persists to DB but the Today panel refresh
+        is skipped until GLCR is rebuilt on the new stack.
+        """
         import uuid
         from shared.db import save_note
-        from apps.glcr.state.today import TodayState
+        try:
+            from apps.glcr.state.today import TodayState
+            _today_state_available = True
+        except ImportError:
+            _today_state_available = False
 
         if not self.capture_content.strip():
             return  # nothing to save
@@ -156,7 +165,8 @@ class AppState(rx.State):
             self.capture_type     = "observation"
             self.capture_sentiment = "neutral"
             self.capture_entities = ""
-            yield TodayState.load_today   # immediate refresh
+            if _today_state_available:
+                yield TodayState.load_today   # immediate refresh
 
     @rx.event
     def set_capture_content(self, value: str):

@@ -1,5 +1,19 @@
 """
-db.py — Supabase client for GLCR Memory Dashboard.
+db.py — Unified Supabase database access.
+
+NOTE (2026-05-12): The four-app Reflex monorepo is being narrowed to ZDS
+only. Many functions in this module exclusively served the archived apps
+(admin / glcr / shift). Those functions are tagged with the
+``# ARCHIVED-APP-ONLY`` marker comment. DO NOT extend them; when the
+relevant app is rebuilt on FastAPI + Next.js, the function should be ported
+to ``apps/zds/api/services/placement_service.py`` and deleted here.
+
+ZDS-only functions are tagged ``# ZDS`` and will eventually move to
+PlacementService too.
+
+Functions without a tag serve both — handle carefully when refactoring.
+
+──────────────────────────────────────────────────────────────────────────────
 
 Replaces the direct SQLite layer. All queries go through supabase-py
 using the service_role key (server-side only — never exposed to browser).
