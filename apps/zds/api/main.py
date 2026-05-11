@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import get_settings
 from .core.dependencies import get_redis_client, get_supabase_client
 from .routers import print as print_router
+from .routers import shift as shift_router
 
 log = logging.getLogger("zds.api")
 
@@ -78,3 +79,4 @@ async def health():
 
 # ── Routers ──────────────────────────────────────────────────────────
 app.include_router(print_router.router)
+app.include_router(shift_router.router)
