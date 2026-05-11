@@ -4,6 +4,29 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-11 — Phase 5: Weekly Planning Overview endpoint (Opus)
+
+GLC-12. New read-only endpoint for the pre-shift planning dashboard:
+
+- `GET /v1/planning/weekly/{week_id}` → `WeeklyPlanningOverview` JSON
+  - `week`: id, week_ending, label, status, schedule_path, date_range
+  - `nights[]`: per-night staffing stats, coverage gaps (unfilled non-empty
+    slots, sorted), notices, call-offs, overlap PM/AM fill counts, and
+    night-lock state
+  - `overrides[]`: schedule overrides attached to the week's schedule_path
+  - `totals`: rolled-up filled/total/unfilled/locked/called_off/coverage_gaps/
+    nights_locked/notes/overrides
+- New `apps/zds/api/services/planning_service.py` aggregator using
+  `PlacementService`. Pydantic models live next to the service so the
+  router can declare a `response_model` for OpenAPI / FastAPI validation.
+- Extended `PlacementService` with cache-through reads for notices,
+  call-offs (by `night_date`), week-night stats, and schedule overrides.
+  Per-night fan-out uses `asyncio.gather` so a 7-night response only
+  costs one round-trip-equivalent of latency.
+- 404 when `week_id` doesn't resolve (clean signal for the Next.js view).
+
+---
+
 ## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
 
 Two issues from live deployment testing of Phase 4k.6:
