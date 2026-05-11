@@ -43,6 +43,7 @@ On macOS you also need: brew install pango cairo
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import importlib
 import json
@@ -207,7 +208,9 @@ class PrintService:
 
         # Render HTML first (re-uses its own cache).
         html_bytes, _ = await self.render_week_html(week_id)
-        pdf_bytes = self._html_to_pdf(html_bytes.decode("utf-8"))
+        pdf_bytes = await asyncio.to_thread(
+            self._html_to_pdf, html_bytes.decode("utf-8")
+        )
 
         # Store PDF bytes as a Latin-1 string (JSON-safe binary representation).
         await self.cache.set(
@@ -263,7 +266,9 @@ class PrintService:
             return pdf_bytes, self._night_filename(night, content_hash, "pdf")
 
         html_bytes, _ = await self.render_night_html(night_id)
-        pdf_bytes = self._html_to_pdf(html_bytes.decode("utf-8"))
+        pdf_bytes = await asyncio.to_thread(
+            self._html_to_pdf, html_bytes.decode("utf-8")
+        )
         await self.cache.set(cache_key, html_bytes.decode("utf-8"), ttl=self.PDF_TTL)
         return pdf_bytes, self._night_filename(night, content_hash, "pdf")
 
@@ -306,10 +311,222 @@ class PrintService:
                 "On macOS also: brew install pango cairo"
             ) from exc
 
+        # Inject WeasyPrint-specific CSS overrides before rendering.
+        # The sacred renderer's HTML is designed for browser Cmd+P — WeasyPrint
+        # needs Flexbox overrides to correctly distribute height in paged media.
+        html = PrintService._inject_weasyprint_compat(html)
+
         try:
             return WP_HTML(string=html).write_pdf()
         except Exception as exc:
             raise RenderError(f"weasyprint PDF conversion failed: {exc}") from exc
+
+    @staticmethod
+    def _inject_weasyprint_compat(html: str) -> str:
+        """Post-process the renderer HTML for WeasyPrint paged media compatibility.
+
+        The sacred renderer outputs HTML designed for browser Cmd+P printing.
+        WeasyPrint applies @media print but does NOT correctly resolve CSS Grid
+        ``fr`` units inside fixed-height containers (``height: 8.5in`` on ``.page``).
+
+        All fixes are aligned with the approved golden master design
+        (``ZDS Golden Master.html``).  The golden master uses
+        ``class="page break-page"`` on break-sheet articles; the renderer always
+        emits ``class="page"`` only.
+
+        All fixes are applied WITHOUT modifying the sacred renderer source files.
+
+        Fixes applied
+        ─────────────
+        1. Add ``break-page`` class to break-sheet articles (matching the golden
+           master).  Physically remove ``<section class="overlaps-section">`` from
+           break sheets — WeasyPrint paginates rather than clips overflow in paged
+           media (``CSS display:none !important`` is ignored).
+        2. Patch ``@page { size: 11in 8.5in landscape; }`` → remove ``landscape``
+           keyword.  WeasyPrint silently drops the entire ``@page`` rule when the
+           ``landscape`` keyword follows explicit dimensions, falling back to A4
+           portrait.  Applied via string replace *and* a fresh ``@page`` rule in
+           the injected ``<style>`` block.
+        3. Inject a ``<style>`` block that replaces CSS Grid on ``.page`` and
+           ``.body`` with Flexbox.  WeasyPrint resolves ``flex-grow`` correctly in
+           paged media; it cannot resolve ``fr`` units against a fixed ``8.5in``
+           page-height container.  Inner grids (``.zones-grid``, ``.rr-grid``,
+           ``.break-cols``) are left as-is — their column ``fr`` units work fine
+           once their parent heights are computed by flexbox.
+        """
+        import re
+
+        # ── Fix 1: Add 'break-page' class to break-sheet articles ────────────
+        # Detection: break-sheet articles contain <div class="break-cols"> inside
+        # their .body; zone-day articles do not.
+        # Strategy: split on </article> to avoid a DOTALL regex over megabytes.
+        #
+        # Two patches per break-sheet chunk:
+        # (a) Add 'break-page' class — matches the golden master's
+        #     class="page break-page" and activates existing CSS rules for
+        #     .break-page .mast, .break-page .body, .break-cols etc.
+        # (b) Physically strip <section class="overlaps-section"> — the golden
+        #     master clips it via overflow:hidden on .break-page, but WeasyPrint
+        #     paginates it to a spurious 3rd page per day instead of clipping.
+        chunks = html.split("</article>")
+        patched = []
+        for chunk in chunks:
+            if '<div class="break-cols"' in chunk:
+                # (a) 'break-page' — matches golden master class="page break-page"
+                chunk = chunk.replace(
+                    'class="page"',
+                    'class="page break-page"',
+                    1,
+                )
+                # (b) Strip overlaps section from HTML — CSS suppression alone
+                #     is ignored by WeasyPrint in paged media.
+                chunk = re.sub(
+                    r'<section class="overlaps-section"[^>]*>.*?</section>',
+                    '',
+                    chunk,
+                    flags=re.DOTALL,
+                )
+            patched.append(chunk)
+        html = "</article>".join(patched)
+
+        # ── Fix 2: Patch @page landscape keyword ─────────────────────────────
+        # The renderer's @media print block contains:
+        #   @page { size: 11in 8.5in landscape; margin: 0; }
+        # WeasyPrint silently drops the entire @page rule when 'landscape'
+        # follows explicit dimensions, falling back to A4 portrait (1241×1754px
+        # instead of the correct 1650×1275px landscape).
+        # We also inject a fresh @page rule below (Fix 3) as a belt-and-suspenders
+        # override in case @media print @page cascades differently across versions.
+        html = html.replace(
+            'size: 11in 8.5in landscape;',
+            'size: 11in 8.5in;',
+        )
+
+        # ── Fix 3: Inject WeasyPrint Flexbox overrides ────────────────────────
+        compat_css = """
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   WeasyPrint compatibility — injected by PrintService._inject_weasyprint_compat
+   Aligned with approved golden master: ZDS Golden Master.html
+   NOT part of the sacred renderer. Never commit to render_deployment_book.py.
+
+   Root cause: WeasyPrint cannot resolve CSS Grid fr units in fixed-height
+   paged containers (height: 8.5in on .page articles).  Flexbox is used
+   instead — WeasyPrint resolves flex-grow correctly in paged media.
+
+   Class note: 'break-page' is added to break-sheet articles by Fix 1 above,
+   matching the golden master's class="page break-page".  The existing CSS
+   rules for .break-page .mast / .break-page .body / .break-cols are already
+   present in the renderer HTML and activate correctly once the class is added.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Belt-and-suspenders @page override (Fix 2 also patches the source text). */
+@page { size: 11in 8.5in; margin: 0; }
+
+/* ── .page: Flexbox column, one 11×8.5in landscape sheet ────────────── */
+.page {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 8.5in !important;
+  width: 11in !important;
+  overflow: hidden !important;
+  page-break-after: always !important;
+  break-after: page !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+.page:last-child {
+  page-break-after: avoid !important;
+  break-after: avoid !important;
+}
+
+/* Masthead and footer: natural height, never grow */
+.mast      { flex: none !important; }
+.page-foot { flex: none !important; }
+
+/* ── .body: flex column, fills all space between mast and footer ─────── */
+/* Replaces: display:grid; grid-template-rows: auto 1fr auto on .page     */
+/* (WeasyPrint cannot resolve the 1fr body row against height:8.5in).      */
+.body {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 11px !important;
+}
+
+/* ── Zone-day body sections ──────────────────────────────────────────── */
+/* Golden master: grid-template-rows: minmax(0,1.4fr) minmax(0,0.85fr) auto auto */
+/* Mirrored as flex-grow ratios.                                          */
+
+/* Section 1 — Zones (1.4fr of stretchable space) */
+.body > section:nth-of-type(1) {
+  flex: 1.4 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+/* zones-grid fills section below its label row */
+.body > section:nth-of-type(1) .zones-grid {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+
+/* Section 2 — Restrooms (0.85fr) */
+.body > section:nth-of-type(2) {
+  flex: 0.85 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+/* rr-grid fills section below its label row */
+.body > section:nth-of-type(2) .rr-grid {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+
+/* Sections 3 & 4 — Auxiliary and Overlaps: natural (auto) height */
+.body > section:nth-of-type(3),
+.body > section:nth-of-type(4) {
+  flex: none !important;
+}
+
+/* ── Break-page body overrides ───────────────────────────────────────── */
+/* 'break-page' class added by Fix 1 — matches golden master design.      */
+/* Golden master .break-page .body: grid-template-rows: minmax(0,1fr)     */
+/* → break-cols is the sole grid child, fills entire body height.         */
+/* Overlaps are removed from HTML (Fix 1) so no 3rd-page overflow.        */
+
+/* Override .break-page .body grid → flex (existing CSS has display:grid) */
+.break-page .body {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+/* break-cols: sole flex child of break-page .body, fills all space */
+.break-page .break-cols {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+</style>"""
+
+        # Inject immediately before </head> so it overrides renderer styles.
+        if "</head>" in html:
+            html = html.replace("</head>", compat_css + "\n</head>", 1)
+        else:
+            # Fallback: prepend to document if no <head> present.
+            html = compat_css + "\n" + html
+
+        return html
 
     # ── Filename helpers ──────────────────────────────────────────────────
 
