@@ -102,3 +102,17 @@ def get_placement_service():
     via app.dependency_overrides[get_placement_service] = lambda: FakeService().
     """
     return _placement_service_singleton()
+
+
+@lru_cache(maxsize=1)
+def _print_service_singleton():
+    from ..services.print_service import PrintService
+    return PrintService(
+        placement=get_placement_service(),
+        cache=get_cache_service(),
+    )
+
+
+def get_print_service():
+    """FastAPI dependency — shared PrintService instance."""
+    return _print_service_singleton()
