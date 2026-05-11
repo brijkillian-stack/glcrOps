@@ -285,9 +285,10 @@ def _task_pool_panel(slot_id) -> rx.Component:
         rx.box(
             rx.match(
                 ZdsState.task_pool_category,
-                ("porter", _pool_items_for("porter")),
-                ("pm_ol",  _pool_items_for("pm_ol")),
-                ("am_ol",  _pool_items_for("am_ol")),
+                ("porter",   _pool_items_for("porter")),
+                ("pm_ol",    _pool_items_for("pm_ol")),
+                ("am_ol",    _pool_items_for("am_ol")),
+                ("coverage", _pool_items_for("coverage")),
                 _pool_items_for("porter"),
             ),
             class_name="task-pool-list",
@@ -444,6 +445,12 @@ def zone_card(slot: dict) -> rx.Component:
       is_filled, has_alert, alert_target, is_sweeper, sweeper_route,
       group_num, has_group, id, slot_key, display_tasks
     """
+    _has_coverage = ZdsState.cards_with_coverage.contains(slot["label"])
+    _badge_cls    = rx.cond(
+        ZdsState.card_badge_classes.contains(slot["label"]),
+        ZdsState.card_badge_classes[slot["label"]], "",
+    )
+    _cvg_cls = rx.cond(_has_coverage, "zone-card-coverage ", "")
     return rx.box(
         # Absolute decorations
         # Filled: 3px bar with zone color. Unfilled: 2px dim bar (no glow).
@@ -549,42 +556,27 @@ def zone_card(slot: dict) -> rx.Component:
         **{
             **CARD_BASE,
             "cursor": "default",
+            # Coverage: full colored border instead of dim 1px + top-bar only
             "border": rx.cond(
                 slot["is_locked"],
                 f"1px solid {_LOCK_GOLD}",
-                "1px solid #e5e7eb",
+                rx.cond(
+                    _has_coverage,
+                    "2px solid " + slot["color"],
+                    "1px solid #e5e7eb",
+                ),
             ),
             "class_name": rx.cond(
                 slot["is_locked"],
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card zone-card-filled zone-card-locked "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
-                    "zone-card zone-card-empty zone-card-locked "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
+                    "zone-card zone-card-filled zone-card-locked " + _cvg_cls + _badge_cls,
+                    "zone-card zone-card-empty zone-card-locked "  + _cvg_cls + _badge_cls,
                 ),
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card zone-card-filled "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
-                    "zone-card zone-card-empty "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
+                    "zone-card zone-card-filled " + _cvg_cls + _badge_cls,
+                    "zone-card zone-card-empty "  + _cvg_cls + _badge_cls,
                 ),
             ),
         },
@@ -671,6 +663,12 @@ def rr_card(slot: dict) -> rx.Component:
             padding="2px",
         )
 
+    _has_coverage_rr = ZdsState.cards_with_coverage.contains(slot["label"])
+    _badge_cls_rr    = rx.cond(
+        ZdsState.card_badge_classes.contains(slot["label"]),
+        ZdsState.card_badge_classes[slot["label"]], "",
+    )
+    _cvg_cls_rr = rx.cond(_has_coverage_rr, "zone-card-coverage ", "")
     return rx.box(
         _color_bar(slot["color"], "2px"),
         rx.cond(slot["has_alert"], _alert_banner(slot["alert_target"]), rx.fragment()),
@@ -699,20 +697,15 @@ def rr_card(slot: dict) -> rx.Component:
         **{
             **CARD_BASE,
             "cursor": "default",
+            "border": rx.cond(
+                _has_coverage_rr,
+                "2px solid " + slot["color"],
+                "1px solid #e5e7eb",
+            ),
             "class_name": rx.cond(
                 slot["mens_is_filled"] | slot["womens_is_filled"],
-                "zone-card rr-card rr-card-filled "
-                + rx.cond(
-                    ZdsState.card_badge_classes.contains(slot["label"]),
-                    ZdsState.card_badge_classes[slot["label"]],
-                    "",
-                ),
-                "zone-card rr-card rr-card-empty "
-                + rx.cond(
-                    ZdsState.card_badge_classes.contains(slot["label"]),
-                    ZdsState.card_badge_classes[slot["label"]],
-                    "",
-                ),
+                "zone-card rr-card rr-card-filled " + _cvg_cls_rr + _badge_cls_rr,
+                "zone-card rr-card rr-card-empty "  + _cvg_cls_rr + _badge_cls_rr,
             ),
         },
         padding_bottom=rx.cond(slot["has_alert"], "22px", "10px"),
@@ -727,6 +720,12 @@ def aux_card(slot: dict) -> rx.Component:
     Fields: label, color, display_name, name_color, name_style,
             has_alert, alert_target, id, slot_key, display_tasks
     """
+    _has_coverage_aux = ZdsState.cards_with_coverage.contains(slot["label"])
+    _badge_cls_aux    = rx.cond(
+        ZdsState.card_badge_classes.contains(slot["label"]),
+        ZdsState.card_badge_classes[slot["label"]], "",
+    )
+    _cvg_cls_aux = rx.cond(_has_coverage_aux, "zone-card-coverage ", "")
     return rx.box(
         _color_bar(slot["color"], "2px"),
         rx.cond(slot["has_alert"], _alert_banner(slot["alert_target"]), rx.fragment()),
@@ -764,39 +763,23 @@ def aux_card(slot: dict) -> rx.Component:
             "border": rx.cond(
                 slot["is_locked"],
                 f"1px solid {_LOCK_GOLD}",
-                "1px solid #e5e7eb",
+                rx.cond(
+                    _has_coverage_aux,
+                    "2px solid " + slot["color"],
+                    "1px solid #e5e7eb",
+                ),
             ),
             "class_name": rx.cond(
                 slot["is_locked"],
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card aux-card zone-card-filled zone-card-locked "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
-                    "zone-card aux-card zone-card-empty zone-card-locked "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
+                    "zone-card aux-card zone-card-filled zone-card-locked " + _cvg_cls_aux + _badge_cls_aux,
+                    "zone-card aux-card zone-card-empty zone-card-locked "  + _cvg_cls_aux + _badge_cls_aux,
                 ),
                 rx.cond(
                     slot["is_filled"],
-                    "zone-card aux-card zone-card-filled "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
-                    "zone-card aux-card zone-card-empty "
-                    + rx.cond(
-                        ZdsState.card_badge_classes.contains(slot["label"]),
-                        ZdsState.card_badge_classes[slot["label"]],
-                        "",
-                    ),
+                    "zone-card aux-card zone-card-filled " + _cvg_cls_aux + _badge_cls_aux,
+                    "zone-card aux-card zone-card-empty "  + _cvg_cls_aux + _badge_cls_aux,
                 ),
             ),
         },

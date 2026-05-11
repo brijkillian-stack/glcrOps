@@ -431,6 +431,28 @@ class ZdsState(rx.State):
         return list(result)
 
     @rx.var
+    def cards_with_coverage(self) -> list[str]:
+        """Slot labels that have at least one coverage task ('and Zone N' / 'and Restroom N').
+        Used by zone_card to apply the full-card outline instead of just the top bar.
+        """
+        result: set[str] = set()
+        for slot in list(self.zone_slots) + list(self.aux_slots):
+            label = slot.get("label") or ""
+            for t in (slot.get("display_tasks") or []):
+                name = (t.get("name") or "").strip().lower()
+                if name.startswith("and zone") or name.startswith("and restroom"):
+                    result.add(label)
+                    break
+        for rr in self.rr_slots:
+            label = rr.get("label") or ""
+            for t in (rr.get("display_tasks") or []):
+                name = (t.get("name") or "").strip().lower()
+                if name.startswith("and zone") or name.startswith("and restroom"):
+                    result.add(label)
+                    break
+        return list(result)
+
+    @rx.var
     def task_popover_existing_note(self) -> str:
         """Existing note text for the task currently open in the popover."""
         if not self.task_popover_annot_id:

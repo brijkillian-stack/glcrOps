@@ -1,10 +1,11 @@
 """
 task_pool_config.py — Static task pool for the ZDS inline task picker.
 
-Organized into three shift-context categories:
-  porter  — general grave-shift porter duties (zones, RR, aux)
-  pm_ol   — PM overlap window tasks (11PM – 1AM)
-  am_ol   — AM overlap window tasks (5AM – 7AM)
+Organized into four shift-context categories:
+  porter   — general grave-shift porter duties (zones, RR, aux)
+  pm_ol    — PM overlap window tasks (11PM – 1AM)
+  am_ol    — AM overlap window tasks (5AM – 7AM)
+  coverage — "and Zone N" / "and Restroom N" secondary-coverage assignments
 
 Edit this file to update the pool.  Future enhancement: migrate to
 a DB-backed task_pool table so the pool can be managed from the UI.
@@ -86,12 +87,32 @@ TASK_POOL: dict[str, list[str]] = {
         "Report overnight incidents",
         "Zone sign-off checklist",
     ],
+    "coverage": [
+        # Secondary zone coverage
+        "and Zone 1",
+        "and Zone 2",
+        "and Zone 3",
+        "and Zone 4",
+        "and Zone 5",
+        "and Zone 6",
+        "and Zone 7",
+        "and Zone 8",
+        "and Zone 9",
+        "and Zone 10",
+        # Secondary restroom coverage
+        "and Restroom 1+2",
+        "and Restroom 6",
+        "and Restroom 7",
+        "and Restroom 8",
+        "and Restroom 10",
+    ],
 }
 
 
 # Ordered list of categories with display labels
 POOL_CATEGORIES: list[tuple[str, str]] = [
-    ("porter", "Porter"),
-    ("pm_ol",  "PM OL"),
-    ("am_ol",  "AM OL"),
+    ("porter",   "Porter"),
+    ("pm_ol",    "PM OL"),
+    ("am_ol",    "AM OL"),
+    ("coverage", "Cvg"),
 ]

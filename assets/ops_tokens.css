@@ -849,3 +849,17 @@ details > summary::-webkit-details-marker {
   display: flex;
   gap: 4px;
 }
+
+/* ── Coverage card outline ───────────────────────────────────────────────── */
+/* Applied when a card has an "and Zone N" / "and Restroom N" coverage task.
+   The colored border is set inline (slot["color"]) via zone_card.py;
+   this class adds the inner glow / box-shadow accent. */
+.zone-card-coverage {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255,255,255,0.6);
+}
+/* Reinforce the top bar on coverage cards — make it slightly taller so
+   the outline + bar read as a cohesive full-card frame. */
+.zone-card-coverage .task-interactive-dot {
+  background: currentColor;
+  opacity: 0.7;
+}
