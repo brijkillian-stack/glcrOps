@@ -4,6 +4,36 @@ Entries in reverse-chronological order. One bullet per landed feature/fix.
 
 ---
 
+## 2026-05-11 — Phase 5: Reoptimize endpoint ([GLC-10](https://linear.app/glcr/issue/GLC-10/implement-reoptimize-endpoint))
+
+New planning API for pre-shift "what-if" simulations.
+
+### Added
+- `POST /v1/planning/reoptimize` — accepts `week_id`, `unavailable_team_members`
+  (display names), and `force_z9`. Calls the existing fill engine via
+  `engine_bridge.run_fill_engine` with a `config_override` (`simulated_unavailable`
+  + `force_z9` keys) and returns the new placements alongside a per-slot diff
+  against the current `zone_assignments` rows. Diff buckets: `unchanged`,
+  `swapped`, `newly_filled`, `newly_unfilled`, `locked` (locked slots are
+  reported but never overwritten — same semantics as `sync_engine_to_week`).
+  Slots that don't map to `zone_assignments` (PM/AM overlaps, Z9 SR Buddy) are
+  excluded from the diff so the numbers match what an apply would actually touch.
+- Cached responses keyed on `(week_id, sorted unavailable list, force_z9)` with
+  a 120s TTL via the existing `CacheService` (no-op when Redis is unavailable).
+- `ReoptimizeService.invalidate(week_id)` — prefix-delete hook for future apply
+  workflows so a sync can drop stale planning previews.
+
+### Changed
+- `fill_engine.py` reads a new `force_z9` key from `--config-override`. When set,
+  Zone 9 is promoted from "skip 1st" to fill right after the must-fill zones
+  (Z1/Z4/Z5/Z8) in both greedy and LAP paths. Default behavior is unchanged.
+
+### Tests
+- `apps/zds/api/tests/test_reoptimize_service.py` — diff categorization, missing
+  week, happy-path with cache hit, and cache-key stability under input ordering.
+
+---
+
 ## 2026-05-08 — Phase 4k.7: stable annot_id + reliable icon rendering (Sonnet)
 
 Two issues from live deployment testing of Phase 4k.6:
