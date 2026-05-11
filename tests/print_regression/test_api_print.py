@@ -19,25 +19,20 @@ Running
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
 
+from tests.print_regression.conftest import (
+    has_db_env as _has_db_env,
+    has_print_service_env,
+    normalise_text,
+)
+
 # ── Path constants (mirror conftest.py) ───────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _has_db_env() -> bool:
-    return bool(
-        os.environ.get("SUPABASE_URL")
-        and os.environ.get("SUPABASE_SERVICE_KEY")
-    )
 
 
 def _make_fastapi_client():
@@ -249,44 +244,82 @@ class TestPrintAPIAdapterTransparency:
     """Assert that /v1/print/week/{id}.html output equals direct renderer output.
 
     If these differ, PrintService is mutating the renderer's output — investigate.
-    Skipped automatically if SUPABASE_URL / SUPABASE_SERVICE_KEY are not set.
+
+    Two paths tested:
+      1. fresh_html (direct renderer call via source xlsx + DB) vs nothing —
+         just verifies the renderer is producing content.
+      2. fresh_html_via_api (fetched from a running PrintService) vs fresh_html —
+         verifies the API adapter is transparent (no mutations in the HTTP layer).
+
+    The second test is skipped if PRINT_SERVICE_URL + PRINT_SERVICE_WEEK_ID
+    are not set (they require a running Forge API server).
     """
 
-    @pytest.mark.asyncio
-    async def test_week_html_endpoint_matches_direct_render(self, fresh_html):
-        """HTML from the endpoint must have the same text content as the
-        direct render_week_html call captured in the fresh_html fixture.
+    @staticmethod
+    def _html_to_normalised_text(html_path: Path) -> str:
+        """Strip all HTML tags, collapse whitespace, return plain text."""
+        import re
+        raw = html_path.read_text(encoding="utf-8")
+        stripped = re.sub(r"<[^>]+>", " ", raw)
+        return normalise_text(stripped)
 
-        Text is extracted and normalised (whitespace collapsed) from both
-        outputs so minor HTML formatting differences don't produce false
-        failures — only content differences matter here.
+    @pytest.mark.asyncio
+    async def test_direct_render_produces_content(self, fresh_html):
+        """Renderer must produce a non-trivially long HTML output.
+
+        Verifies the renderer is generating real content (not an empty page or
+        error shell) via the direct render path.  Skipped without DB env vars.
         """
         if not _has_db_env():
             pytest.skip("DB env vars not set — Tier 2 adapter transparency test skipped")
 
-        import re
-        import importlib
-
-        renderer = importlib.import_module("apps.zds.print_renderer")
-
-        # Extract normalised text from the fresh_html fixture (direct render).
-        direct_html = Path(fresh_html).read_text(encoding="utf-8") if hasattr(fresh_html, "__fspath__") else fresh_html.read_text(encoding="utf-8")
-        def norm(html: str) -> str:
-            # Strip tags, collapse whitespace.
-            text = re.sub(r"<[^>]+>", " ", html)
-            return re.sub(r"\s+", " ", text).strip()
-
-        direct_text = norm(direct_html)
-
-        # The Tier 2 test verifies the renderer is working;
-        # here we verify the API layer is transparent (no mutations).
-        # With a live DB we'd hit the real endpoint; in the test suite
-        # we call PrintService directly with a real Supabase client.
-        assert len(direct_text) > 100, (
-            "Direct render produced suspiciously short output — "
-            "check the fresh_html fixture."
+        text = self._html_to_normalised_text(fresh_html)
+        assert len(text) > 500, (
+            f"Direct render produced suspiciously short output ({len(text)} chars). "
+            "Check the fresh_html fixture and the source xlsx."
         )
-        # If this passes, the renderer is producing content.
-        # The API endpoint is verified structurally by the Tier 1 tests above.
-        # Full round-trip API→renderer comparison requires a running server
-        # (tested in integration, not in this test suite).
+
+    @pytest.mark.asyncio
+    async def test_api_html_matches_direct_render(self, fresh_html, fresh_html_via_api):
+        """HTML from the API endpoint must have the same text content as a
+        direct render.
+
+        Both outputs are stripped of HTML tags and whitespace-normalised before
+        comparison, so minor formatting differences (attribute ordering, extra
+        newlines) don't produce false failures — only content differences matter.
+
+        Skipped if:
+          - SUPABASE_URL / SUPABASE_SERVICE_KEY not set (no direct render)
+          - PRINT_SERVICE_URL / PRINT_SERVICE_WEEK_ID not set (no API render)
+          - Forge API server unreachable (fresh_html_via_api fixture auto-skips)
+        """
+        if not _has_db_env():
+            pytest.skip("DB env vars not set — skipped")
+        if not has_print_service_env():
+            pytest.skip(
+                "PRINT_SERVICE_URL / PRINT_SERVICE_WEEK_ID not set — "
+                "start the Forge API and export those vars to enable this test"
+            )
+
+        direct_text = self._html_to_normalised_text(fresh_html)
+        api_text    = self._html_to_normalised_text(fresh_html_via_api)
+
+        assert direct_text and api_text, "One or both renders produced empty text"
+
+        # Exact match required — any divergence means the API layer is mutating
+        # the renderer's output, which violates the sacred-renderer contract.
+        if direct_text != api_text:
+            # Print first divergence point to aid diagnosis.
+            min_len = min(len(direct_text), len(api_text))
+            first_diff = next(
+                (i for i in range(min_len) if direct_text[i] != api_text[i]),
+                min_len,
+            )
+            ctx = slice(max(0, first_diff - 80), first_diff + 80)
+            pytest.fail(
+                f"API HTML text diverges from direct render at char {first_diff}.\n"
+                f"  Direct context: {direct_text[ctx]!r}\n"
+                f"  API    context: {api_text[ctx]!r}\n\n"
+                "PrintService is altering the renderer's output — investigate "
+                "print_service.py between render and HTTP response."
+            )

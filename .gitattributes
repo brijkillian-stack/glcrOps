@@ -1,0 +1,14 @@
+# ── Git LFS — print regression golden binaries ───────────────────────────────
+# These files are large binary artifacts locked at a specific approved state.
+# Store them in LFS to keep the working-tree clone fast.
+#
+# First-time setup:
+#   git lfs install
+#   git lfs migrate import --include="tests/print_regression/golden/*.pdf,tests/print_regression/golden/**/*.png" --everything
+#   git push --force origin main   # rewrites history — coordinate with team
+#
+# After that, normal `git add / commit / push` automatically uses LFS for
+# paths matched below.
+
+tests/print_regression/golden/*.pdf   filter=lfs diff=lfs merge=lfs -text
+tests/print_regression/golden/**/*.png filter=lfs diff=lfs merge=lfs -text

@@ -32,9 +32,12 @@ Re-renders the book from the current renderer code using the frozen source xlsx
 and live DB, then compares extracted text per page against the golden.
 
 Automatically **skipped** if:
-- `tests/print_regression/golden/inputs/Week Overview - Filled - 2026-05-14.xlsx`
+- `tests/print_regression/golden/inputs/Week Overview - Filled - <week>.xlsx`
   is missing
 - `SUPABASE_URL` or `SUPABASE_SERVICE_KEY` env vars are not set
+
+The active week is read from `golden/manifest.json` (`week_key` field) — no
+hardcoded date in the code.
 
 To enable: place the source xlsx in `golden/inputs/` and export the DB env vars.
 
@@ -47,8 +50,10 @@ in font hinting; 0.95 catches real drift without flakiness).
 
 Automatically **skipped** if weasyprint is not installed. Install it locally:
 
-```
+```bash
 pip install weasyprint
+# macOS also needs:
+brew install pango cairo
 ```
 
 ---
@@ -60,13 +65,13 @@ pip install weasyprint
 pytest tests/print_regression/ -v
 
 # Tier 1 only (fast, no external deps)
-pytest tests/print_regression/ -v -k tier1
+pytest tests/print_regression/ -v -m tier1
 
 # Tier 2 + Tier 1 (text regression; no weasyprint needed)
-pytest tests/print_regression/ -v -k "tier1 or tier2"
+pytest tests/print_regression/ -v -m "tier1 or tier2"
 
 # All three tiers
-pytest tests/print_regression/ -v -k "tier1 or tier2 or tier3"
+pytest tests/print_regression/ -v -m "tier1 or tier2 or tier3"
 ```
 
 ---
@@ -77,7 +82,7 @@ pytest tests/print_regression/ -v -k "tier1 or tier2 or tier3"
 
 The committed golden is corrupted or missing. Run:
 
-```
+```bash
 python -m tests.print_regression.update_golden --force
 ```
 
@@ -88,8 +93,8 @@ Commit the regenerated artifacts.
 The renderer produced different text than the golden. The test output shows
 the differing pages and a preview of expected vs actual text.
 
-1. **Read the diff carefully.** Is this an intentional change (e.g. a copy
-   update from "ZONES" → "Zones") or an accidental regression?
+1. **Read the diff carefully.** Is this an intentional change or an accidental
+   regression?
 2. If unintentional → fix the renderer. Do not update the golden.
 3. If intentional (Brian's approval required) → regenerate the golden (see
    below) and include the approval in the commit message.
@@ -114,25 +119,72 @@ Actions run's "Artifacts" tab to download them.
 
 **This workflow requires Brian's explicit sign-off before running.**
 
-1. Confirm the new renderer output looks correct (run Tier 2 + 3 locally,
-   inspect diffs).
-2. Have Brian review the new rendered book side-by-side with the current golden.
-3. Once approved, regenerate:
+### Classic (browser-print PDF) workflow
+
+1. Print the book from the browser to PDF and save it as:
+   `tests/print_regression/golden/zone_deployment_book_<week>.pdf`
+2. Run:
 
 ```bash
-python -m tests.print_regression.update_golden --force
+python -m tests.print_regression.update_golden --week YYYY-MM-DD --force
 ```
 
-4. Commit the regenerated golden + the renderer change **in the same commit**.
-   Include the sign-off in the commit message:
+### PrintService workflow (recommended for Phase 3+)
+
+Once the Forge API is running, fetch the golden directly from the service:
+
+1. Start the Forge API: `uvicorn apps.zds.api.main:app --port 8001`
+2. Look up the week UUID: `SELECT id FROM weeks WHERE week_ending = 'YYYY-MM-DD';`
+3. Run:
+
+```bash
+python -m tests.print_regression.update_golden \
+    --source print-service \
+    --service-url http://localhost:8001 \
+    --service-week-id <uuid>
+```
+
+Or via env vars:
+```bash
+PRINT_SERVICE_URL=http://localhost:8001 \
+PRINT_SERVICE_WEEK_ID=<uuid> \
+python -m tests.print_regression.update_golden --source print-service
+```
+
+4. Open the generated PDF and page PNGs — confirm they match what Brian
+   visually approved.
+5. Commit everything in `tests/print_regression/golden/` with message:
 
 ```
-Phase N: [description of layout change]
-
-Golden master regenerated — Brian approved on YYYY-MM-DD.
+Golden master regenerated from PrintService — Brian approved YYYY-MM-DD
 ```
 
-5. Push and verify CI passes on the new golden.
+---
+
+## Git LFS — large binary golden artifacts
+
+The golden PDF and page PNGs are large binary files stored in Git LFS to keep
+clone times fast. They are tracked via `.gitattributes`:
+
+```
+tests/print_regression/golden/*.pdf    filter=lfs diff=lfs merge=lfs -text
+tests/print_regression/golden/**/*.png filter=lfs diff=lfs merge=lfs -text
+```
+
+**First-time LFS setup** (if golden files weren't already in LFS):
+
+```bash
+git lfs install
+git lfs migrate import \
+    --include="tests/print_regression/golden/*.pdf,tests/print_regression/golden/**/*.png" \
+    --everything
+git push --force origin main   # rewrites history — coordinate with team
+```
+
+After that, `git add / commit / push` automatically uses LFS for those paths.
+
+**CI:** The workflow calls `git lfs pull` after checkout to ensure the golden
+files are fully materialized before the tests run.
 
 ---
 
@@ -148,20 +200,21 @@ The golden is the contract. Updating it without sign-off breaks the contract.
 ```
 tests/print_regression/
 ├── __init__.py
-├── conftest.py                         pytest fixtures
-├── test_book_render.py                 the regression tests
-├── update_golden.py                    CLI to regenerate golden artifacts
-├── README.md                           this file
+├── conftest.py              pytest fixtures + shared helpers
+├── test_book_render.py      Tier 1/2/3 regression tests
+├── test_api_print.py        API endpoint structural + adapter-transparency tests
+├── update_golden.py         CLI to regenerate golden artifacts
+├── README.md                this file
 ├── golden/
-│   ├── zone_deployment_book_2026-05-14.pdf      source golden (browser print)
-│   ├── zone_deployment_book_2026-05-14/
-│   │   ├── page_01.png                          committed page images
+│   ├── zone_deployment_book_<week>.pdf      source golden PDF (LFS)
+│   ├── zone_deployment_book_<week>/
+│   │   ├── page_01.png                      committed page images (LFS)
 │   │   └── …
-│   ├── zone_deployment_book_2026-05-14_text.json  per-page extracted text
-│   ├── manifest.json                            page count, DPI, hash
+│   ├── zone_deployment_book_<week>_text.json  per-page extracted text
+│   ├── manifest.json                        page count, DPI, hash, week_key
 │   └── inputs/
-│       └── Week Overview - Filled - 2026-05-14.xlsx   frozen source xlsx
-└── diffs/                              generated on test failure (gitignored)
+│       └── Week Overview - Filled - <week>.xlsx   frozen source xlsx (not in LFS)
+└── diffs/                   generated on test failure (gitignored)
     └── .gitkeep
 ```
 
@@ -171,10 +224,16 @@ tests/print_regression/
 
 - **poppler-utils** — required by `pdf2image` (page image extraction)
   - macOS: `brew install poppler`
-  - Ubuntu/Render: `apt-get install poppler-utils`
+  - Ubuntu/CI: `apt-get install poppler-utils`
 - **weasyprint** (Tier 3 only) — HTML → PDF conversion
   - `pip install weasyprint`
   - May need `brew install pango cairo` on macOS
+
+Install all Python test deps at once:
+
+```bash
+pip install -r requirements-dev.txt
+```
 
 ---
 
@@ -184,5 +243,5 @@ The 0.95 threshold for Tier 3 (browser-print golden vs weasyprint fresh render)
 was calibrated empirically. Run the test multiple times on unchanged code and
 confirm the baseline SSIM is consistently ≥ 0.97 before shipping.
 
-If the test is flaky at 0.95, increase to 0.93. If it's too permissive, lower
+If the test is flaky at 0.95, lower toward 0.93. If it's too permissive, raise
 toward 0.97. Document the calibration run in the manifest.

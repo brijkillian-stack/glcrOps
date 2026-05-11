@@ -3,66 +3,105 @@ conftest.py — pytest fixtures for the Zone Deployment Book print regression su
 
 Session-scoped fixtures are used wherever possible so expensive operations
 (PDF rendering, image conversion) happen once per pytest run, not once per test.
+
+Configuration via environment variables
+──────────────────────────────────────
+  PRINT_REGRESSION_WEEK       ISO week-ending date (YYYY-MM-DD).
+                              Defaults to the week_key recorded in manifest.json.
+  PRINT_SERVICE_URL           Base URL of a running ZDS Forge API server,
+                              e.g. http://localhost:8001
+                              Required for fresh_html_via_api fixture.
+  PRINT_SERVICE_WEEK_ID       DB UUID of the golden week (from public.weeks).
+                              Required for fresh_html_via_api fixture.
+  SUPABASE_URL                Required for Tier 2 (direct renderer path).
+  SUPABASE_SERVICE_KEY        Required for Tier 2 (direct renderer path).
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Paths — all relative to the repo root so tests are portable
-# ---------------------------------------------------------------------------
+# ── Paths ─────────────────────────────────────────────────────────────────────
 
-REPO_ROOT   = Path(__file__).resolve().parent.parent.parent
-GOLDEN_DIR  = Path(__file__).parent / "golden"
-DIFFS_DIR   = Path(__file__).parent / "diffs"
-WEEK_KEY    = "2026-05-14"
+REPO_ROOT  = Path(__file__).resolve().parent.parent.parent
+GOLDEN_DIR = Path(__file__).parent / "golden"
+DIFFS_DIR  = Path(__file__).parent / "diffs"
+MANIFEST   = GOLDEN_DIR / "manifest.json"
+INPUTS_DIR = GOLDEN_DIR / "inputs"
+
+# ── Week key — driven by manifest, overridable via env ───────────────────────
+
+def _resolve_week_key() -> str:
+    """Resolve the active week key: env → manifest → last-resort fallback.
+
+    In normal operation this reads from manifest.json so the value stays in
+    sync with committed golden artifacts without any hardcoding.
+    """
+    if k := os.environ.get("PRINT_REGRESSION_WEEK", "").strip():
+        return k
+    if MANIFEST.exists():
+        try:
+            data = json.loads(MANIFEST.read_text())
+            if k := data.get("week_key", "").strip():
+                return k
+        except Exception:
+            pass
+    return "2026-05-14"   # last-resort; should never be reached in normal use
+
+
+WEEK_KEY = _resolve_week_key()
 
 GOLDEN_PDF   = GOLDEN_DIR / f"zone_deployment_book_{WEEK_KEY}.pdf"
 GOLDEN_PAGES = GOLDEN_DIR / f"zone_deployment_book_{WEEK_KEY}"
 GOLDEN_TEXT  = GOLDEN_DIR / f"zone_deployment_book_{WEEK_KEY}_text.json"
-MANIFEST     = GOLDEN_DIR / "manifest.json"
+SOURCE_XLSX  = INPUTS_DIR / f"Week Overview - Filled - {WEEK_KEY}.xlsx"
 
-# Schedule xlsx: renderer reads from this to re-produce the book.
-# Stored in tests/print_regression/golden/inputs/ so the test is fully
-# self-contained without Storage access. Brian places the file here once;
-# it's committed (xlsx is ~30 KB).
-INPUTS_DIR    = GOLDEN_DIR / "inputs"
-SOURCE_XLSX   = INPUTS_DIR / f"Week Overview - Filled - {WEEK_KEY}.xlsx"
+# ── PrintService integration config ──────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# Tolerance constants
-# ---------------------------------------------------------------------------
+PRINT_SERVICE_URL     = os.environ.get("PRINT_SERVICE_URL", "").rstrip("/")
+PRINT_SERVICE_WEEK_ID = os.environ.get("PRINT_SERVICE_WEEK_ID", "").strip()
 
-DPI         = 150   # matches update_golden.py
-SSIM_FLOOR  = 0.98  # structural similarity threshold; lower = more permissive
+# ── Tolerance constants ───────────────────────────────────────────────────────
+
+DPI        = 150    # matches update_golden.py
+SSIM_FLOOR = 0.98   # structural similarity threshold; lower = more permissive
 
 
-# ---------------------------------------------------------------------------
-# Markers
-# ---------------------------------------------------------------------------
+# ── Helpers (exported so test files share the same logic) ─────────────────────
+
+def has_db_env() -> bool:
+    """Return True if Supabase env vars are present (Tier 2 gate)."""
+    return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"))
+
+
+def has_print_service_env() -> bool:
+    """Return True if PrintService integration env vars are set."""
+    return bool(PRINT_SERVICE_URL and PRINT_SERVICE_WEEK_ID)
+
+
+def normalise_text(text: str) -> str:
+    """Collapse whitespace runs to single space; strip.
+
+    Exported so test files share the same normalisation as update_golden.py.
+    """
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+# Backward-compat alias used by fixtures below.
+_has_db_env = has_db_env
+
+
+# ── Markers ───────────────────────────────────────────────────────────────────
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers",
-        "requires_source_xlsx: test needs the source xlsx in golden/inputs/; "
-        "skipped automatically if the file is absent",
-    )
-    config.addinivalue_line(
-        "markers",
-        "requires_db: test needs SUPABASE_URL + SUPABASE_SERVICE_KEY env vars",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _has_db_env() -> bool:
-    return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"))
+    config.addinivalue_line("markers", "tier1: always-runs golden-integrity checks (no external deps)")
+    config.addinivalue_line("markers", "tier2: text regression — requires source xlsx + Supabase env vars")
+    config.addinivalue_line("markers", "tier3: SSIM visual regression — requires tier2 + weasyprint")
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +190,56 @@ def fresh_html(tmp_path_factory) -> Path:
         pytest.fail(f"Renderer reported success but HTML not found at {out_html}")
 
     return out_html
+
+
+@pytest.fixture(scope="session")
+def fresh_html_via_api(tmp_path_factory) -> Path:
+    """Fetch the current week's HTML from a running PrintService instance.
+
+    Full end-to-end path: HTTP → PrintService → sacred renderer → HTML.
+    Compared against golden text to verify the API layer is transparent.
+
+    Requires:
+      PRINT_SERVICE_URL      e.g. http://localhost:8001 (Forge API)
+      PRINT_SERVICE_WEEK_ID  DB UUID of the golden week (public.weeks.id)
+
+    Skipped if either env var is absent or the server is unreachable.
+
+    To set up:
+      1. Start the Forge API: uvicorn apps.zds.api.main:app --port 8001
+      2. Look up the week UUID: SELECT id FROM weeks WHERE week_ending='YYYY-MM-DD'
+      3. Export PRINT_SERVICE_URL=http://localhost:8001
+         Export PRINT_SERVICE_WEEK_ID=<uuid>
+    """
+    if not has_print_service_env():
+        pytest.skip(
+            "PRINT_SERVICE_URL and PRINT_SERVICE_WEEK_ID not set — "
+            "PrintService integration tests skipped.  "
+            "Start the Forge API and export those env vars to enable."
+        )
+    try:
+        import httpx
+    except ImportError:
+        pytest.skip("httpx not installed — pip install httpx")
+
+    endpoint = f"{PRINT_SERVICE_URL}/v1/print/week/{PRINT_SERVICE_WEEK_ID}.html"
+    try:
+        resp = httpx.get(endpoint, timeout=30)
+    except Exception as exc:
+        pytest.skip(f"PrintService unreachable at {endpoint}: {exc}")
+
+    if resp.status_code == 404:
+        pytest.fail(
+            f"PrintService 404 for week {PRINT_SERVICE_WEEK_ID!r}. "
+            "Verify PRINT_SERVICE_WEEK_ID is a valid week UUID in the DB."
+        )
+    if resp.status_code != 200:
+        pytest.fail(f"PrintService returned {resp.status_code} for {endpoint}:\n{resp.text[:500]}")
+
+    tmpdir = tmp_path_factory.mktemp("zds_api_render")
+    out    = tmpdir / f"api_{PRINT_SERVICE_WEEK_ID[:8]}.html"
+    out.write_text(resp.text, encoding="utf-8")
+    return out
 
 
 @pytest.fixture(scope="session")

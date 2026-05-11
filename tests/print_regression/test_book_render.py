@@ -18,7 +18,7 @@ The suite has three tiers, each with different infrastructure requirements:
   compares it against the text extracted from the golden PDF.
 
   Skipped automatically if:
-    - tests/print_regression/golden/inputs/Week Overview - Filled - 2026-05-14.xlsx
+    - tests/print_regression/golden/inputs/Week Overview - Filled - <week>.xlsx
       is absent (place the file there to enable these tests)
     - SUPABASE_URL or SUPABASE_SERVICE_KEY env vars are not set
 
@@ -64,7 +64,6 @@ Running
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -79,15 +78,8 @@ from tests.print_regression.conftest import (
     MANIFEST,
     SSIM_FLOOR,
     WEEK_KEY,
+    normalise_text as _normalise,
 )
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _normalise(text: str) -> str:
-    """Collapse all whitespace runs to single space; strip. Makes comparisons
-    robust to minor PDF-layer formatting differences."""
-    return re.sub(r"\s+", " ", text or "").strip()
 
 
 def _html_to_text(html_path: Path) -> dict[str, str]:
@@ -193,7 +185,9 @@ class TestGoldenIntegrity:
         missing = required - set(golden_manifest)
         assert not missing, f"Manifest missing keys: {missing}"
         assert golden_manifest["page_count"] > 0, "page_count must be positive"
-        assert golden_manifest["week_key"] == WEEK_KEY
+        assert re.match(r"^\d{4}-\d{2}-\d{2}$", golden_manifest["week_key"]), (
+            f"week_key must be YYYY-MM-DD, got {golden_manifest['week_key']!r}"
+        )
 
     def test_source_pdf_hash_unchanged(self, golden_manifest):
         """SHA-256 of the golden PDF must match the manifest.
