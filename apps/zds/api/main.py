@@ -32,7 +32,6 @@ log = logging.getLogger("zds.api")
 async def lifespan(app: FastAPI):
     """Warm singletons on boot, log infra status, clean shutdown."""
     settings = get_settings()
-    instrument_app(app, env=settings.env)
     log.info("ZDS Forge starting (env=%s, debug=%s)", settings.env, settings.debug)
 
     # Touch the supabase singleton so a misconfigured env surfaces at
@@ -63,6 +62,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Observability middleware must be added before the app starts (Starlette 1.0+).
+settings = get_settings()
+instrument_app(app, env=settings.env)
 
 # CORS — wide-open for now; tighten when the web UI's origin is known.
 app.add_middleware(
