@@ -11,6 +11,7 @@ import {
   fetchWeekOverview,
   formatWeekEnding,
   coveragePctToRate,
+  getWeekPrintUrl,
   type WeeklyPlanningOverviewResponse,
   type NightPlanningSnapshot,
 } from "@/lib/forge-api";
@@ -101,7 +102,7 @@ export default function WeekOverviewPage() {
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium
                          bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"
-              onClick={() => window.open(overview.links.print_week_pdf, "_blank")}
+              onClick={() => window.open(getWeekPrintUrl(weekId, "pdf"), "_blank")}
             >
               <PrintIcon />
               Print Book

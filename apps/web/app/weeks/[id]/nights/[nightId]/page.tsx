@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
+import useSWR from "swr";
 import { GlcrHeader } from "@/components/ui/GlcrHeader";
 import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
+import { fetchActiveTMs, type ActiveTM } from "@/lib/forge-api";
 import { cn, groupColor } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
@@ -69,6 +71,13 @@ export default function DailyPlannerPage() {
   const [ctxSlot, setCtxSlot] = useState<TMAssignment | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [pencilHoverSlot, setPencilHoverSlot] = useState<string | null>(null);
+  const [pickerSlot, setPickerSlot] = useState<TMAssignment | null>(null);
+
+  // TM roster — cached by SWR, refreshes every 10 min
+  const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
+    revalidateOnFocus: false,
+    dedupingInterval: 600_000,
+  });
 
   // Separate zone types
   const zones      = data?.placements.filter((p) => p.zone_type === "zone")       ?? [];
@@ -82,27 +91,29 @@ export default function DailyPlannerPage() {
     setCtxPos({ x: e.clientX, y: e.clientY });
   }
 
+  function openPicker(slot: TMAssignment) {
+    setCtxSlot(null);
+    setCtxPos(undefined);
+    setPickerSlot(slot);
+  }
+
   const ctxActions: ContextAction[] = ctxSlot
     ? [
         {
           label: ctxSlot.tm_id ? "Reassign TM" : "Assign TM",
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="5" cy="4" r="3" stroke="currentColor" strokeWidth="1.2"/><path d="M1 13c0-2 2-3.5 4-3.5s4 1.5 4 3.5M10 5h4M12 3v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
-          onClick: () => {
-            // In prod: open a TM picker sheet
-            const mockTM = { id: "tm-joy", name: "Joy M.", initials: "JM" };
-            assignTM(ctxSlot.slot_id, ctxSlot.tm_id ? null : mockTM);
-          },
+          onClick: () => openPicker(ctxSlot),
         },
         {
           label: "Clear slot",
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-          onClick: () => assignTM(ctxSlot.slot_id, null),
+          onClick: () => { assignTM(ctxSlot.slot_id, null); setCtxSlot(null); },
           disabled: !ctxSlot.tm_id,
         },
         {
           label: `Move to Break 1`,
           icon: <WaveIcon />,
-          onClick: () => ctxSlot.tm_id && moveBreakTM(ctxSlot.tm_id, ctxSlot.tm_name ?? "", ctxSlot.group ?? "1", "1"),
+          onClick: () => { ctxSlot.tm_id && moveBreakTM(ctxSlot.tm_id, ctxSlot.tm_name ?? "", ctxSlot.group ?? "1", "1"); setCtxSlot(null); },
           disabled: !ctxSlot.tm_id,
         },
       ]
@@ -286,6 +297,23 @@ export default function DailyPlannerPage() {
         onClose={() => { setCtxSlot(null); setCtxPos(undefined); }}
         actions={ctxActions}
         anchorPos={ctxPos}
+      />
+
+      <TMPickerSheet
+        slot={pickerSlot}
+        tms={tmRoster ?? []}
+        onSelect={(tm) => {
+          if (!pickerSlot) return;
+          const initials = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+          assignTM(pickerSlot.slot_id, { id: tm.id, name: tm.display_name, initials });
+          setPickerSlot(null);
+        }}
+        onClear={() => {
+          if (!pickerSlot) return;
+          assignTM(pickerSlot.slot_id, null);
+          setPickerSlot(null);
+        }}
+        onClose={() => setPickerSlot(null)}
       />
     </div>
   );
@@ -497,6 +525,161 @@ function OverlapsSection() {
         ))}
       </div>
     </section>
+  );
+}
+
+// ── TM Picker Sheet ───────────────────────────────────────────────────────────
+
+interface TMPickerSheetProps {
+  slot: TMAssignment | null;
+  tms: ActiveTM[];
+  onSelect: (tm: ActiveTM) => void;
+  onClear: () => void;
+  onClose: () => void;
+}
+
+function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetProps) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isOpen = !!slot;
+
+  const filtered = tms.filter((tm) =>
+    tm.display_name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="picker-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={onClose}
+          />
+          {/* Sheet */}
+          <motion.div
+            key="picker-sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl
+                       shadow-2xl flex flex-col max-h-[80dvh]"
+            onAnimationComplete={() => inputRef.current?.focus()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pb-3 shrink-0">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h3 className="text-[16px] font-bold text-gray-900">
+                    {slot?.tm_id ? "Reassign" : "Assign"} TM
+                  </h3>
+                  <p className="text-[12px] text-gray-400">{slot?.zone_label}</p>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center
+                             text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                    <path d="M1 1l9 9M10 1L1 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="relative mt-2">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                     width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search TMs…"
+                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-gray-100 text-[14px]
+                             text-gray-800 placeholder:text-gray-400 outline-none
+                             focus:ring-2 focus:ring-[#007AFF]/30"
+                />
+              </div>
+            </div>
+
+            {/* TM list */}
+            <div className="overflow-y-auto flex-1 px-4 pb-safe">
+              {/* Clear option — only if slot is filled */}
+              {slot?.tm_id && (
+                <button
+                  onClick={onClear}
+                  className="w-full flex items-center gap-3 px-3 py-3 mb-1 rounded-2xl
+                             text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <span className="text-[14px] font-semibold">Clear slot</span>
+                </button>
+              )}
+
+              {filtered.length === 0 && (
+                <p className="text-center text-[13px] text-gray-400 py-8">No TMs found</p>
+              )}
+
+              {filtered.map((tm) => {
+                const initials = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+                const isCurrent = tm.id === slot?.tm_id;
+                return (
+                  <button
+                    key={tm.id}
+                    onClick={() => onSelect(tm)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors",
+                      isCurrent
+                        ? "bg-[#007AFF]/08 text-[#007AFF]"
+                        : "hover:bg-gray-50 text-gray-800"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                      "text-[12px] font-bold ring-1",
+                      isCurrent
+                        ? "bg-[#007AFF]/15 text-[#007AFF] ring-[#007AFF]/20"
+                        : "bg-gray-100 text-gray-600 ring-gray-200"
+                    )}>
+                      {initials}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-[14px] font-semibold">{tm.display_name}</div>
+                    </div>
+                    {isCurrent && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 7l4 4 6-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Bottom safe area spacer */}
+              <div className="h-6" />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 

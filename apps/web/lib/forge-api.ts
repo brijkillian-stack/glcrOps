@@ -125,6 +125,22 @@ export function getWeekPrintUrl(weekId: string, format: "html" | "pdf") {
   return `${BASE}/v1/print/week/${weekId}.${format}`;
 }
 
+// ── TM Roster ─────────────────────────────────────────────────────────────────
+
+/** Active TM from entities table — mirrors TMRow in apps/zds/api/models/tm.py */
+export interface ActiveTM {
+  id: string;
+  name: string;
+  display_name: string;
+  status: string;
+  metadata: Record<string, unknown> | null;
+}
+
+/** Fetch active TM roster for the picker sheet. Cached by SWR at call site. */
+export async function fetchActiveTMs(): Promise<ActiveTM[]> {
+  return get<ActiveTM[]>("/v1/planning/tms");
+}
+
 export function getNightPrintUrl(nightId: string, format: "html" | "pdf") {
   return `${BASE}/v1/print/night/${nightId}.${format}`;
 }

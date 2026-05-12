@@ -64,17 +64,23 @@ _RENDERER_MODULE = "apps.zds.print_renderer"
 def _load_renderer():
     """Import apps/zds/print_renderer.py via the package system.
 
+    Tries the fully-qualified path first (running from repo root), then falls
+    back to the bare module name (running from apps/zds/ as Render does with
+    rootDir: apps/zds).
+
     Package-relative imports inside print_renderer.py (``from . import
     database``, etc.) require the regular package machinery — not
     spec_from_file_location which would break them.
     """
-    try:
-        return importlib.import_module(_RENDERER_MODULE)
-    except ImportError as exc:
-        raise RuntimeError(
-            f"Could not import renderer {_RENDERER_MODULE!r}. "
-            "Run uvicorn from brijkillian-stack/ so the repo root is on sys.path."
-        ) from exc
+    for module_name in (_RENDERER_MODULE, "print_renderer"):
+        try:
+            return importlib.import_module(module_name)
+        except ImportError:
+            continue
+    raise RuntimeError(
+        f"Could not import renderer (tried {_RENDERER_MODULE!r} and 'print_renderer'). "
+        "Make sure the repo root or apps/zds is on sys.path."
+    )
 
 
 class PrintService:

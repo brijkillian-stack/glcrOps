@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..core.dependencies import get_planning_service, get_placement_service
 from ..models.planning import WeeklyPlanningOverviewResponse
+from ..models.tm import TMRow
 from ..models.week import WeekRow
 from ..services.placement_service import PlacementService
 from ..services.planning_service import PlanningService
@@ -66,6 +67,28 @@ def _planning_unavailable(detail: str) -> HTTPException:
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoints
 # ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/tms",
+    response_model=list[TMRow],
+    summary="Active TM roster",
+    responses={200: {"description": "All active TMs ordered by display name"}},
+)
+async def list_tms(
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return all active TMs from the entities table.
+
+    Used by the Daily Planner TM picker sheet — cached for 10 min in
+    PlacementService (TM_TTL = 600 s).  Not paginated — the roster is
+    small enough to load in full and filter client-side.
+    """
+    try:
+        return await placement_service.list_active_tms()
+    except Exception as exc:
+        log.exception("list_active_tms raised")
+        raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
+
 
 @router.get(
     "/weeks",
