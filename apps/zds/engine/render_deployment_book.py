@@ -893,20 +893,34 @@ def render_zone_card(num, name_str, color, tasks, alert="", group=None,
         trainee_html = ('<div class="zone-trainee zone-trainee--marker-only">'
                         '<span class="train-pill">TRAINING</span>'
                         '</div>')
-    if tasks:
-        items = "".join(_render_task_li(t) for t in tasks)
+    # Split tasks: regular vs coverage ("and Zone/Restroom/Aux/Admin X").
+    # Coverage tasks are rendered as a pinned footer element at the card bottom
+    # (matches Daily Planner UI) rather than flowing inline in the task list.
+    _COV_PREFIXES = ("and zone", "and restroom", "and aux", "and admin")
+    regular_tasks  = [t for t in (tasks or []) if not t.lower().startswith(_COV_PREFIXES)]
+    coverage_tasks = [t for t in (tasks or []) if     t.lower().startswith(_COV_PREFIXES)]
+
+    if regular_tasks:
+        items = "".join(_render_task_li(t) for t in regular_tasks)
         tasks_html = f'<ul class="zone-tasks">{items}</ul>'
     else:
         tasks_html = ('<ul class="zone-tasks zone-tasks--asneeded">'
                       '<li><em>Support as needed</em></li></ul>')
+
+    # Coverage footer — separate grid child; sits below the 1fr task row so it
+    # always appears pinned just above the bottom edge of the card.
+    coverage_html = ""
+    if coverage_tasks:
+        labels = "".join(f'<span class="coverage-label">{esc(t)}</span>' for t in coverage_tasks)
+        coverage_html = f'<div class="coverage-footer">{labels}</div>'
+
     empty_cls = "" if name_str else " is-empty"
     alert_cls = " has-alert" if alert else ""
     train_cls = " has-trainee" if trainee_html else ""  # fires in both modes
-    # Crowded modifier: 4+ tasks triggers tighter layout so all tasks stay visible
-    # (Z10 with HL Slots / E Door Glass / Outdoor Smoking / Pit 4 was clipping).
-    # is-extra-crowded fires at 5+ tasks (typically when sweeper task is added),
-    # shrinking the trainer name as well to give the task block more room.
-    n_tasks = len(tasks) if tasks else 0
+    # Crowded modifier: 4+ *regular* tasks triggers tighter layout so all tasks
+    # stay visible. Coverage tasks are excluded from the count — they're pinned
+    # to the footer and don't compete with the task list for vertical space.
+    n_tasks = len(regular_tasks)
     crowded_cls = ""
     if n_tasks >= 5:
         crowded_cls = " is-crowded is-extra-crowded"
@@ -918,6 +932,7 @@ def render_zone_card(num, name_str, color, tasks, alert="", group=None,
         {name_html}
         {trainee_html}
         {tasks_html}
+        {coverage_html}
         {alert_html}
       </div>"""
 
@@ -2115,10 +2130,31 @@ li.sweeper-task .sweeper-route {
   font-variant-numeric: tabular-nums;
 }
 
-/* === COVERAGE TASK — "and Zone/Restroom X" supervisor-assigned cross-area coverage
-   Rendered bold, centered, slightly larger (12px vs 10.5px default), with a thin
-   separator rule above so it reads as a distinct callout at the foot of the task list.
+/* === COVERAGE FOOTER — "and Zone/Restroom X" supervisor-assigned cross-area coverage
+   Rendered as a separate grid child AFTER the 1fr task list so it is always
+   pinned to the bottom of the card — matching the Daily Planner card layout.
    The card-coverage-outline class (border) is applied by _inject_coverage_outline(). */
+.coverage-footer {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  border-top: 0.75px solid rgba(0,0,0,0.12);
+  padding: 3px 4px 2px;
+  margin: 0 -2px 0;
+}
+.coverage-label {
+  display: block;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
+}
+.zone-card.is-crowded .coverage-label { font-size: 11px; }
+.zone-card.is-extra-crowded .coverage-label { font-size: 10.5px; }
+
+/* Legacy fallback — li.coverage-task is no longer rendered (coverage tasks are
+   now extracted to .coverage-footer before building the task list), but keep
+   the rule in case a code path still emits the old markup. */
 li.coverage-task {
   display: block !important;
   text-align: center;
