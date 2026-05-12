@@ -24,6 +24,7 @@ from .observability import instrument_app
 from .routers import nights as nights_router
 from .routers import planning as planning_router
 from .routers import print as print_router
+from .routers import view as view_router
 
 log = logging.getLogger("zds.api")
 
@@ -87,3 +88,4 @@ async def health():
 app.include_router(print_router.router)
 app.include_router(planning_router.router)
 app.include_router(nights_router.router)
+app.include_router(view_router.router)
