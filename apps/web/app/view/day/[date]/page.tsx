@@ -11,8 +11,9 @@
  * field returned by GET /v1/view/night/{date}.
  */
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { consumeAccessDeniedCookie } from "@/lib/auth";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNightPlacements, type TMAssignment, type GroupId } from "@/lib/sync";
@@ -751,6 +752,12 @@ export default function DayViewerPage() {
     { dedupingInterval: 30_000, revalidateOnFocus: false },
   );
 
+  // ── Access-denied flash (set by middleware when restricted role redirected) ─
+  const [accessDenied, setAccessDenied] = useState(false);
+  useEffect(() => {
+    if (consumeAccessDeniedCookie()) setAccessDenied(true);
+  }, []);
+
   // ── Context menu + TM picker (edit mode only) ─────────────────────────────
   const [ctxSlot, setCtxSlot] = useState<TMAssignment | null>(null);
   const [ctxPos,  setCtxPos]  = useState<{ x: number; y: number } | null>(null);
@@ -916,6 +923,35 @@ export default function DayViewerPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Access-denied banner ────────────────────────────────────── */}
+      {accessDenied && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5 text-amber-600">
+                <path d="M8 1L15 13H1L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M8 6v3M8 11v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              <div>
+                <p className="text-[13px] font-semibold text-amber-800">Limited Access</p>
+                <p className="text-[12px] text-amber-700 mt-0.5">
+                  Your role only has access to the Published Day Viewer. Contact a Graves Ops Super or Sudo Admin for full access.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setAccessDenied(false)}
+              className="shrink-0 p-1 rounded-lg hover:bg-amber-100 text-amber-500 transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Content ─────────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 py-6">

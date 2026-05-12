@@ -3,16 +3,18 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { setAuthCookies, type UserRole } from '@/lib/auth';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const router = useRouter();
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
+  const router                        = useRouter();
+  const searchParams                  = useSearchParams();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,32 +22,41 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // ── 1. Authenticate ───────────────────────────────────────────────────
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      if (authError) throw authError;
 
-      if (error) throw error;
+      // ── 2. Fetch role from users table ────────────────────────────────────
+      let role: UserRole = 'ops_super'; // safe default (restricted access)
+      try {
+        const { data: userData, error: roleError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', data.user!.id)
+          .single();
 
-      // Set session duration based on stayLoggedIn
-      if (stayLoggedIn) {
-        // 14 days
-        localStorage.setItem('session_expires', (Date.now() + 14 * 24 * 60 * 60 * 1000).toString());
+        if (!roleError && userData?.role) {
+          role = userData.role as UserRole;
+        }
+      } catch {
+        // If the users table lookup fails, default to restricted access.
+        // This is intentionally safe — unknown roles get the least access.
+        console.warn('[auth] Could not fetch role from users table; defaulting to ops_super');
       }
 
-      // Log login to Trail
-      await fetch('/api/trail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'login',
-          details: 'User logged in',
-        }),
-      });
+      // ── 3. Persist auth cookies ───────────────────────────────────────────
+      setAuthCookies(role, stayLoggedIn);
 
-      router.push('/');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+      // ── 4. Redirect ───────────────────────────────────────────────────────
+      // Honor ?next= param set by middleware when redirecting unauthenticated users.
+      const next = searchParams.get('next');
+      router.push(next ?? '/');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -99,7 +110,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
