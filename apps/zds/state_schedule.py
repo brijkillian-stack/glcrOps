@@ -16,7 +16,7 @@ import reflex as rx
 from . import database
 from . import schedule_parser
 from .state import ZdsState
-from .types import ScheduleCell, ScheduleRow
+from .zds_types import ScheduleCell, ScheduleRow
 
 
 # Override values written to the schedule_overrides table. Match the

@@ -15,7 +15,7 @@ import reflex as rx
 from . import database
 from .database import ENGINE_SLOT_LABEL
 from .styles import BG_ZONE, BG_RR_M, BG_RR_W, BG_AUX
-from .types import (
+from .zds_types import (
     EMPTY_NIGHT,
     EMPTY_ENGINE_RESULT,
     BreakRow,

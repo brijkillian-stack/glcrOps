@@ -20,7 +20,7 @@ import reflex as rx
 
 from ..styles import CARD_BASE, C_ALERT
 from ..state import ZdsState
-from ..types import TaskItem
+from ..zds_types import TaskItem
 from ..task_pool_config import TASK_POOL, POOL_CATEGORIES
 from shared.components.context_menu import ContextMenuState
 from .task_popover import task_popover
