@@ -85,9 +85,11 @@ export default function WeekOverviewPage() {
     );
   }
 
-  const weekFillRate = overview.metrics.total_assignments > 0
-    ? overview.metrics.total_assignments / (overview.metrics.total_assignments + overview.metrics.total_gaps)
-    : 0;
+  // Compute fill rate across all nights (planning service only counts in_rotation nights
+  // in metrics; fall back to a simple slots-based calc so the strip isn't always 0%).
+  const totalSlots = overview.nights.reduce((s, n) => s + n.total_slots, 0);
+  const totalFilled = overview.nights.reduce((s, n) => s + n.filled_slots, 0);
+  const weekFillRate = totalSlots > 0 ? totalFilled / totalSlots : 0;
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#F5F5F7]">
@@ -167,7 +169,7 @@ export default function WeekOverviewPage() {
         </AnimatePresence>
 
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory -mx-1 px-1">
-          {overview.nights.filter((n) => n.in_rotation).map((night, i) => (
+          {overview.nights.map((night, i) => (
             <DayCard
               key={night.night_id}
               night={night}
