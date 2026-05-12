@@ -2444,14 +2444,15 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
     { revalidateOnFocus: true, refreshInterval: 30_000 },
   );
 
-  // Which overlap slot has the TM picker open
-  const [pickerOverlap, setPickerOverlap] = useState<OverlapSlot | null>(null);
-  const [saving, setSaving] = useState<string | null>(null); // overlap id being saved
+  const [pickerOverlap, setPickerOverlap]   = useState<OverlapSlot | null>(null);
+  const [ctxOverlap, setCtxOverlap]         = useState<OverlapSlot | null>(null);
+  const [ctxPos, setCtxPos]                 = useState<{ x: number; y: number } | undefined>();
+  const [pencilHover, setPencilHover]       = useState<string | null>(null);
+  const [saving, setSaving]                 = useState<string | null>(null);
 
   async function handleAssign(overlap: OverlapSlot, tm: ActiveTM | null) {
     setSaving(overlap.id);
     const tmId = tm?.id ?? null;
-    // Optimistic update
     mutate(
       (prev) => prev?.map((o) =>
         o.id === overlap.id
@@ -2467,105 +2468,193 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
       console.error("patchOverlapTM failed:", err);
     } finally {
       setSaving(null);
-      mutate(); // revalidate
+      mutate();
     }
   }
 
+  function openCtx(e: React.MouseEvent, slot: OverlapSlot) {
+    e.preventDefault();
+    setCtxOverlap(slot);
+    setCtxPos({ x: e.clientX, y: e.clientY });
+  }
+
+  const ctxActions: ContextAction[] = ctxOverlap ? [
+    {
+      label: "Assign TM",
+      onClick: () => { setPickerOverlap(ctxOverlap); setCtxOverlap(null); },
+    },
+    ...(ctxOverlap.tm_id ? [{
+      label: "Clear TM",
+      destructive: true as const,
+      onClick: () => { handleAssign(ctxOverlap, null); setCtxOverlap(null); },
+    }] : []),
+  ] : [];
+
+  // Always show exactly 6 positions per window — fill gaps where engine hasn't run
+  function buildWindowSlots(window: "pm" | "am"): Array<OverlapSlot | null> {
+    const found = overlaps?.filter((o) => o.overlap_window === window) ?? [];
+    return Array.from({ length: 6 }, (_, i) => {
+      const pos = i + 1;
+      return found.find((s) => s.position === pos) ?? null;
+    });
+  }
+
+  // Skeleton while loading
   if (!overlaps) {
     return (
-      <div className="flex flex-col gap-3 animate-pulse">
-        <div className="h-5 w-32 rounded bg-gray-200" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-20 rounded-2xl bg-gray-200" />
-          ))}
-        </div>
-        <div className="h-5 w-32 rounded bg-gray-200 mt-2" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-20 rounded-2xl bg-gray-200" />
-          ))}
-        </div>
+      <div className="flex flex-col gap-5 animate-pulse">
+        {["PM Overlaps", "AM Overlaps"].map((label) => (
+          <section key={label}>
+            <div className="h-4 w-28 rounded bg-gray-200 mb-3" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-28 rounded-2xl bg-gray-200" />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     );
   }
 
-  const pmSlots = overlaps.filter((o) => o.overlap_window === "pm");
-  const amSlots = overlaps.filter((o) => o.overlap_window === "am");
+  function OverlapCard({ slot, index, window: win }: { slot: OverlapSlot | null; index: number; window: "pm" | "am" }) {
+    const position = index + 1;
+    const label    = overlapPositionLabel(position, win);
+    const isEmpty  = !slot?.tm_id;
+    const isSaving = slot ? saving === slot.id : false;
+    const isHover  = slot ? pencilHover === `${win}-${position}` : false;
+    const initials = slot?.tm_name?.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2) ?? "";
 
-  function OverlapCard({ slot }: { slot: OverlapSlot }) {
-    const isSaving = saving === slot.id;
-    const isEmpty  = !slot.tm_id;
+    // No DB row yet — engine hasn't run for this position
+    if (!slot) {
+      return (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="card rounded-2xl overflow-hidden opacity-40"
+        >
+          <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
+          <div className="p-3 flex flex-col gap-2">
+            <div className="text-[13px] font-bold text-gray-400">{label}</div>
+            <div className="text-[11px] text-gray-300 italic">No engine data</div>
+          </div>
+        </motion.div>
+      );
+    }
 
     return (
-      <button
-        onClick={() => setPickerOverlap(slot)}
-        disabled={isSaving}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => openCtx(e, slot)}
+        onContextMenu={(e) => openCtx(e, slot)}
+        onPointerEnter={() => setPencilHover(`${win}-${position}`)}
+        onPointerLeave={() => setPencilHover(null)}
         className={cn(
-          "card rounded-2xl p-3.5 text-left w-full transition-all duration-150 no-select",
-          "hover:shadow-card-hover active:scale-[0.98]",
-          isEmpty ? "opacity-80" : "opacity-100",
+          "card rounded-2xl overflow-hidden cursor-pointer no-select",
+          "transition-all duration-150",
+          isHover && "shadow-card-hover ring-2 ring-[#C9A84C]/40",
+          isEmpty && "opacity-75",
         )}
       >
-        {/* Position badge + task */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">
-            {overlapPositionLabel(slot.position, slot.overlap_window)}
-          </span>
-          {isSaving && (
-            <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
-            </svg>
+        {/* Gold accent bar */}
+        <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
+
+        <div className="p-3 flex flex-col gap-2.5">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-1">
+            <div className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
+              {label}
+              <span className="text-gray-300 shrink-0 mt-0.5"><ChevronRightIcon /></span>
+            </div>
+            {isSaving && (
+              <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
+              </svg>
+            )}
+          </div>
+
+          {/* TM info */}
+          <div className="flex items-center gap-2">
+            {isEmpty ? <EmptySlotIcon /> : <UserIcon initials={initials} />}
+            <div className="min-w-0">
+              <div className={cn(
+                "text-[13px] font-semibold truncate",
+                isEmpty ? "text-gray-300 italic" : "text-gray-800"
+              )}>
+                {slot.tm_name || "Unassigned"}
+              </div>
+            </div>
+          </div>
+
+          {/* Task */}
+          {slot.task && (
+            <ul className="flex flex-col gap-0.5">
+              {slot.task.split(/[,;]/).map((t, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
+                  <TaskDotIcon />
+                  <span className="truncate">{t.trim()}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-        <div className="text-[11px] text-gray-500 leading-snug mb-2.5 line-clamp-2">{slot.task || "—"}</div>
-        {/* TM */}
-        {slot.tm_id ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center
-                            text-[9px] font-bold text-blue-700 ring-1 ring-blue-200 shrink-0">
-              {slot.tm_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2)}
-            </div>
-            <span className="text-[12px] font-semibold text-gray-700 truncate">{slot.tm_name}</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="#CBD5E1" strokeWidth="1.2" strokeDasharray="3 2"/>
-              <path d="M7 4v3M7 8.5v.5" stroke="#CBD5E1" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-            Unassigned
-          </div>
-        )}
-      </button>
+
+        {/* Pencil hover overlay */}
+        <AnimatePresence>
+          {isHover && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-[#C9A84C]/05 pointer-events-none
+                         flex items-end justify-end p-2"
+            >
+              <span className="text-[10px] font-semibold text-[#C9A84C] bg-[#C9A84C]/10
+                               px-2 py-0.5 rounded-full">
+                Edit
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     );
   }
 
+  const pmSlots = buildWindowSlots("pm");
+  const amSlots = buildWindowSlots("am");
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* PM Overlaps */}
       <section>
         <h2 className="section-header">PM Overlaps</h2>
-        {pmSlots.length === 0 ? (
-          <p className="text-[13px] text-gray-400 py-4">No PM overlap slots for this night.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {pmSlots.map((slot) => <OverlapCard key={slot.id} slot={slot} />)}
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {pmSlots.map((slot, i) => (
+            <OverlapCard key={slot?.id ?? `pm-${i}`} slot={slot} index={i} window="pm" />
+          ))}
+        </div>
       </section>
 
       {/* AM Overlaps */}
       <section>
         <h2 className="section-header">AM Overlaps</h2>
-        {amSlots.length === 0 ? (
-          <p className="text-[13px] text-gray-400 py-4">No AM overlap slots for this night.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {amSlots.map((slot) => <OverlapCard key={slot.id} slot={slot} />)}
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {amSlots.map((slot, i) => (
+            <OverlapCard key={slot?.id ?? `am-${i}`} slot={slot} index={i} window="am" />
+          ))}
+        </div>
       </section>
+
+      {/* Context menu */}
+      <ContextMenu
+        open={!!ctxOverlap}
+        onClose={() => { setCtxOverlap(null); setCtxPos(undefined); }}
+        actions={ctxActions}
+        anchorPos={ctxPos}
+      />
 
       {/* TM Picker Sheet */}
       <OverlapPickerSheet

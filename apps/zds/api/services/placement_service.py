@@ -423,6 +423,29 @@ class PlacementService:
                 row["tm_id"]   = entity.get("id")
                 row["tm_name"] = entity.get("display_name") or ""
                 row["task"]    = row.get("task") or ""
+
+            # If any row is missing its task, pull from overlap_tasks and merge.
+            # overlap_tasks.slot_id is "PMOL1"…"AMOL6"; derive from window + position.
+            if rows and any(not row.get("task") for row in rows):
+                try:
+                    tasks_res = (
+                        self.supabase.table("overlap_tasks")
+                        .select("period, slot_id, task")
+                        .execute()
+                    )
+                    task_map = {
+                        r["slot_id"]: r["task"]
+                        for r in (tasks_res.data or [])
+                    }
+                    for row in rows:
+                        if not row.get("task"):
+                            window = (row.get("overlap_window") or "").upper()
+                            pos    = row.get("position", 0)
+                            slot_id = f"{window}OL{pos}"
+                            row["task"] = task_map.get(slot_id, "")
+                except Exception as task_exc:
+                    log.warning("get_night_overlaps(%s) task merge failed: %s", night_id, task_exc)
+
         except Exception as exc:
             log.warning("get_night_overlaps(%s) supabase query failed: %s", night_id, exc)
             try:
