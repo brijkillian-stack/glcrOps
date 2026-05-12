@@ -438,9 +438,9 @@ function ZoneCard({
         </div>
 
         {/* Tasks */}
-        {slot.tasks.length > 0 && (
+        {(slot.tasks ?? []).length > 0 && (
           <ul className="flex flex-col gap-1">
-            {slot.tasks.slice(0, 2).map((t, i) => (
+            {(slot.tasks ?? []).slice(0, 2).map((t, i) => (
               <li
                 key={i}
                 className="flex items-start gap-1.5 text-[11px] text-gray-500"
@@ -964,17 +964,40 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
 
   // Local selected state — initialised from slot.tasks when sheet opens
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Track whether we've applied defaults for this sheet open
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   // Sync selected set whenever slot changes (new sheet open)
   const prevSlotId = useRef<string | null>(null);
   useEffect(() => {
     if (slot && slot.slot_id !== prevSlotId.current) {
       prevSlotId.current = slot.slot_id;
-      setSelected(new Set(slot.tasks ?? []));
       setActiveTab("zone");
       setCustomInput("");
+      setDefaultsApplied(false);
+      if (slot.tasks !== null) {
+        // Explicit save exists — use it as-is (may be empty if all tasks were cleared)
+        setSelected(new Set(slot.tasks));
+      } else {
+        // Never been customised — will be pre-filled once catalogue loads (see effect below)
+        setSelected(new Set());
+      }
     }
   }, [slot]);
+
+  // Once catalogue loads AND slot has never been customised, pre-select defaults
+  useEffect(() => {
+    if (!slot || slot.tasks !== null || defaultsApplied || allTasks.length === 0) return;
+    const defaults = allTasks
+      .filter(
+        (t) =>
+          t.target_codes.length === 0 ||            // universal task for this slot type
+          t.target_codes.includes(slot.zone_id)     // specifically targets this zone
+      )
+      .map((t) => t.name);
+    setSelected(new Set(defaults));
+    setDefaultsApplied(true);
+  }, [slot, allTasks, defaultsApplied]);
 
   // Tasks that are selected but don't exist in the DB catalogue — these are custom
   const catalogueNames = new Set(allTasks.map((t) => t.name));

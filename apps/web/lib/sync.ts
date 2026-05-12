@@ -26,7 +26,7 @@ export interface TMAssignment {
   tm_name: string | null;
   tm_initials: string | null;
   group: GroupId | null;
-  tasks: string[];
+  tasks: string[] | null;  // null = never customised → picker uses catalogue defaults; [] = explicitly cleared
   is_override: boolean;
 }
 

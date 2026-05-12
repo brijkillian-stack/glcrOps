@@ -89,7 +89,7 @@ class TMAssignment(BaseModel):
     tm_initials: Optional[str] = None
 
     group: Optional[GroupId] = None  # break group "1"|"2"|"3"
-    tasks: list[str] = []
+    tasks: Optional[list[str]] = None  # None = never customised → use catalogue defaults; [] = explicitly cleared
     is_override: bool = False
     is_filled: bool = False
     is_locked: bool = False
@@ -117,10 +117,15 @@ class TMAssignment(BaseModel):
             # rr_side normalisation
             side = data.get("rr_side") or ""
             data["rr_side"] = side if side else None
-            # Tasks from custom_tasks
+            # Tasks from custom_tasks — preserve None so the frontend knows
+            # whether the slot has ever been customised (None → use catalogue
+            # defaults; [] → explicitly cleared; [...] → explicit selection).
             if "tasks" not in data:
-                raw_tasks = data.get("custom_tasks") or []
-                data["tasks"] = raw_tasks if isinstance(raw_tasks, list) else []
+                raw = data.get("custom_tasks")
+                if raw is None:
+                    data["tasks"] = None
+                else:
+                    data["tasks"] = raw if isinstance(raw, list) else []
         return data
 
 
@@ -205,7 +210,7 @@ def build_night_response(
                 tm_name    = tm_name,
                 tm_initials= _derive_initials(tm_name),
                 group      = str(row["group_num"]) if row.get("group_num") in (1, 2, 3) else None,
-                tasks      = row.get("custom_tasks") or [],
+                tasks      = row.get("custom_tasks"),   # None preserved → frontend uses catalogue defaults
                 is_override= bool(row.get("is_override")),
                 is_filled  = is_filled,
                 is_locked  = bool(row.get("is_locked")),
