@@ -314,6 +314,20 @@ export default function DailyPlannerPage() {
       <TMPickerSheet
         slot={pickerSlot}
         tms={tmRoster ?? []}
+        deployedTmIds={new Set(
+          (data?.placements ?? [])
+            .filter((p) => p.tm_id && p.slot_id !== pickerSlot?.slot_id)
+            .map((p) => p.tm_id!)
+        )}
+        deployedSlotMap={Object.fromEntries(
+          (data?.placements ?? [])
+            .filter((p) => p.tm_id && p.slot_id !== pickerSlot?.slot_id)
+            .map((p) => [p.tm_id!, p.zone_label])
+        )}
+        scheduledTmIds={new Set(
+          (data?.break_waves ?? [])
+            .flatMap((w) => w.groups.flatMap((g) => g.tm_ids))
+        )}
         onSelect={(tm) => {
           if (!pickerSlot) return;
           const initials = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
@@ -551,19 +565,196 @@ function OverlapsSection() {
 interface TMPickerSheetProps {
   slot: TMAssignment | null;
   tms: ActiveTM[];
+  /** tm_id → zone_label for every slot that already has a TM assigned */
+  deployedTmIds: Set<string>;
+  deployedSlotMap: Record<string, string>;
+  /** TM ids that appear in break wave assignments (= on the schedule tonight) */
+  scheduledTmIds: Set<string>;
   onSelect: (tm: ActiveTM) => void;
   onClear: () => void;
   onClose: () => void;
 }
 
-function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetProps) {
+/** Return true if this TM is eligible for the given zone_type.
+ *  Reads `metadata.eligible_types` (string[]) when present.
+ *  Falls back to true (all-eligible) when the field is absent — safe until
+ *  eligibility data is loaded into the entities table. */
+function isEligible(tm: ActiveTM, zoneType: string): boolean {
+  const eligible = (tm.metadata as Record<string, unknown> | null)?.eligible_types;
+  if (!Array.isArray(eligible)) return true;
+  return (eligible as string[]).includes(zoneType);
+}
+
+function TMPickerSheet({
+  slot,
+  tms,
+  deployedTmIds,
+  deployedSlotMap,
+  scheduledTmIds,
+  onSelect,
+  onClear,
+  onClose,
+}: TMPickerSheetProps) {
   const [query, setQuery] = useState("");
+  const [showDeployed, setShowDeployed]         = useState(false);
+  const [showNotScheduled, setShowNotScheduled] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpen = !!slot;
 
-  const filtered = tms.filter((tm) =>
-    tm.display_name.toLowerCase().includes(query.toLowerCase())
+  // Reset collapse state when slot changes
+  const prevSlotId = useRef<string | null>(null);
+  useEffect(() => {
+    if (slot && slot.slot_id !== prevSlotId.current) {
+      prevSlotId.current = slot.slot_id;
+      setQuery("");
+      setShowDeployed(false);
+      setShowNotScheduled(false);
+    }
+  }, [slot]);
+
+  // ── Partition eligible TMs into three groups ──────────────────────────────
+  const eligible   = tms.filter((tm) => isEligible(tm, slot?.zone_type ?? "zone"));
+  const ineligible = tms.filter((tm) => !isEligible(tm, slot?.zone_type ?? "zone"));
+  void ineligible; // reserved for future "show ineligible" toggle
+
+  const q = query.toLowerCase();
+  const matchesSearch = (tm: ActiveTM) =>
+    !q || tm.display_name.toLowerCase().includes(q);
+
+  /** Already deployed to another slot this night */
+  const deployedGroup    = eligible.filter((tm) => deployedTmIds.has(tm.id) && matchesSearch(tm));
+  /** On the schedule (in break waves) but not yet deployed */
+  const availableGroup   = eligible.filter(
+    (tm) => scheduledTmIds.has(tm.id) && !deployedTmIds.has(tm.id) && matchesSearch(tm)
   );
+  /** Not on tonight's schedule at all */
+  const unscheduledGroup = eligible.filter(
+    (tm) => !scheduledTmIds.has(tm.id) && !deployedTmIds.has(tm.id) && matchesSearch(tm)
+  );
+
+  // If search is active, collapse/expand doesn't apply — show everything that matches
+  const isSearching = !!q;
+
+  function renderTMRow(tm: ActiveTM, variant: "available" | "deployed" | "unscheduled") {
+    const initials  = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+    const isCurrent = tm.id === slot?.tm_id;
+    const deployedAt = deployedSlotMap[tm.id];
+
+    const circleStyle = isCurrent
+      ? "bg-[#007AFF]/15 text-[#007AFF] ring-[#007AFF]/20"
+      : variant === "deployed"
+        ? "bg-amber-100 text-amber-700 ring-amber-200"
+        : variant === "unscheduled"
+          ? "bg-gray-50 text-gray-400 ring-gray-100"
+          : "bg-gray-100 text-gray-600 ring-gray-200";
+
+    return (
+      <button
+        key={tm.id}
+        onClick={() => onSelect(tm)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-colors text-left",
+          isCurrent      ? "bg-[#007AFF]/08"  :
+          variant === "deployed"    ? "hover:bg-amber-50" :
+          variant === "unscheduled" ? "hover:bg-gray-50 opacity-60" :
+          "hover:bg-gray-50"
+        )}
+      >
+        {/* Avatar circle */}
+        <div className="relative shrink-0">
+          <div className={cn(
+            "w-9 h-9 rounded-full flex items-center justify-center",
+            "text-[12px] font-bold ring-1",
+            circleStyle
+          )}>
+            {initials}
+          </div>
+          {/* Deployed pip — small amber dot */}
+          {variant === "deployed" && (
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full
+                            bg-amber-400 ring-2 ring-white flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-white" />
+            </div>
+          )}
+          {/* Unscheduled pip — small gray dot */}
+          {variant === "unscheduled" && (
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full
+                            bg-gray-300 ring-2 ring-white" />
+          )}
+        </div>
+
+        {/* Name + badge */}
+        <div className="flex-1 min-w-0">
+          <div className={cn(
+            "text-[14px] font-semibold truncate",
+            isCurrent         ? "text-[#007AFF]" :
+            variant === "unscheduled" ? "text-gray-400" :
+            "text-gray-800"
+          )}>
+            {tm.display_name}
+          </div>
+          {deployedAt && (
+            <div className="text-[11px] text-amber-600 font-medium mt-0.5">
+              Deployed → {deployedAt}
+            </div>
+          )}
+          {variant === "unscheduled" && (
+            <div className="text-[11px] text-gray-400 mt-0.5">Not on tonight's schedule</div>
+          )}
+        </div>
+
+        {/* Current checkmark */}
+        {isCurrent && (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+            <path d="M2 7l4 4 6-7" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+    );
+  }
+
+  function CollapseHeader({
+    label,
+    count,
+    open,
+    onToggle,
+    accent = "gray",
+  }: {
+    label: string;
+    count: number;
+    open: boolean;
+    onToggle: () => void;
+    accent?: "amber" | "gray";
+  }) {
+    return (
+      <button
+        onClick={onToggle}
+        className={cn(
+          "w-full flex items-center gap-2 px-1 py-2.5 text-left transition-colors",
+          accent === "amber" ? "text-amber-600" : "text-gray-400"
+        )}
+      >
+        <motion.span
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ duration: 0.18 }}
+          className="shrink-0"
+        >
+          <ChevronRightIcon />
+        </motion.span>
+        <span className="text-[12px] font-semibold uppercase tracking-widest flex-1">
+          {label}
+        </span>
+        <span className={cn(
+          "text-[11px] font-bold px-2 py-0.5 rounded-full",
+          accent === "amber"
+            ? "bg-amber-100 text-amber-700"
+            : "bg-gray-100 text-gray-500"
+        )}>
+          {count}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -587,7 +778,7 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 36 }}
             className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl
-                       shadow-2xl flex flex-col max-h-[80dvh]"
+                       shadow-2xl flex flex-col max-h-[82dvh]"
             onAnimationComplete={() => inputRef.current?.focus()}
           >
             {/* Handle */}
@@ -597,7 +788,7 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
 
             {/* Header */}
             <div className="px-5 pb-3 shrink-0">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="text-[16px] font-bold text-gray-900">
                     {slot?.tm_id ? "Reassign" : "Assign"} TM
@@ -616,7 +807,7 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
               </div>
 
               {/* Search */}
-              <div className="relative mt-2">
+              <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                      width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -636,11 +827,11 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
 
             {/* TM list */}
             <div className="overflow-y-auto flex-1 px-4 pb-safe">
-              {/* Clear option — only if slot is filled */}
+              {/* Clear option */}
               {slot?.tm_id && (
                 <button
                   onClick={onClear}
-                  className="w-full flex items-center gap-3 px-3 py-3 mb-1 rounded-2xl
+                  className="w-full flex items-center gap-3 px-3 py-2.5 mb-1 rounded-2xl
                              text-red-500 hover:bg-red-50 transition-colors"
                 >
                   <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
@@ -652,46 +843,88 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
                 </button>
               )}
 
-              {filtered.length === 0 && (
-                <p className="text-center text-[13px] text-gray-400 py-8">No TMs found</p>
+              {/* ── Available (scheduled, not deployed) ─────────────────── */}
+              {isSearching ? (
+                /* When searching: flat list across all groups */
+                <>
+                  {[...availableGroup, ...deployedGroup, ...unscheduledGroup].length === 0 && (
+                    <p className="text-center text-[13px] text-gray-400 py-8">No TMs found</p>
+                  )}
+                  {availableGroup.map((tm) => renderTMRow(tm, "available"))}
+                  {deployedGroup.map((tm) => renderTMRow(tm, "deployed"))}
+                  {unscheduledGroup.map((tm) => renderTMRow(tm, "unscheduled"))}
+                </>
+              ) : (
+                <>
+                  {/* Available section — always expanded */}
+                  {availableGroup.length > 0 && (
+                    <>
+                      <div className="text-[11px] font-semibold uppercase tracking-widest
+                                      text-gray-400 px-1 pt-1 pb-2">
+                        Available · {availableGroup.length}
+                      </div>
+                      {availableGroup.map((tm) => renderTMRow(tm, "available"))}
+                    </>
+                  )}
+
+                  {availableGroup.length === 0 && deployedGroup.length === 0 && unscheduledGroup.length === 0 && (
+                    <p className="text-center text-[13px] text-gray-400 py-8">No eligible TMs</p>
+                  )}
+
+                  {/* Deployed section — collapsible, amber accent */}
+                  {deployedGroup.length > 0 && (
+                    <div className="mt-2">
+                      <CollapseHeader
+                        label="Already Deployed"
+                        count={deployedGroup.length}
+                        open={showDeployed}
+                        onToggle={() => setShowDeployed((v) => !v)}
+                        accent="amber"
+                      />
+                      <AnimatePresence>
+                        {showDeployed && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            {deployedGroup.map((tm) => renderTMRow(tm, "deployed"))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Not Scheduled section — collapsible, gray accent */}
+                  {unscheduledGroup.length > 0 && (
+                    <div className="mt-2">
+                      <CollapseHeader
+                        label="Not Scheduled Tonight"
+                        count={unscheduledGroup.length}
+                        open={showNotScheduled}
+                        onToggle={() => setShowNotScheduled((v) => !v)}
+                        accent="gray"
+                      />
+                      <AnimatePresence>
+                        {showNotScheduled && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            {unscheduledGroup.map((tm) => renderTMRow(tm, "unscheduled"))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </>
               )}
 
-              {filtered.map((tm) => {
-                const initials = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
-                const isCurrent = tm.id === slot?.tm_id;
-                return (
-                  <button
-                    key={tm.id}
-                    onClick={() => onSelect(tm)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors",
-                      isCurrent
-                        ? "bg-[#007AFF]/08 text-[#007AFF]"
-                        : "hover:bg-gray-50 text-gray-800"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
-                      "text-[12px] font-bold ring-1",
-                      isCurrent
-                        ? "bg-[#007AFF]/15 text-[#007AFF] ring-[#007AFF]/20"
-                        : "bg-gray-100 text-gray-600 ring-gray-200"
-                    )}>
-                      {initials}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="text-[14px] font-semibold">{tm.display_name}</div>
-                    </div>
-                    {isCurrent && (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M2 7l4 4 6-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </button>
-                );
-              })}
-
-              {/* Bottom safe area spacer */}
               <div className="h-6" />
             </div>
           </motion.div>
