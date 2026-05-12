@@ -171,17 +171,29 @@ export async function fetchZoneTasks(slotType?: string): Promise<ZoneTask[]> {
 export interface OverlapSlot {
   id: string;
   overlap_window: "pm" | "am";
-  position: string;    // "PMOL1"–"PMOL6" | "AMOL1"–"AMOL6"
+  position: number;    // 1–6 integer from the DB
   is_filled: boolean;
   task: string;        // task description, e.g. "Vacuum, Bottles & Glass"
   tm_id: string | null;
   tm_name: string;     // "" when unfilled
 }
 
-/** Derive a short display label from position code: "PMOL1" → "PM OL 1" */
-export function overlapPositionLabel(position: string | null | undefined): string {
-  if (!position) return "—";
-  return position
+/**
+ * Derive a short display label for an overlap slot.
+ * Accepts the integer position + window ("pm"|"am") stored in overlap_assignments.
+ * Also handles legacy string codes ("PMOL1", "AMOL3") for defensive compatibility.
+ */
+export function overlapPositionLabel(
+  position: string | number | null | undefined,
+  window?: "pm" | "am",
+): string {
+  if (position == null) return "—";
+  if (typeof position === "number") {
+    const prefix = window === "pm" ? "PM OL" : window === "am" ? "AM OL" : "OL";
+    return `${prefix} ${position}`;
+  }
+  // Legacy string codes: "PMOL1" → "PM OL 1", "AMOL3" → "AM OL 3"
+  return String(position)
     .replace(/^PMOL(\d+)$/, "PM OL $1")
     .replace(/^AMOL(\d+)$/, "AM OL $1");
 }

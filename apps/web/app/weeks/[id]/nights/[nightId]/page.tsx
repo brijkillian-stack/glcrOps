@@ -2510,7 +2510,7 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
         {/* Position badge + task */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">
-            {overlapPositionLabel(slot.position)}
+            {overlapPositionLabel(slot.position, slot.overlap_window)}
           </span>
           {isSaving && (
             <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -2605,7 +2605,7 @@ function OverlapPickerSheet({ overlap, tms, onSelect, onClear, onClose }: Overla
   const q = query.toLowerCase();
   const filtered = tms.filter((tm) => !q || tm.display_name.toLowerCase().includes(q));
 
-  const label = overlap ? overlapPositionLabel(overlap.position) : "";
+  const label = overlap ? overlapPositionLabel(overlap.position, overlap.overlap_window) : "";
 
   return (
     <AnimatePresence>
