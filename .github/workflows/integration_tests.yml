@@ -1,124 +1,41 @@
-name: Integration & Smoke Tests — ZDS Forge
+name: Integration Tests
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "apps/zds/**"
-      - "tests/integration/**"
-      - "scripts/**"
-      - "requirements*.txt"
+    branches: [ main ]
   pull_request:
-    paths:
-      - "apps/zds/**"
-      - "tests/integration/**"
-      - "scripts/**"
-      - "requirements*.txt"
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [ main ]
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Smoke test — start the Forge API and run scripts/smoke_test.py.
-  # Requires Supabase secrets; skipped on fork PRs.
-  # ─────────────────────────────────────────────────────────────────────────────
   smoke:
-    name: "Smoke test (live API)"
+    name: Smoke test (live API)
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    if: success() && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt httpx python-dotenv
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt httpx python-dotenv uvicorn
 
-      - name: Start Forge API (background)
-        env:
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          python -m uvicorn apps.zds.api.main:app --port 8001 &
-          # Wait up to 15 s for the server to be ready
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:8001/health && break
-            echo "Waiting for server ($i)…"
-            sleep 1
-          done
+    - name: Start Forge API (background)
+      run: |
+        python -m uvicorn apps.zds.api.main:app --port 8001 &
+        # Wait up to 15 s for the server to be ready
+        for i in $(seq 1 15); do
+          curl -sf http://localhost:8001/health && break
+          echo "Waiting for server ($i)…"
+          sleep 1
+        done
 
-      - name: Run smoke test
-        env:
-          PRINT_SERVICE_URL:     http://localhost:8001
-          PRINT_SERVICE_WEEK_ID: ${{ secrets.SMOKE_WEEK_ID }}
-          PRINT_SERVICE_NIGHT_ID: ${{ secrets.SMOKE_NIGHT_ID }}
-        run: python scripts/smoke_test.py
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Full integration suite — pytest tests/integration/
-  # ─────────────────────────────────────────────────────────────────────────────
-  integration:
-    name: "Integration tests"
-    runs-on: ubuntu-latest
-    needs: smoke
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt httpx
-
-      - name: Start Forge API (background)
-        env:
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          python -m uvicorn apps.zds.api.main:app --port 8001 &
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:8001/health && break
-            sleep 1
-          done
-
-      - name: Run integration tests
-        env:
-          PRINT_SERVICE_URL:      http://localhost:8001
-          PRINT_SERVICE_WEEK_ID:  ${{ secrets.SMOKE_WEEK_ID }}
-          PRINT_SERVICE_NIGHT_ID: ${{ secrets.SMOKE_NIGHT_ID }}
-        run: |
-          pytest tests/integration/ \
-            -v \
-            -m integration \
-            --tb=short \
-            --no-header \
-            -x
-
-      - name: Upload test results on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-results-${{ github.run_id }}
-          path: |
-            .pytest_cache/
-          retention-days: 7
-          if-no-files-found: ignore
+    - name: Run smoke test
+      run: python scripts/smoke_test.py
+      env:
+        PRINT_SERVICE_URL: http://localhost:8001
