@@ -10,7 +10,7 @@ import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
 import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, type ActiveTM, type ZoneTask } from "@/lib/forge-api";
-import { cn, groupColor } from "@/lib/utils";
+import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -346,6 +346,7 @@ export default function DailyPlannerPage() {
         slot={taskSlot}
         nightId={nightId}
         onClose={() => setTaskSlot(null)}
+        onSaved={refresh}
       />
     </div>
   );
@@ -370,7 +371,8 @@ function ZoneCard({
   onPencilLeave,
   onContextMenu,
 }: ZoneCardProps) {
-  const accent = slot.group ? groupColor(slot.group) : "#E2E8F0";
+  const accent      = zoneAccentColor(slot.zone_id);   // zone-family bar — matches print exactly
+  const groupAccent = slot.group ? groupColor(slot.group) : "#E2E8F0"; // break group dot
   const isEmpty = !slot.tm_id;
 
   return (
@@ -409,11 +411,11 @@ function ZoneCard({
               </div>
             )}
           </div>
-          {/* Group dot */}
+          {/* Group dot — break-group color, not zone-family */}
           {slot.group && (
             <div
               className="w-2 h-2 rounded-full shrink-0 mt-0.5"
-              style={{ backgroundColor: accent }}
+              style={{ backgroundColor: groupAccent }}
             />
           )}
         </div>
@@ -437,18 +439,23 @@ function ZoneCard({
           </div>
         </div>
 
-        {/* Tasks */}
+        {/* Tasks — show up to 3, "+N more" if overflow */}
         {(slot.tasks ?? []).length > 0 && (
-          <ul className="flex flex-col gap-1">
-            {(slot.tasks ?? []).slice(0, 2).map((t, i) => (
+          <ul className="flex flex-col gap-0.5">
+            {(slot.tasks ?? []).slice(0, 3).map((t, i) => (
               <li
                 key={i}
-                className="flex items-start gap-1.5 text-[11px] text-gray-500"
+                className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug"
               >
                 <TaskDotIcon />
                 <span className="truncate">{t}</span>
               </li>
             ))}
+            {(slot.tasks ?? []).length > 3 && (
+              <li className="text-[10px] font-semibold text-gray-400 pl-3">
+                +{(slot.tasks ?? []).length - 3} more
+              </li>
+            )}
           </ul>
         )}
 
@@ -493,7 +500,10 @@ function RestroomPill({
   index: number;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const accent = slot.group ? groupColor(slot.group) : "#94A3B8";
+  const accent  = zoneAccentColor(slot.zone_id);  // zone-family — matches print
+  const bgTint  = rrSideTint(slot.rr_side);       // whisper pink/blue for mens/womens
+  const sideLabel = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
@@ -503,19 +513,32 @@ function RestroomPill({
       onContextMenu={onContextMenu}
       className="card flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl
                  cursor-pointer no-select shrink-0 min-w-[160px]"
+      style={{ backgroundColor: bgTint !== "transparent" ? bgTint : undefined }}
     >
+      {/* Zone-family left accent bar */}
       <div
-        className="w-2 h-full rounded-full min-h-[28px] shrink-0"
+        className="w-1.5 rounded-full min-h-[32px] shrink-0"
         style={{ backgroundColor: accent }}
       />
-      <div>
-        <div className="text-[12px] font-semibold text-gray-700">{slot.zone_label}</div>
-        <div className={cn("text-[11px]", slot.tm_id ? "text-gray-500" : "text-gray-300 italic")}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="text-[12px] font-semibold text-gray-700 truncate">{slot.zone_label}</div>
+          {sideLabel && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: `${accent}22`,
+                    color: accent,
+                  }}>
+              {sideLabel}
+            </span>
+          )}
+        </div>
+        <div className={cn("text-[11px] truncate", slot.tm_id ? "text-gray-500" : "text-gray-300 italic")}>
           {slot.tm_name ?? "Unassigned"}
         </div>
       </div>
       {slot.tm_initials && (
-        <div className="ml-auto">
+        <div className="shrink-0">
           <UserIcon initials={slot.tm_initials} />
         </div>
       )}
@@ -946,9 +969,10 @@ interface TaskPickerSheetProps {
   slot: TMAssignment | null;
   nightId: string;
   onClose: () => void;
+  onSaved?: () => void;  // called after successful save so SWR revalidates immediately
 }
 
-function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
+function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetProps) {
   const isOpen = !!slot;
   const [activeTab, setActiveTab] = useState("zone");
   const [saving, setSaving] = useState(false);
@@ -1030,6 +1054,7 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
     setSaving(true);
     try {
       await patchSlotTasks(nightId, slot.slot_id, [...selected]);
+      onSaved?.();   // kick SWR revalidation so the card updates immediately
       onClose();
     } catch (err) {
       console.error("patchSlotTasks failed:", err);

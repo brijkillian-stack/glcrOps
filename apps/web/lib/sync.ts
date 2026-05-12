@@ -26,6 +26,7 @@ export interface TMAssignment {
   tm_name: string | null;
   tm_initials: string | null;
   group: GroupId | null;
+  rr_side: string | null;  // "mens" | "womens" | null
   tasks: string[] | null;  // null = never customised → picker uses catalogue defaults; [] = explicitly cleared
   is_override: boolean;
 }
@@ -74,7 +75,7 @@ export const placementsKey = (nightId: string) =>
 
 async function fetchPlacements(nightId: string): Promise<NightPlacements> {
   const res = await fetch(`/api/forge/v1/nights/${nightId}/placements`, {
-    next: { revalidate: 30 },
+    cache: "no-store",  // always fetch fresh — SWR manages client-side deduping
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -94,9 +95,9 @@ export function useNightPlacements(nightId: string) {
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      dedupingInterval: 5_000,
+      dedupingInterval: 3_000,
       // Polling fallback — replace with Supabase Realtime subscription later
-      refreshInterval: 30_000,
+      refreshInterval: 10_000,
     }
   );
 
