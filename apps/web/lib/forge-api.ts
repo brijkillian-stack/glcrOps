@@ -309,3 +309,141 @@ export async function patchWeekStatus(
   }
   return res.json();
 }
+
+// ── Slot lock (Feature 0) ─────────────────────────────────────────────────────
+
+/** Lock or unlock a zone assignment slot. */
+export async function patchSlotLock(
+  nightId: string,
+  slotId: string,
+  isLocked: boolean,
+): Promise<{ slot_id: string; is_locked: boolean; updated: boolean }> {
+  const res = await fetch(
+    `${BASE}/v1/nights/${nightId}/placements/${slotId}/lock`,
+    {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ is_locked: isLocked }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`patchSlotLock ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+
+// ── Slot swap (Feature 2) ─────────────────────────────────────────────────────
+
+/** Atomically swap two slot TM assignments. */
+export async function swapSlots(
+  nightId: string,
+  slotIdA: string,
+  slotIdB: string,
+): Promise<{ swapped: boolean }> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/placements/swap`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ slot_id_a: slotIdA, slot_id_b: slotIdB }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`swapSlots ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+
+// ── Schedule / attendance (Feature 3) ────────────────────────────────────────
+
+export type TMStatus = "present" | "late" | "call_out" | "no_show";
+
+/** A TM in the nightly schedule with attendance status overlay. */
+export interface ScheduledTM {
+  tm_id: string;
+  tm_name: string;
+  status: TMStatus;
+  note: string | null;
+  break_wave: number | null;
+}
+
+/** Fetch all TMs scheduled for a night with their attendance status. */
+export async function fetchNightSchedule(nightId: string): Promise<ScheduledTM[]> {
+  return get<ScheduledTM[]>(`/v1/nights/${nightId}/schedule`);
+}
+
+/** Upsert attendance status for a TM on a night. */
+export async function setTMStatus(
+  nightId: string,
+  tmId: string,
+  status: TMStatus,
+  opts?: { tmName?: string; note?: string },
+): Promise<ScheduledTM> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/schedule/${tmId}/status`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({
+      status,
+      tm_name: opts?.tmName,
+      note:    opts?.note,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`setTMStatus ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+
+// ── Audit trail (Feature 5) ───────────────────────────────────────────────────
+
+export type TrailActionType =
+  | "assign"
+  | "clear"
+  | "lock"
+  | "unlock"
+  | "swap"
+  | "status"
+  | "engine_run"
+  | "note";
+
+/** One entry in the night_audit_log. */
+export interface TrailEntry {
+  id?: string;
+  night_id: string;
+  action_type: TrailActionType;
+  slot_id: string | null;
+  zone_label: string | null;
+  tm_from: string | null;
+  tm_to: string | null;
+  detail: string | null;
+  actor: string;
+  created_at?: string;
+}
+
+/** Fetch the audit trail for a night (newest first). */
+export async function fetchNightTrail(
+  nightId: string,
+  limit = 150,
+): Promise<TrailEntry[]> {
+  return get<TrailEntry[]>(`/v1/nights/${nightId}/trail?limit=${limit}`);
+}
+
+/** Append one entry to the night audit trail (best-effort — never throws). */
+export async function addTrailEntry(
+  nightId: string,
+  entry: Omit<TrailEntry, "id" | "night_id" | "created_at">,
+): Promise<void> {
+  try {
+    const res = await fetch(`${BASE}/v1/nights/${nightId}/trail`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ ...entry, night_id: nightId }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`addTrailEntry ${res.status}: ${body}`);
+    }
+  } catch (err) {
+    console.warn("addTrailEntry failed (best-effort):", err);
+  }
+}

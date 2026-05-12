@@ -468,6 +468,204 @@ class PlacementService:
             f"zds:weeks:recent",
         ])
 
+    # ── Feature 0: Lock / Unlock ──────────────────────────────────────────
+
+    async def patch_slot_lock(self, slot_id: str, is_locked: bool) -> dict:
+        """Set is_locked on a single zone_assignments row.
+
+        Invalidates the night's assignment cache so the next GET /placements
+        reflects the updated lock state.
+        """
+        try:
+            res = (
+                self.supabase.table("zone_assignments")
+                .update({"is_locked": is_locked})
+                .eq("id", slot_id)
+                .execute()
+            )
+            row = (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("patch_slot_lock(%s, %s) failed: %s", slot_id, is_locked, exc)
+            raise
+
+        night_id = row.get("night_id")
+        if night_id:
+            await self.cache.delete(f"zds:night:{night_id}:assignments")
+        return row
+
+    # ── Feature 2: Swap ───────────────────────────────────────────────────
+
+    async def swap_slots(self, slot_id_a: str, slot_id_b: str) -> dict:
+        """Swap the TM assignments between two zone_assignments rows.
+
+        Fetches both current rows, then writes the swapped tm_ids back.
+        Invalidates the night assignment cache for both rows (usually
+        the same night).  Returns a summary dict with old and new values.
+        """
+        try:
+            res_a = (
+                self.supabase.table("zone_assignments")
+                .select("id, tm_id, night_id")
+                .eq("id", slot_id_a)
+                .execute()
+            )
+            res_b = (
+                self.supabase.table("zone_assignments")
+                .select("id, tm_id, night_id")
+                .eq("id", slot_id_b)
+                .execute()
+            )
+            slot_a = (res_a.data or [{}])[0]
+            slot_b = (res_b.data or [{}])[0]
+        except Exception as exc:
+            log.warning("swap_slots fetch failed: %s", exc)
+            raise
+
+        tm_a = slot_a.get("tm_id")  # currently assigned to slot A
+        tm_b = slot_b.get("tm_id")  # currently assigned to slot B
+
+        try:
+            self.supabase.table("zone_assignments").update({
+                "tm_id":    tm_b,
+                "is_filled": tm_b is not None,
+                "is_empty":  tm_b is None,
+            }).eq("id", slot_id_a).execute()
+
+            self.supabase.table("zone_assignments").update({
+                "tm_id":    tm_a,
+                "is_filled": tm_a is not None,
+                "is_empty":  tm_a is None,
+            }).eq("id", slot_id_b).execute()
+        except Exception as exc:
+            log.warning("swap_slots write failed: %s", exc)
+            raise
+
+        nights = {slot_a.get("night_id"), slot_b.get("night_id")} - {None}
+        for night_id in nights:
+            await self.cache.delete(f"zds:night:{night_id}:assignments")
+
+        return {
+            "slot_id_a": slot_id_a, "new_tm_a": tm_b,
+            "slot_id_b": slot_id_b, "new_tm_b": tm_a,
+        }
+
+    # ── Feature 3: Daily Schedule ─────────────────────────────────────────
+
+    async def get_night_schedule(self, night_id: str) -> list[dict]:
+        """Return the list of TMs scheduled for a night with their statuses.
+
+        Source of TMs: break_assignments (deduplicated).
+        Status overlay: night_tm_status (upserted by the supervisor).
+        """
+        try:
+            res = (
+                self.supabase.table("break_assignments")
+                .select("id, group_num, break_wave, entities(id, display_name)")
+                .eq("night_id", night_id)
+                .execute()
+            )
+            rows = res.data or []
+        except Exception as exc:
+            log.warning("get_night_schedule break_assignments(%s) failed: %s", night_id, exc)
+            rows = []
+
+        seen: set[str] = set()
+        tms: list[dict] = []
+        for row in rows:
+            entity = row.get("entities") or {}
+            tm_id = entity.get("id") or ""
+            if tm_id and tm_id not in seen:
+                seen.add(tm_id)
+                tms.append({
+                    "tm_id":      tm_id,
+                    "tm_name":    entity.get("display_name") or "",
+                    "status":     "present",
+                    "note":       None,
+                    "break_wave": row.get("group_num"),
+                })
+
+        if not tms:
+            return tms
+
+        try:
+            status_res = (
+                self.supabase.table("night_tm_status")
+                .select("tm_id, status, note")
+                .eq("night_id", night_id)
+                .execute()
+            )
+            status_map = {r["tm_id"]: r for r in (status_res.data or [])}
+        except Exception as exc:
+            log.warning("get_night_schedule status_query(%s) failed: %s", night_id, exc)
+            status_map = {}
+
+        for tm in tms:
+            if override := status_map.get(tm["tm_id"]):
+                tm["status"] = override.get("status", "present")
+                tm["note"]   = override.get("note")
+
+        # Sort: non-present first (called_out etc.) then alphabetically
+        STATUS_ORDER = {"called_out": 0, "pto": 1, "loa": 2, "pdl": 3, "off": 4, "other": 5, "present": 6}
+        tms.sort(key=lambda t: (STATUS_ORDER.get(t["status"], 7), t["tm_name"].lower()))
+        return tms
+
+    async def set_tm_status(
+        self, night_id: str, tm_id: str, tm_name: str, status: str, note: Optional[str] = None
+    ) -> dict:
+        """Upsert a TM's schedule status for a night.
+
+        Conflicts on (night_id, tm_id) are resolved by updating status + note.
+        """
+        payload = {
+            "night_id": night_id,
+            "tm_id":    tm_id,
+            "tm_name":  tm_name,
+            "status":   status,
+            "note":     note,
+        }
+        try:
+            res = (
+                self.supabase.table("night_tm_status")
+                .upsert(payload, on_conflict="night_id,tm_id")
+                .execute()
+            )
+            return (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("set_tm_status(%s, %s, %s) failed: %s", night_id, tm_id, status, exc)
+            raise
+
+    # ── Feature 5: Trail / Audit Log ─────────────────────────────────────
+
+    async def get_night_trail(self, night_id: str, limit: int = 150) -> list[dict]:
+        """Return audit log entries for a night, newest first."""
+        try:
+            res = (
+                self.supabase.table("night_audit_log")
+                .select("id, night_id, action_type, slot_id, zone_label,"
+                        "tm_from, tm_to, detail, actor, created_at")
+                .eq("night_id", night_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return res.data or []
+        except Exception as exc:
+            log.warning("get_night_trail(%s) failed: %s", night_id, exc)
+            return []
+
+    async def add_trail_entry(self, entry: dict) -> dict:
+        """Insert a single audit log entry.  Best-effort — never raises."""
+        try:
+            res = (
+                self.supabase.table("night_audit_log")
+                .insert(entry)
+                .execute()
+            )
+            return (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("add_trail_entry failed: %s", exc)
+            return {}
+
     # ═══════════════════════════════════════════════════════════════════════
     # Phase 2 — Extended data layer
     # ═══════════════════════════════════════════════════════════════════════

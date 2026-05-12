@@ -10,12 +10,20 @@
  *   • A Realtime hook stub is exported for future Supabase channel wiring
  */
 
+import { useRef, useState as useReactState } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
-import { moveBreakTMApi } from "@/lib/forge-api";
+import { moveBreakTMApi, patchSlotLock, swapSlots as swapSlotsApi } from "@/lib/forge-api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type GroupId = "1" | "2" | "3";
+
+const UNDO_LIMIT = 10;
+
+interface UndoEntry {
+  prevData:  NightPlacements;
+  apiRevert: () => Promise<void>;   // call to revert the action on the server
+}
 
 export interface TMAssignment {
   slot_id: string;    // unique placement slot
@@ -29,6 +37,7 @@ export interface TMAssignment {
   rr_side: string | null;  // "mens" | "womens" | null
   tasks: string[] | null;  // null = never customised → picker uses catalogue defaults; [] = explicitly cleared
   is_override: boolean;
+  is_locked: boolean;      // locked slots are skipped by the fill engine
 }
 
 /**
@@ -89,6 +98,9 @@ async function fetchPlacements(nightId: string): Promise<NightPlacements> {
 
 /** Primary hook — used by BOTH Daily Planner and Break Sheet */
 export function useNightPlacements(nightId: string) {
+  const undoStack = useRef<UndoEntry[]>([]);
+  const [undoDepth, setUndoDepth] = useReactState(0); // tracks length for re-render
+
   const { data, error, isLoading, mutate } = useSWR(
     placementsKey(nightId),
     ([, id]) => fetchPlacements(id),
@@ -101,13 +113,22 @@ export function useNightPlacements(nightId: string) {
     }
   );
 
+  /** Push to undo stack (capped at UNDO_LIMIT). Triggers re-render via undoDepth. */
+  function pushUndo(prevData: NightPlacements, apiRevert: () => Promise<void>) {
+    undoStack.current = [{ prevData, apiRevert }, ...undoStack.current].slice(0, UNDO_LIMIT);
+    setUndoDepth(undoStack.current.length);
+  }
+
   /**
    * Optimistically assign a TM to a slot.
    * Immediately reflects in both Daily Planner and Break Sheet (same SWR key).
+   * Records an undo entry so the action can be reverted.
    */
   async function assignTM(slotId: string, tm: { id: string; name: string; initials: string } | null) {
     if (!data) return;
 
+    const prevData = data;
+    const prevSlot = data.placements.find((p) => p.slot_id === slotId);
     const optimistic: NightPlacements = {
       ...data,
       last_synced: new Date().toISOString(),
@@ -117,6 +138,15 @@ export function useNightPlacements(nightId: string) {
           : p
       ),
     };
+
+    // Push undo — reverts to old tm_id
+    pushUndo(prevData, async () => {
+      await fetch(`/api/forge/v1/nights/${nightId}/placements/${slotId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ tm_id: prevSlot?.tm_id ?? null }),
+      });
+    });
 
     await mutate(
       async () => {
@@ -135,6 +165,94 @@ export function useNightPlacements(nightId: string) {
         return { ...optimistic, last_synced: new Date().toISOString() };
       },
       { optimisticData: optimistic, rollbackOnError: true, revalidate: true }
+    );
+  }
+
+  /**
+   * Optimistically lock or unlock a slot.
+   * Locked slots are skipped by the fill engine.
+   */
+  async function lockSlot(slotId: string, isLocked: boolean) {
+    if (!data) return;
+
+    const prevData  = data;
+    const prevSlot  = data.placements.find((p) => p.slot_id === slotId);
+    const optimistic: NightPlacements = {
+      ...data,
+      last_synced: new Date().toISOString(),
+      placements: data.placements.map((p) =>
+        p.slot_id === slotId ? { ...p, is_locked: isLocked } : p
+      ),
+    };
+
+    // Push undo — reverts to old lock state
+    pushUndo(prevData, async () => {
+      await patchSlotLock(nightId, slotId, prevSlot?.is_locked ?? false);
+    });
+
+    await mutate(
+      async () => {
+        await patchSlotLock(nightId, slotId, isLocked);
+        return { ...optimistic, last_synced: new Date().toISOString() };
+      },
+      { optimisticData: optimistic, rollbackOnError: true, revalidate: true }
+    );
+  }
+
+  /**
+   * Optimistically swap two slot TM assignments.
+   * Swapping is self-inverse so the undo just calls swap again.
+   */
+  async function swapSlots(slotIdA: string, slotIdB: string) {
+    if (!data) return;
+
+    const prevData = data;
+    const slotA    = data.placements.find((p) => p.slot_id === slotIdA);
+    const slotB    = data.placements.find((p) => p.slot_id === slotIdB);
+    if (!slotA || !slotB) return;
+
+    const optimistic: NightPlacements = {
+      ...data,
+      last_synced: new Date().toISOString(),
+      placements: data.placements.map((p) => {
+        if (p.slot_id === slotIdA)
+          return { ...p, tm_id: slotB.tm_id, tm_name: slotB.tm_name, tm_initials: slotB.tm_initials };
+        if (p.slot_id === slotIdB)
+          return { ...p, tm_id: slotA.tm_id, tm_name: slotA.tm_name, tm_initials: slotA.tm_initials };
+        return p;
+      }),
+    };
+
+    // Swap is its own inverse
+    pushUndo(prevData, async () => {
+      await swapSlotsApi(nightId, slotIdA, slotIdB);
+    });
+
+    await mutate(
+      async () => {
+        await swapSlotsApi(nightId, slotIdA, slotIdB);
+        return { ...optimistic, last_synced: new Date().toISOString() };
+      },
+      { optimisticData: optimistic, rollbackOnError: true, revalidate: true }
+    );
+  }
+
+  /**
+   * Undo the most recent action (assign, lock, or swap).
+   * Restores the previous snapshot optimistically and calls the revert API.
+   */
+  async function undo() {
+    const entry = undoStack.current[0];
+    if (!entry) return;
+    undoStack.current = undoStack.current.slice(1);
+    setUndoDepth(undoStack.current.length);
+
+    await mutate(
+      async () => {
+        await entry.apiRevert();
+        return { ...entry.prevData, last_synced: new Date().toISOString() };
+      },
+      { optimisticData: { ...entry.prevData, last_synced: new Date().toISOString() }, rollbackOnError: true, revalidate: true }
     );
   }
 
@@ -197,10 +315,14 @@ export function useNightPlacements(nightId: string) {
     data,
     error,
     isLoading,
-    lastSynced: data?.last_synced ?? null,
+    lastSynced:  data?.last_synced ?? null,
     assignTM,
+    lockSlot,
+    swapSlots,
     moveBreakTM,
-    refresh: () => mutate(),
+    undo,
+    canUndo:  undoDepth > 0,
+    refresh:  () => mutate(),
   };
 }
 

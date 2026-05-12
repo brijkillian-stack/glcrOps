@@ -328,3 +328,251 @@ async def move_break_tm(
         "to_wave":   payload.to_wave,
         "rows_moved": count,
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PATCH /v1/nights/{night_id}/placements/{slot_id}/lock   (Feature 0)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class LockSlotPayload(BaseModel):
+    is_locked: bool
+
+
+@router.patch(
+    "/{night_id}/placements/{slot_id}/lock",
+    summary="Lock or unlock a zone assignment slot",
+    responses={
+        200: {"description": "Lock state updated"},
+        404: {"description": "Slot not found"},
+        503: {"description": "Update failed"},
+    },
+)
+async def patch_slot_lock(
+    night_id: str,
+    slot_id: str,
+    payload: LockSlotPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Set is_locked on a zone_assignments row.
+
+    Locked slots are skipped by the fill engine so manual placements
+    survive a Reoptimize run.  The Daily Planner renders a lock badge
+    over locked cards.
+    """
+    try:
+        row = await placement_service.patch_slot_lock(
+            slot_id=slot_id,
+            is_locked=payload.is_locked,
+        )
+    except Exception as exc:
+        log.exception("patch_slot_lock(%s) raised", slot_id)
+        raise _unavailable(str(exc))
+
+    if not row:
+        raise _not_found(f"Slot not found: {slot_id!r}")
+
+    return {"slot_id": slot_id, "is_locked": payload.is_locked, "updated": True}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# POST /v1/nights/{night_id}/placements/swap   (Feature 2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class SwapSlotsPayload(BaseModel):
+    slot_id_a: str
+    slot_id_b: str
+
+
+@router.post(
+    "/{night_id}/placements/swap",
+    summary="Swap TM assignments between two slots",
+    responses={
+        200: {"description": "Slots swapped"},
+        404: {"description": "One or both slots not found"},
+        503: {"description": "Swap failed"},
+    },
+)
+async def swap_night_placements(
+    night_id: str,
+    payload: SwapSlotsPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Atomically swap the tm_id values between two zone_assignments rows.
+
+    Both slots must belong to the same night.  The swap is non-destructive —
+    if either slot has no TM the empty value is transferred to the other.
+    Invalidates the night assignment cache.
+    """
+    try:
+        result = await placement_service.swap_slots(
+            slot_id_a=payload.slot_id_a,
+            slot_id_b=payload.slot_id_b,
+        )
+    except ValueError as exc:
+        raise _not_found(str(exc))
+    except Exception as exc:
+        log.exception("swap_slots(night=%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    return {
+        "night_id":   night_id,
+        "slot_id_a":  payload.slot_id_a,
+        "slot_id_b":  payload.slot_id_b,
+        "swapped":    True,
+        **result,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GET  /v1/nights/{night_id}/schedule       (Feature 3 — Daily Schedule tab)
+# PATCH /v1/nights/{night_id}/schedule/{tm_id}/status
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/{night_id}/schedule",
+    summary="Nightly TM schedule with attendance status",
+    responses={
+        200: {"description": "TM list with status overlay"},
+        503: {"description": "Schedule data unavailable"},
+    },
+)
+async def get_night_schedule(
+    night_id: str,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return all TMs assigned to this night with their attendance status.
+
+    Merges break_assignments (the authoritative scheduled-TM list) with
+    night_tm_status overrides so supervisors can mark call-outs, late
+    arrivals, etc. without editing the deployment.
+    """
+    try:
+        rows = await placement_service.get_night_schedule(night_id)
+    except Exception as exc:
+        log.exception("get_night_schedule(%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    return rows
+
+
+class TMStatusPayload(BaseModel):
+    tm_name: Optional[str] = None
+    status:  str = "present"   # present | late | call_out | no_show
+    note:    Optional[str] = None
+
+
+@router.patch(
+    "/{night_id}/schedule/{tm_id}/status",
+    summary="Set attendance status for a TM on a given night",
+    responses={
+        200: {"description": "Status upserted"},
+        503: {"description": "Update failed"},
+    },
+)
+async def set_tm_status(
+    night_id: str,
+    tm_id: str,
+    payload: TMStatusPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Upsert a night_tm_status row for one TM.
+
+    Creates or replaces the attendance record.  Valid statuses:
+    ``present`` | ``late`` | ``call_out`` | ``no_show``.
+    """
+    try:
+        row = await placement_service.set_tm_status(
+            night_id=night_id,
+            tm_id=tm_id,
+            tm_name=payload.tm_name or tm_id,
+            status=payload.status,
+            note=payload.note,
+        )
+    except Exception as exc:
+        log.exception("set_tm_status(night=%s, tm=%s) raised", night_id, tm_id)
+        raise _unavailable(str(exc))
+
+    return row
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GET  /v1/nights/{night_id}/trail          (Feature 5 — Trail tab)
+# POST /v1/nights/{night_id}/trail
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/{night_id}/trail",
+    summary="Audit trail for a night",
+    responses={
+        200: {"description": "Ordered list of trail entries (newest first)"},
+        503: {"description": "Trail data unavailable"},
+    },
+)
+async def get_night_trail(
+    night_id: str,
+    limit: int = 150,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return the audit trail for a night, newest-first.
+
+    Each entry records an action (assign, clear, lock, unlock, swap, status,
+    engine_run, etc.) with optional slot, zone, TM, and free-text detail.
+    """
+    try:
+        rows = await placement_service.get_night_trail(night_id, limit=limit)
+    except Exception as exc:
+        log.exception("get_night_trail(%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    return rows
+
+
+class TrailEntryPayload(BaseModel):
+    action_type: str          # assign | clear | lock | unlock | swap | status | engine_run | note
+    slot_id:     Optional[str] = None
+    zone_label:  Optional[str] = None
+    tm_from:     Optional[str] = None
+    tm_to:       Optional[str] = None
+    detail:      Optional[str] = None
+    actor:       str = "supervisor"
+
+
+@router.post(
+    "/{night_id}/trail",
+    summary="Append an entry to the night audit trail",
+    status_code=201,
+    responses={
+        201: {"description": "Trail entry recorded"},
+        503: {"description": "Insert failed"},
+    },
+)
+async def post_trail_entry(
+    night_id: str,
+    payload: TrailEntryPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Append one entry to night_audit_log.
+
+    The Daily Planner calls this after every user action so the Trail tab
+    shows a live record of all changes.  Failures are best-effort — the
+    client should not block on a failed trail write.
+    """
+    from ..models.planning import TrailEntry  # local import to keep top tidy
+
+    entry = TrailEntry(
+        night_id    = night_id,
+        action_type = payload.action_type,
+        slot_id     = payload.slot_id,
+        zone_label  = payload.zone_label,
+        tm_from     = payload.tm_from,
+        tm_to       = payload.tm_to,
+        detail      = payload.detail,
+        actor       = payload.actor,
+    )
+    try:
+        row = await placement_service.add_trail_entry(entry.model_dump(exclude_none=True))
+    except Exception as exc:
+        log.exception("add_trail_entry(night=%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    return row or {"recorded": True}

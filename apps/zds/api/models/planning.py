@@ -105,6 +105,35 @@ class PlanningLinks(BaseModel):
     reoptimize:      str   # /v1/engine/week/{week_id}/reoptimize  (Phase 5 GLC-10)
 
 
+# ── Schedule / trail models ───────────────────────────────────────────────────
+
+class ScheduledTM(BaseModel):
+    """One TM in the nightly schedule with their attendance status overlay."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    tm_id:     str
+    tm_name:   str
+    status:    str = "present"   # present | late | call_out | no_show
+    note:      Optional[str] = None
+    break_wave: Optional[int] = None   # 1 | 2 | 3; from break_assignments
+
+
+class TrailEntry(BaseModel):
+    """One entry in the night audit trail (night_audit_log)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    night_id:    str
+    action_type: str              # assign | clear | lock | unlock | swap | status | engine_run | note
+    slot_id:     Optional[str] = None
+    zone_label:  Optional[str] = None
+    tm_from:     Optional[str] = None
+    tm_to:       Optional[str] = None
+    detail:      Optional[str] = None
+    actor:       str = "supervisor"
+
+
 # ── Top-level response ────────────────────────────────────────────────────────
 
 class WeeklyPlanningOverviewResponse(BaseModel):

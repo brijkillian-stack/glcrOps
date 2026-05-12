@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, type ActiveTM, type ZoneTask, type EngineRunResult } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry } from "@/lib/forge-api";
 import { mutate as globalMutate } from "swr";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
@@ -105,19 +105,20 @@ export default function DailyPlannerPage() {
   const nightId = params?.nightId ?? "n1";
 
   // ← Shared sync hook — same key used by Break Sheet view
-  const { data, isLoading, lastSynced, assignTM, moveBreakTM, refresh } =
+  const { data, isLoading, lastSynced, assignTM, lockSlot, swapSlots, moveBreakTM, undo, canUndo, refresh } =
     useNightPlacements(nightId);
 
   // Wire Supabase Realtime when ready (no-op stub for now)
   useRealtimeSync(nightId);
 
-  const [activeSection, setActiveSection] = useState<"zones" | "breaks">("zones");
+  const [activeSection, setActiveSection] = useState<"zones" | "breaks" | "schedule" | "trail">("zones");
   const [ctxSlot, setCtxSlot] = useState<TMAssignment | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [pencilHoverSlot, setPencilHoverSlot] = useState<string | null>(null);
   const [pickerSlot, setPickerSlot]     = useState<TMAssignment | null>(null);
   const [taskSlot, setTaskSlot]         = useState<TMAssignment | null>(null);
   const [coverageSlot, setCoverageSlot] = useState<TMAssignment | null>(null);
+  const [swapSourceSlot, setSwapSourceSlot] = useState<TMAssignment | null>(null);
 
   // ── Engine run state ──────────────────────────────────────────────────────
   const [engineRunning, setEngineRunning] = useState(false);
@@ -291,6 +292,38 @@ export default function DailyPlannerPage() {
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="5" cy="4" r="3" stroke="currentColor" strokeWidth="1.2"/><path d="M1 13c0-2 2-3.5 4-3.5s4 1.5 4 3.5M10 5h4M12 3v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
           onClick: () => openPicker(ctxSlot),
         },
+        // ← Lock / Unlock slot
+        {
+          label: ctxSlot.is_locked ? "Unlock Slot" : "Lock Slot",
+          icon: ctxSlot.is_locked
+            ? <LockOpenIcon />
+            : <LockClosedIcon />,
+          onClick: async () => {
+            const wasLocked = ctxSlot.is_locked;
+            setCtxSlot(null);
+            await lockSlot(ctxSlot.slot_id, !wasLocked);
+            void addTrailEntry(nightId, {
+              action_type: wasLocked ? "unlock" : "lock",
+              slot_id:    ctxSlot.slot_id,
+              zone_label: ctxSlot.zone_label,
+              tm_from:    null, tm_to: null,
+              detail:     wasLocked ? "Unlocked by supervisor" : "Locked by supervisor",
+              actor: "supervisor",
+            });
+          },
+        },
+        // ← Swap TM — only when slot has a TM
+        ...(ctxSlot.tm_id
+          ? [{
+              label: "Swap TM…",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M2 5h10M9 2l3 3-3 3M12 9H2M5 6l-3 3 3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ),
+              onClick: () => { setSwapSourceSlot(ctxSlot); setCtxSlot(null); },
+            }]
+          : []),
         // ← Add Coverage — only surfaces on unassigned slots
         ...(!ctxSlot.tm_id
           ? [{
@@ -308,7 +341,18 @@ export default function DailyPlannerPage() {
         {
           label: "Clear slot",
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-          onClick: () => { assignTM(ctxSlot.slot_id, null); setCtxSlot(null); },
+          onClick: () => {
+            const prevTm = ctxSlot.tm_name;
+            assignTM(ctxSlot.slot_id, null);
+            void addTrailEntry(nightId, {
+              action_type: "clear",
+              slot_id:    ctxSlot.slot_id,
+              zone_label: ctxSlot.zone_label,
+              tm_from:    prevTm, tm_to: null,
+              detail: null, actor: "supervisor",
+            });
+            setCtxSlot(null);
+          },
           disabled: !ctxSlot.tm_id,
         },
         {
@@ -338,6 +382,51 @@ export default function DailyPlannerPage() {
         right={
           <div className="flex items-center gap-2">
             <SyncBar lastSynced={lastSynced} onRefresh={refresh} />
+
+            {/* Undo button */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                canUndo
+                  ? "bg-white/10 text-white/80 hover:bg-white/20"
+                  : "bg-white/05 text-white/25 cursor-not-allowed"
+              )}
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo last action"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M2 5.5H8.5a3 3 0 010 6H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M4 3L2 5.5 4 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Undo
+            </button>
+
+            {/* Re-up button (fills remaining gaps) */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                engineRunning
+                  ? "bg-amber-500/20 text-amber-300 cursor-wait"
+                  : "bg-white/10 text-white/80 hover:bg-white/20",
+              )}
+              onClick={handleRunEngine}
+              disabled={engineRunning}
+              title="Re-up: fill remaining gaps with engine"
+            >
+              {engineRunning ? (
+                <svg className="animate-spin" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.3"/>
+                  <path d="M6.5 1.5a5 5 0 0 1 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <path d="M6.5 1.5v2M6.5 9.5v2M1.5 6.5h2M9.5 6.5h2M3.2 3.2l1.4 1.4M8.4 8.4l1.4 1.4M3.2 9.8l1.4-1.4M8.4 4.6l1.4-1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  <circle cx="6.5" cy="6.5" r="1.8" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )}
+              Re-up
+            </button>
 
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
@@ -431,11 +520,11 @@ export default function DailyPlannerPage() {
           </div>
 
           {/* Ops Quick Actions */}
-          <div className="ml-auto flex gap-2">
-            {["zones", "breaks"].map((s) => (
+          <div className="ml-auto flex gap-2 flex-wrap justify-end">
+            {(["zones", "breaks", "schedule", "trail"] as const).map((s) => (
               <button
                 key={s}
-                onClick={() => setActiveSection(s as "zones" | "breaks")}
+                onClick={() => setActiveSection(s)}
                 className={cn(
                   "h-7 px-3 rounded-lg text-[12px] font-semibold transition-all no-select",
                   activeSection === s
@@ -443,7 +532,7 @@ export default function DailyPlannerPage() {
                     : "bg-white/10 text-white/60 hover:bg-white/20"
                 )}
               >
-                {s === "zones" ? "Zones" : "Break Waves"}
+                {s === "zones" ? "Zones" : s === "breaks" ? "Break Waves" : s === "schedule" ? "Schedule" : "Trail"}
               </button>
             ))}
           </div>
@@ -512,7 +601,7 @@ export default function DailyPlannerPage() {
               </section>
 
             </motion.div>
-          ) : (
+          ) : activeSection === "breaks" ? (
             <motion.div
               key="breaks"
               initial={{ opacity: 0, x: 12 }}
@@ -526,6 +615,26 @@ export default function DailyPlannerPage() {
                 lastSynced={lastSynced}
                 onRefresh={refresh}
               />
+            </motion.div>
+          ) : activeSection === "schedule" ? (
+            <motion.div
+              key="schedule"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ScheduleView nightId={nightId} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="trail"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <TrailView nightId={nightId} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -581,6 +690,26 @@ export default function DailyPlannerPage() {
         allSlots={data?.placements ?? []}
         onSelect={addCoverage}
         onClose={() => setCoverageSlot(null)}
+      />
+
+      <SwapPickerSheet
+        sourceSlot={swapSourceSlot}
+        allSlots={data?.placements ?? []}
+        onSelect={async (targetSlot) => {
+          if (!swapSourceSlot) return;
+          const aName = swapSourceSlot.tm_name;
+          const bName = targetSlot.tm_name;
+          setSwapSourceSlot(null);
+          await swapSlots(swapSourceSlot.slot_id, targetSlot.slot_id);
+          void addTrailEntry(nightId, {
+            action_type: "swap",
+            slot_id: swapSourceSlot.slot_id,
+            zone_label: `${swapSourceSlot.zone_label} ↔ ${targetSlot.zone_label}`,
+            tm_from: aName, tm_to: bName,
+            detail: null, actor: "supervisor",
+          });
+        }}
+        onClose={() => setSwapSourceSlot(null)}
       />
 
       {/* ── Engine Run Toast ───────────────────────────────────────── */}
@@ -789,11 +918,24 @@ function ZoneCard({
           </div>
         )}
 
-        {/* Override indicator */}
-        {slot.is_override && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-            <span className="text-[10px] font-semibold text-orange-500 uppercase tracking-wide">Override</span>
+        {/* Status badges row */}
+        {(slot.is_override || slot.is_locked) && (
+          <div className="flex items-center gap-2">
+            {slot.is_locked && (
+              <div className="flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 13 13" fill="none" className="text-[#C9A84C]">
+                  <rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+                <span className="text-[10px] font-semibold text-[#C9A84C] uppercase tracking-wide">Locked</span>
+              </div>
+            )}
+            {slot.is_override && (
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                <span className="text-[10px] font-semibold text-orange-500 uppercase tracking-wide">Override</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -877,6 +1019,14 @@ function RestroomPill({
           {slot.tm_name ?? "Unassigned"}
         </div>
       </div>
+      {slot.is_locked && (
+        <div title="Locked">
+          <svg width="11" height="11" viewBox="0 0 13 13" fill="none" className="text-[#C9A84C] shrink-0">
+            <rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+        </div>
+      )}
       {slot.tm_initials && (
         <div className="shrink-0">
           <UserIcon initials={slot.tm_initials} />
@@ -1930,6 +2080,350 @@ function BreakGroupRow({ grpSlot, waveId, draggingTmId, onDragStart }: BreakGrou
     </div>
   );
 }
+
+// ── Swap Picker Sheet (Feature 2) ─────────────────────────────────────────────
+// User long-pressed a slot and selected "Swap TM…".  Pick a second slot to swap with.
+
+interface SwapPickerSheetProps {
+  sourceSlot: TMAssignment | null;
+  allSlots: TMAssignment[];
+  onSelect: (targetSlot: TMAssignment) => Promise<void>;
+  onClose: () => void;
+}
+
+function SwapPickerSheet({ sourceSlot, allSlots, onSelect, onClose }: SwapPickerSheetProps) {
+  const isOpen = !!sourceSlot;
+  const [saving, setSaving] = useState<string | null>(null);
+
+  if (!sourceSlot) return null;
+
+  // Show all other filled slots as swap targets
+  const targets = allSlots.filter((s) => s.slot_id !== sourceSlot.slot_id && s.tm_id);
+  const emptyTargets = allSlots.filter((s) => s.slot_id !== sourceSlot.slot_id && !s.tm_id);
+
+  async function handleSelect(slot: TMAssignment) {
+    setSaving(slot.slot_id);
+    await onSelect(slot);
+    setSaving(null);
+  }
+
+  function SlotRow({ slot }: { slot: TMAssignment }) {
+    const accent   = zoneAccentColor(slot.zone_id);
+    const isSaving = saving === slot.slot_id;
+    return (
+      <button
+        onClick={() => !isSaving && handleSelect(slot)}
+        disabled={isSaving}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+      >
+        <div className="w-1 h-9 rounded-full shrink-0" style={{ backgroundColor: accent }} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-gray-800 truncate">{slot.zone_label}</div>
+          <div className="text-[11px] text-gray-400 mt-0.5 truncate">
+            {slot.tm_name ?? <span className="italic">Unassigned</span>}
+          </div>
+        </div>
+        {isSaving ? (
+          <div className="w-4 h-4 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin shrink-0" />
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-gray-300 shrink-0">
+            <path d="M2 5h10M9 2l3 3-3 3M12 9H2M5 6l-3 3 3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="swap-backdrop"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={onClose}
+          />
+          <motion.div
+            key="swap-sheet"
+            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[78dvh]"
+          >
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+            <div className="px-5 pt-1 pb-4 shrink-0 flex items-start justify-between">
+              <div>
+                <h3 className="text-[16px] font-bold text-gray-900">Swap TM</h3>
+                <p className="text-[12px] text-gray-400 mt-0.5">
+                  Swapping <span className="font-semibold text-gray-700">{sourceSlot.tm_name}</span> from{" "}
+                  <span className="font-semibold text-gray-700">{sourceSlot.zone_label}</span> — pick a target slot
+                </p>
+              </div>
+              <button onClick={onClose}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors shrink-0">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <path d="M1 1l9 9M10 1L1 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-4 pb-safe">
+              {targets.length === 0 && emptyTargets.length === 0 && (
+                <p className="text-center text-[13px] text-gray-400 py-10">No other slots available</p>
+              )}
+              {targets.length > 0 && (
+                <>
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 px-1 pt-1 pb-2">
+                    Filled Slots · {targets.length}
+                  </div>
+                  {targets.map((s) => <SlotRow key={s.slot_id} slot={s} />)}
+                </>
+              )}
+              {emptyTargets.length > 0 && (
+                <>
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 px-1 pt-3 pb-2">
+                    Empty Slots · {emptyTargets.length}
+                  </div>
+                  {emptyTargets.map((s) => <SlotRow key={s.slot_id} slot={s} />)}
+                </>
+              )}
+              <div className="h-6" />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+
+// ── Schedule View (Feature 3) ─────────────────────────────────────────────────
+// Shows every TM on tonight's schedule with their attendance status.
+// Supervisor can tap a TM row to cycle: present → late → call_out → no_show → present.
+
+const STATUS_META: Record<TMStatus, { label: string; color: string; bg: string }> = {
+  present:   { label: "Present",   color: "#34C759", bg: "#34C75910" },
+  late:      { label: "Late",      color: "#FF9500", bg: "#FF950010" },
+  call_out:  { label: "Call Out",  color: "#FF3B30", bg: "#FF3B3010" },
+  no_show:   { label: "No Show",   color: "#8E8E93", bg: "#8E8E9310" },
+};
+
+const STATUS_CYCLE: TMStatus[] = ["present", "late", "call_out", "no_show"];
+
+function ScheduleView({ nightId }: { nightId: string }) {
+  const { data: schedule, mutate } = useSWR(
+    `forge:schedule:${nightId}`,
+    () => fetchNightSchedule(nightId),
+    { revalidateOnFocus: true, refreshInterval: 15_000 },
+  );
+
+  const [saving, setSaving] = useState<string | null>(null);
+
+  async function cycleStatus(tm: ScheduledTM) {
+    const idx     = STATUS_CYCLE.indexOf(tm.status as TMStatus);
+    const next    = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    setSaving(tm.tm_id);
+    try {
+      await setTMStatus(nightId, tm.tm_id, next, { tmName: tm.tm_name });
+      await mutate();
+    } catch (err) {
+      console.error("setTMStatus failed:", err);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  if (!schedule) {
+    return (
+      <div className="flex flex-col gap-2 animate-pulse">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="h-14 rounded-2xl bg-gray-200" style={{ animationDelay: `${i * 0.06}s` }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (schedule.length === 0) {
+    return (
+      <div className="text-center text-[13px] text-gray-400 py-16">
+        No TMs scheduled for this night yet.<br/>
+        <span className="text-[12px]">Run the engine or assign TMs to zones.</span>
+      </div>
+    );
+  }
+
+  const grouped: Record<TMStatus, ScheduledTM[]> = {
+    present: [], late: [], call_out: [], no_show: [],
+  };
+  for (const tm of schedule) {
+    const s = (tm.status ?? "present") as TMStatus;
+    if (s in grouped) grouped[s].push(tm);
+  }
+
+  function TMRow({ tm }: { tm: ScheduledTM }) {
+    const meta = STATUS_META[tm.status as TMStatus] ?? STATUS_META.present;
+    const isSaving = saving === tm.tm_id;
+    const initials = tm.tm_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+
+    return (
+      <button
+        onClick={() => cycleStatus(tm)}
+        disabled={isSaving}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+      >
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold ring-1 ring-gray-200 bg-gray-100 text-gray-600 shrink-0">
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-gray-800 truncate">{tm.tm_name}</div>
+          {tm.note && <div className="text-[11px] text-gray-400 truncate">{tm.note}</div>}
+          {tm.break_wave && (
+            <div className="text-[11px] text-gray-400">Group {tm.break_wave}</div>
+          )}
+        </div>
+        {isSaving ? (
+          <div className="w-5 h-5 rounded-full border-2 border-gray-300 border-t-transparent animate-spin shrink-0" />
+        ) : (
+          <span
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0"
+            style={{ color: meta.color, backgroundColor: meta.bg }}
+          >
+            {meta.label}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  const orderedStatuses: TMStatus[] = ["present", "late", "call_out", "no_show"];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="section-header !mb-0">Tonight&apos;s Schedule</h2>
+        <span className="text-[12px] text-gray-400">Tap to cycle status</span>
+      </div>
+      <div className="flex gap-3 flex-wrap">
+        {orderedStatuses.map((s) => {
+          const meta = STATUS_META[s];
+          const count = grouped[s].length;
+          return (
+            <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
+                 style={{ backgroundColor: meta.bg }}>
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+              <span className="text-[12px] font-semibold" style={{ color: meta.color }}>
+                {meta.label} · {count}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="card rounded-2xl overflow-hidden divide-y divide-gray-50">
+        {schedule.map((tm) => <TMRow key={tm.tm_id} tm={tm} />)}
+      </div>
+    </div>
+  );
+}
+
+
+// ── Trail View (Feature 5) ────────────────────────────────────────────────────
+// Live audit log for tonight — polls every 5 s.
+
+const TRAIL_ACTION_META: Record<string, { label: string; color: string }> = {
+  assign:     { label: "Assigned",    color: "#007AFF" },
+  clear:      { label: "Cleared",     color: "#8E8E93" },
+  lock:       { label: "Locked",      color: "#C9A84C" },
+  unlock:     { label: "Unlocked",    color: "#C9A84C" },
+  swap:       { label: "Swapped",     color: "#AF52DE" },
+  status:     { label: "Status",      color: "#FF9500" },
+  engine_run: { label: "Engine Run",  color: "#34C759" },
+  note:       { label: "Note",        color: "#636366" },
+};
+
+function TrailView({ nightId }: { nightId: string }) {
+  const { data: trail } = useSWR(
+    `forge:trail:${nightId}`,
+    () => fetchNightTrail(nightId, 150),
+    { revalidateOnFocus: true, refreshInterval: 5_000 },
+  );
+
+  if (!trail) {
+    return (
+      <div className="flex flex-col gap-2 animate-pulse">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-12 rounded-2xl bg-gray-200" />
+        ))}
+      </div>
+    );
+  }
+
+  if (trail.length === 0) {
+    return (
+      <div className="text-center text-[13px] text-gray-400 py-16">
+        No trail entries yet.<br/>
+        <span className="text-[12px]">Actions will appear here as you make changes.</span>
+      </div>
+    );
+  }
+
+  function formatRelative(iso: string | undefined): string {
+    if (!iso) return "";
+    const d    = new Date(iso);
+    const now  = Date.now();
+    const diff = Math.floor((now - d.getTime()) / 1000);
+    if (diff < 60)  return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function TrailRow({ entry }: { entry: TrailEntry }) {
+    const meta = TRAIL_ACTION_META[entry.action_type] ?? { label: entry.action_type, color: "#8E8E93" };
+    return (
+      <div className="flex items-start gap-3 px-3 py-2.5">
+        {/* Action type pill */}
+        <span
+          className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg mt-0.5"
+          style={{ color: meta.color, backgroundColor: `${meta.color}15` }}
+        >
+          {meta.label}
+        </span>
+        <div className="flex-1 min-w-0">
+          {entry.zone_label && (
+            <div className="text-[12px] font-semibold text-gray-700 truncate">{entry.zone_label}</div>
+          )}
+          {(entry.tm_from || entry.tm_to) && (
+            <div className="text-[11px] text-gray-400 truncate">
+              {entry.tm_from && <span>{entry.tm_from}</span>}
+              {entry.tm_from && entry.tm_to && <span className="mx-1">→</span>}
+              {entry.tm_to && <span>{entry.tm_to}</span>}
+            </div>
+          )}
+          {entry.detail && (
+            <div className="text-[11px] text-gray-400 truncate">{entry.detail}</div>
+          )}
+        </div>
+        <span className="text-[10px] text-gray-300 shrink-0 mt-0.5">{formatRelative(entry.created_at)}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="section-header !mb-0">Audit Trail</h2>
+        <span className="text-[12px] text-gray-400">Auto-refreshes every 5s</span>
+      </div>
+      <div className="card rounded-2xl overflow-hidden divide-y divide-gray-50">
+        {trail.map((entry, i) => (
+          <TrailRow key={entry.id ?? i} entry={entry} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
