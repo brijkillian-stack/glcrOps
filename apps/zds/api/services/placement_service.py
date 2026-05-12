@@ -129,29 +129,54 @@ class PlacementService:
     # ═══════════════════════════════════════════════════════════════════════
 
     async def get_week(self, week_id: str) -> Optional[dict]:
+        """Fetch one week row by id.  Uses self.supabase directly — no legacy db module."""
         key = f"zds:week:{week_id}"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
         try:
-            week = self.db.fetch_week(week_id)
+            res = (
+                self.supabase.table("weeks")
+                .select("*")
+                .eq("id", week_id)
+                .maybe_single()
+                .execute()
+            )
+            week = res.data or {}
         except Exception as exc:
-            log.warning("fetch_week(%s) failed: %s", week_id, exc)
-            return None
+            log.warning("get_week(%s) supabase query failed: %s", week_id, exc)
+            # Fall back to legacy db module if direct query fails.
+            try:
+                week = self.db.fetch_week(week_id)
+            except Exception as exc2:
+                log.warning("get_week(%s) db fallback also failed: %s", week_id, exc2)
+                return None
         if week:
             await self.cache.set(key, week, ttl=self.WEEK_TTL)
         return week
 
     async def get_week_nights(self, week_id: str) -> list[dict]:
+        """Fetch all night rows for a week ordered by day_num.  Uses self.supabase directly."""
         key = f"zds:week:{week_id}:nights"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
         try:
-            nights = self.db.fetch_nights(week_id) or []
+            res = (
+                self.supabase.table("nights")
+                .select("*")
+                .eq("week_id", week_id)
+                .order("day_num")
+                .execute()
+            )
+            nights = res.data or []
         except Exception as exc:
-            log.warning("fetch_nights(%s) failed: %s", week_id, exc)
-            return []
+            log.warning("get_week_nights(%s) supabase query failed: %s", week_id, exc)
+            try:
+                nights = self.db.fetch_nights(week_id) or []
+            except Exception as exc2:
+                log.warning("get_week_nights(%s) db fallback also failed: %s", week_id, exc2)
+                return []
         await self.cache.set(key, nights, ttl=self.WEEK_TTL)
         return nights
 
@@ -175,15 +200,46 @@ class PlacementService:
         return out
 
     async def get_night_assignments(self, night_id: str) -> list[dict]:
+        """Fetch zone_assignments for a night joined with entity display names.
+
+        Uses self.supabase directly, matching the query in database.fetch_zone_assignments
+        but without the Reflex-specific display-field pre-computation.  Falls back to
+        the legacy db module only if the direct query fails.
+        """
         key = f"zds:night:{night_id}:assignments"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
         try:
-            rows = self.db.fetch_zone_assignments(night_id) or []
+            res = (
+                self.supabase.table("zone_assignments")
+                .select(
+                    "id, slot_type, slot_key, rr_side, is_filled, is_empty,"
+                    "group_num, has_alert, alert_target,"
+                    "is_sweeper, sweeper_route, is_locked,"
+                    "is_crowded, is_extra_crowded, has_trainee, trainee_name,"
+                    "sort_order, custom_tasks,"
+                    "night_id,"
+                    "entities(id, display_name, metadata)"
+                )
+                .eq("night_id", night_id)
+                .order("sort_order")
+                .execute()
+            )
+            rows = res.data or []
+            # Flatten the joined entity into top-level keys.
+            for row in rows:
+                entity = row.pop("entities", None) or {}
+                row["tm_id"]   = entity.get("id")
+                row["tm_name"] = entity.get("display_name") or ""
+                row["tm_skill"] = (entity.get("metadata") or {}).get("skill_score")
         except Exception as exc:
-            log.warning("fetch_zone_assignments(%s) failed: %s", night_id, exc)
-            return []
+            log.warning("get_night_assignments(%s) supabase query failed: %s", night_id, exc)
+            try:
+                rows = self.db.fetch_zone_assignments(night_id) or []
+            except Exception as exc2:
+                log.warning("get_night_assignments(%s) db fallback also failed: %s", night_id, exc2)
+                return []
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
@@ -225,10 +281,30 @@ class PlacementService:
         if cached is not None:
             return cached
         try:
-            rows = self.db.fetch_break_assignments(night_id) or []
+            res = (
+                self.supabase.table("break_assignments")
+                .select("id, group_num, break_wave, sort_order, slot_ref, is_wave_locked, entities(id, display_name)")
+                .eq("night_id", night_id)
+                .order("sort_order")
+                .execute()
+            )
+            rows = res.data or []
+            for row in rows:
+                entity = row.pop("entities", None) or {}
+                row["tm_id"]   = entity.get("id") or ""
+                row["tm_name"] = entity.get("display_name") or ""
+                row["slot_ref"]       = row.get("slot_ref") or ""
+                row["slot_label"]     = row.get("slot_ref") or ""
+                row["is_wave_locked"] = bool(row.get("is_wave_locked"))
+                row["group_num"]      = int(row.get("group_num") or 1)
+                row["show_section_header"] = False
         except Exception as exc:
-            log.warning("fetch_break_assignments(%s) failed: %s", night_id, exc)
-            return []
+            log.warning("get_night_breaks(%s) supabase query failed: %s", night_id, exc)
+            try:
+                rows = self.db.fetch_break_assignments(night_id) or []
+            except Exception as exc2:
+                log.warning("get_night_breaks(%s) db fallback also failed: %s", night_id, exc2)
+                return []
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
@@ -238,10 +314,27 @@ class PlacementService:
         if cached is not None:
             return cached
         try:
-            rows = self.db.fetch_overlap_assignments(night_id) or []
+            res = (
+                self.supabase.table("overlap_assignments")
+                .select("id, overlap_window, position, is_filled, task, entities(id, display_name)")
+                .eq("night_id", night_id)
+                .order("overlap_window")
+                .order("position")
+                .execute()
+            )
+            rows = res.data or []
+            for row in rows:
+                entity = row.pop("entities", None) or {}
+                row["tm_id"]   = entity.get("id")
+                row["tm_name"] = entity.get("display_name") or ""
+                row["task"]    = row.get("task") or ""
         except Exception as exc:
-            log.warning("fetch_overlap_assignments(%s) failed: %s", night_id, exc)
-            return []
+            log.warning("get_night_overlaps(%s) supabase query failed: %s", night_id, exc)
+            try:
+                rows = self.db.fetch_overlap_assignments(night_id) or []
+            except Exception as exc2:
+                log.warning("get_night_overlaps(%s) db fallback also failed: %s", night_id, exc2)
+                return []
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
