@@ -18,7 +18,7 @@ sentry-sdk[fastapi]>=2.0.0
 # still happens at load time).
 openpyxl>=3.1.0
 
-# WeasyPrint converts renderer HTML → PDF for the /print/*.pdf endpoints.
-# Requires system packages on Linux: libpango-1.0-0 libcairo2 libgdk-pixbuf2.0-0
-# Render's Ubuntu 22.04 environment has these pre-installed.
-weasyprint>=60.0
+# WeasyPrint is NOT listed here — it requires system packages (libpango, libcairo)
+# that cannot be installed via pip on Render's standard build environment.
+# The /print/*.pdf endpoints gracefully return a 500 with a clear message;
+# the frontend uses /print/*.html endpoints instead (browser prints to PDF natively).

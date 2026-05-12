@@ -137,7 +137,7 @@ export default function DailyPlannerPage() {
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
                          bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"
               onClick={() =>
-                window.open(`/api/forge/v1/print/night/${nightId}.pdf`, "_blank")
+                window.open(`/api/forge/v1/print/night/${nightId}.html`, "_blank")
               }
             >
               <PrintIcon />

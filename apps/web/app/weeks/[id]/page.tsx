@@ -102,7 +102,7 @@ export default function WeekOverviewPage() {
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium
                          bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"
-              onClick={() => window.open(getWeekPrintUrl(weekId, "pdf"), "_blank")}
+              onClick={() => window.open(getWeekPrintUrl(weekId, "html"), "_blank")}
             >
               <PrintIcon />
               Print Book
