@@ -1,4 +1,5 @@
 services:
+  # ── Reflex app (GLCR Memory / main dashboard) ─────────────────────────────
   - type: web
     name: glcr-memory
     runtime: docker
@@ -11,5 +12,39 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false         # Set in Render dashboard (service_role — secret)
       - key: SUPABASE_AUTH_REDIRECT
-        sync: false         # Update to https://<your-render-url>/auth/callback
-                            # AFTER first deploy when Render gives you the URL.
+        sync: false         # https://<glcr-memory-url>/auth/callback
+
+  # ── ZDS Forge API (FastAPI) ───────────────────────────────────────────────
+  - type: web
+    name: zds-forge
+    runtime: python
+    plan: starter           # $7/mo — upgrade to standard if PDF gen is slow
+    region: ohio
+    rootDir: .              # repo root; uvicorn path is relative
+    buildCommand: pip install -r apps/zds/api/requirements.txt
+    startCommand: uvicorn apps.zds.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        value: https://iazgrcainbokkdqunkok.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false         # Same service_role key — set in Render dashboard
+      - key: APP_ENV
+        value: production
+      - key: REDIS_URL
+        sync: false         # Optional — leave blank to run without cache
+
+  # ── ZDS Web (Next.js frontend) ────────────────────────────────────────────
+  - type: web
+    name: zds-web
+    runtime: node
+    plan: starter
+    region: ohio
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: FORGE_API_URL
+        sync: false         # Set to https://zds-forge.onrender.com after first Forge deploy
+      - key: NODE_ENV
+        value: production

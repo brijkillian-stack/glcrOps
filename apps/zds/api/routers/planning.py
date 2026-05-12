@@ -34,8 +34,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..core.dependencies import get_planning_service
+from ..core.dependencies import get_planning_service, get_placement_service
 from ..models.planning import WeeklyPlanningOverviewResponse
+from ..models.week import WeekRow
+from ..services.placement_service import PlacementService
 from ..services.planning_service import PlanningService
 
 log = logging.getLogger("zds.api.planning")
@@ -64,6 +66,29 @@ def _planning_unavailable(detail: str) -> HTTPException:
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoints
 # ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/weeks",
+    response_model=list[WeekRow],
+    summary="List recent weeks",
+    responses={200: {"description": "Most recent weeks ordered by week_ending desc"}},
+)
+async def list_weeks(
+    limit: int = 12,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return the most recent *limit* weeks from Supabase, ordered newest first.
+
+    Used by the Launchpad page to populate the Recent Weeks list.
+    Not cached — list view needs freshness so newly-created weeks appear immediately.
+    """
+    try:
+        weeks = await placement_service.list_recent_weeks(limit=limit)
+        return weeks
+    except Exception as exc:
+        log.exception("list_recent_weeks raised")
+        raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
+
 
 @router.get(
     "/weekly/{week_id}",

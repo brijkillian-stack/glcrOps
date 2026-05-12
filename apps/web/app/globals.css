@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets ───────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --surface-base: #F5F5F7;
+    --surface-card: #FFFFFF;
+    --text-primary: #1C1C1E;
+    --text-secondary: #3C3C43;
+    --text-tertiary: #8E8E93;
+    --separator: rgba(60, 60, 67, 0.12);
+    --glcr-gold: #C9A84C;
+    --glcr-navy: #1A2340;
+    --blue-primary: #007AFF;
+    --blue-pressed: #0056CC;
+    --green: #34C759;
+    --orange: #FF9500;
+    --red: #FF3B30;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    height: 100%;
+    background-color: var(--surface-base);
+  }
+
+  body {
+    height: 100%;
+    min-height: 100dvh;
+    background-color: var(--surface-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+      "Helvetica Neue", Arial, sans-serif;
+    /* Prevent overscroll bounce on iPad */
+    overscroll-behavior: none;
+  }
+
+  /* Smooth scrolling everywhere */
+  * {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar — subtle, macOS/iPadOS style */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.16);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.28);
+  }
+}
+
+/* ── Utility layers ─────────────────────────────────────────────────── */
+@layer utilities {
+  /* Glass morphism card */
+  .glass {
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.64);
+  }
+
+  /* Dark glass for overlays / context menus */
+  .glass-dark {
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    background: rgba(30, 30, 32, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Prevent text selection on interactive elements */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Apple-style press feedback */
+  .press-feedback {
+    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.1s ease;
+  }
+  .press-feedback:active {
+    transform: scale(0.97);
+    opacity: 0.88;
+  }
+
+  /* Shimmering skeleton */
+  .shimmer-bg {
+    background: linear-gradient(
+      90deg,
+      #f0f0f2 25%,
+      #e8e8ea 50%,
+      #f0f0f2 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+  }
+}
+
+/* ── Component layer ─────────────────────────────────────────────────── */
+@layer components {
+  /* iOS-style pill badge */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold no-select;
+  }
+  .badge-draft {
+    @apply badge bg-orange-50 text-orange-600 ring-1 ring-orange-200/60;
+  }
+  .badge-published {
+    @apply badge bg-green-50 text-green-700 ring-1 ring-green-200/60;
+  }
+  .badge-archived {
+    @apply badge bg-gray-100 text-gray-500 ring-1 ring-gray-200/60;
+  }
+
+  /* Card base */
+  .card {
+    @apply bg-white rounded-2xl shadow-card transition-shadow duration-200;
+  }
+  .card:hover {
+    @apply shadow-card-hover;
+  }
+
+  /* Section header inside card */
+  .section-header {
+    @apply text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3 px-1;
+  }
+
+  /* Context menu item */
+  .ctx-item {
+    @apply flex items-center gap-3 px-4 py-3 text-sm font-medium text-white/90
+           hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors duration-100
+           cursor-pointer no-select;
+  }
+  .ctx-item-destructive {
+    @apply ctx-item text-red-400 hover:text-red-300;
+  }
+}
