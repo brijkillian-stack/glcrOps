@@ -52,6 +52,18 @@ function ChevronRightIcon() {
   return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 }
 
+// ── Break schedule constants (mirrors Python _BREAK_SCHEDULE in night.py) ─────
+
+/** [groupNum][waveNum] → [start_24h, end_24h, duration_min] */
+const BREAK_TIMES: Record<string, Record<string, [string, string, number]>> = {
+  "1": { "1": ["00:45", "01:00", 15], "2": ["02:30", "03:00", 30], "3": ["05:00", "05:15", 15] },
+  "2": { "1": ["01:00", "01:15", 15], "2": ["03:00", "03:30", 30], "3": ["05:00", "05:15", 15] },
+  "3": { "1": ["01:15", "01:30", 15], "2": ["03:30", "04:00", 30], "3": ["05:15", "05:30", 15] },
+};
+const WAVE_LABELS: Record<string, string> = {
+  "1": "First Break", "2": "Main Break", "3": "Last Break",
+};
+
 // ── Daily Planner ─────────────────────────────────────────────────────────────
 
 export default function DailyPlannerPage() {
@@ -94,10 +106,49 @@ export default function DailyPlannerPage() {
   }, [allTasks]);
 
   // Separate zone types
-  const zones      = data?.placements.filter((p) => p.zone_type === "zone")       ?? [];
-  const restrooms  = data?.placements.filter((p) => p.zone_type === "restroom")   ?? [];
-  const auxiliary  = data?.placements.filter((p) => p.zone_type === "auxiliary")  ?? [];
-  const breakWaves = data?.break_waves ?? [];
+  const zones     = data?.placements.filter((p) => p.zone_type === "zone")      ?? [];
+  const restrooms = data?.placements.filter((p) => p.zone_type === "restroom")  ?? [];
+  const auxiliary = data?.placements.filter((p) => p.zone_type === "auxiliary") ?? [];
+
+  /**
+   * Derive break waves from zone placements (same source as the print deployment book).
+   * This populates correctly even before the engine runs — the engine populates
+   * break_assignments, but zone_assignments.group_num (= placements[].group) is always set.
+   * Every TM appears in all 3 waves under their correct group, exactly like the print.
+   */
+  const breakWaves = useMemo((): BreakWave[] => {
+    const placements = data?.placements ?? [];
+
+    // Accumulate TMs by group
+    const groupedTMs: Record<string, { tm_ids: string[]; tm_names: string[] }> = {
+      "1": { tm_ids: [], tm_names: [] },
+      "2": { tm_ids: [], tm_names: [] },
+      "3": { tm_ids: [], tm_names: [] },
+    };
+    for (const p of placements) {
+      if (p.tm_id && p.tm_name && p.group && p.group in groupedTMs) {
+        groupedTMs[p.group].tm_ids.push(p.tm_id);
+        groupedTMs[p.group].tm_names.push(p.tm_name);
+      }
+    }
+
+    return (["1", "2", "3"] as GroupId[]).map((waveId) => ({
+      wave: waveId,
+      label: WAVE_LABELS[waveId],
+      groups: (["1", "2", "3"] as GroupId[]).map((grpId) => {
+        const [start, end, dur] = BREAK_TIMES[grpId][waveId];
+        return {
+          group: grpId as GroupId,
+          start_time: start,
+          end_time: end,
+          duration_min: dur,
+          tm_ids:   [...groupedTMs[grpId].tm_ids],
+          tm_names: [...groupedTMs[grpId].tm_names],
+        };
+      }),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.placements]);
 
   // Overlap slots: placements that have at least one overlap_am / overlap_pm task saved
   const overlapPmSlots = useMemo(() =>
@@ -1162,6 +1213,23 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
     customInputRef.current?.focus();
   }
 
+  /**
+   * Union-merge catalogue defaults into the current selection.
+   * Adds any default tasks that aren't already selected.
+   * Never removes custom tasks or existing selections — purely additive.
+   */
+  function restoreDefaults() {
+    if (!slot || allTasks.length === 0) return;
+    const defaults = allTasks
+      .filter(
+        (t) =>
+          t.target_codes.length === 0 ||         // universal task for this slot type
+          t.target_codes.includes(slot.zone_id)  // specifically targets this zone
+      )
+      .map((t) => t.name);
+    setSelected((prev) => new Set([...defaults, ...prev]));
+  }
+
   async function save() {
     if (!slot) return;
     setSaving(true);
@@ -1217,6 +1285,16 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {/* Restore Defaults — additive merge, never clears custom tasks */}
+                <button
+                  onClick={restoreDefaults}
+                  disabled={allTasks.length === 0}
+                  title="Add all default tasks for this zone without clearing your custom selections"
+                  className="h-8 px-3 rounded-xl bg-gray-100 text-gray-600 text-[12px] font-semibold
+                             hover:bg-gray-200 transition-colors disabled:opacity-40 shrink-0"
+                >
+                  Restore Defaults
+                </button>
                 <button
                   onClick={save}
                   disabled={saving}
