@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, type ActiveTM, type ZoneTask } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, runEngineForNight, type ActiveTM, type ZoneTask, type EngineRunResult } from "@/lib/forge-api";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
@@ -111,6 +111,41 @@ export default function DailyPlannerPage() {
   const [pickerSlot, setPickerSlot]     = useState<TMAssignment | null>(null);
   const [taskSlot, setTaskSlot]         = useState<TMAssignment | null>(null);
   const [coverageSlot, setCoverageSlot] = useState<TMAssignment | null>(null);
+
+  // ── Engine run state ──────────────────────────────────────────────────────
+  const [engineRunning, setEngineRunning] = useState(false);
+  const [engineToast, setEngineToast]     = useState<{ result: EngineRunResult } | null>(null);
+  const engineToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleRunEngine() {
+    if (engineRunning) return;
+    setEngineRunning(true);
+    setEngineToast(null);
+    try {
+      const result = await runEngineForNight(nightId);
+      setEngineToast({ result });
+      if (result.success) {
+        // Refresh placements so the grid updates immediately
+        refresh();
+      }
+      // Auto-dismiss after 8 s
+      if (engineToastTimer.current) clearTimeout(engineToastTimer.current);
+      engineToastTimer.current = setTimeout(() => setEngineToast(null), 8_000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEngineToast({
+        result: {
+          success: false, scope: "night", updated: 0, locked_skipped: 0,
+          unresolved_cleared: 0, unresolved: [], fill_rate: 0,
+          week_ending: "", message: "", error: msg,
+        },
+      });
+      if (engineToastTimer.current) clearTimeout(engineToastTimer.current);
+      engineToastTimer.current = setTimeout(() => setEngineToast(null), 10_000);
+    } finally {
+      setEngineRunning(false);
+    }
+  }
 
   // TM roster — cached by SWR, refreshes every 10 min
   const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
@@ -284,12 +319,24 @@ export default function DailyPlannerPage() {
               Print Day
             </button>
             <button
-              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
-                         bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"
-              onClick={() => console.log("Run engine")}
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                engineRunning
+                  ? "bg-amber-500/20 text-amber-300 cursor-wait"
+                  : "bg-white/10 text-white/80 hover:bg-white/20",
+              )}
+              onClick={handleRunEngine}
+              disabled={engineRunning}
             >
-              <EngineIcon />
-              Run Engine
+              {engineRunning ? (
+                <svg className="animate-spin" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.3"/>
+                  <path d="M6.5 1.5a5 5 0 0 1 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <EngineIcon />
+              )}
+              {engineRunning ? "Running…" : "Run Engine"}
             </button>
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
@@ -482,6 +529,84 @@ export default function DailyPlannerPage() {
         onSelect={addCoverage}
         onClose={() => setCoverageSlot(null)}
       />
+
+      {/* ── Engine Run Toast ───────────────────────────────────────── */}
+      <AnimatePresence>
+        {engineToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ type: "spring", damping: 22, stiffness: 320 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[min(420px,calc(100vw-32px))]"
+          >
+            <div className={cn(
+              "rounded-2xl px-4 py-3.5 shadow-2xl flex items-start gap-3",
+              engineToast.result.success
+                ? "bg-[#1C1C1E] border border-white/10"
+                : "bg-red-950 border border-red-800/60"
+            )}>
+              {/* Icon */}
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                engineToast.result.success ? "bg-green-500/20" : "bg-red-500/20"
+              )}>
+                {engineToast.result.success ? (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.5 7l3 3 6-6" stroke="#34C759" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 4v4M7 10v.5" stroke="#FF3B30" strokeWidth="1.8" strokeLinecap="round"/>
+                    <circle cx="7" cy="7" r="5.5" stroke="#FF3B30" strokeWidth="1.3"/>
+                  </svg>
+                )}
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 min-w-0">
+                <div className={cn(
+                  "text-[13px] font-semibold leading-snug",
+                  engineToast.result.success ? "text-white" : "text-red-200"
+                )}>
+                  {engineToast.result.success ? "Engine run complete" : "Engine run failed"}
+                </div>
+                <div className={cn(
+                  "text-[12px] mt-0.5 leading-snug",
+                  engineToast.result.success ? "text-white/60" : "text-red-300/80"
+                )}>
+                  {engineToast.result.success
+                    ? engineToast.result.message
+                    : engineToast.result.error ?? "Unknown error"}
+                </div>
+                {engineToast.result.success && engineToast.result.fill_rate > 0 && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all duration-700"
+                        style={{ width: `${engineToast.result.fill_rate}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-white/50 shrink-0">
+                      {engineToast.result.fill_rate.toFixed(0)}% filled
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Dismiss */}
+              <button
+                onClick={() => setEngineToast(null)}
+                className="shrink-0 text-white/30 hover:text-white/70 transition-colors mt-0.5"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

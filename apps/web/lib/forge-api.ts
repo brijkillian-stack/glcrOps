@@ -251,3 +251,42 @@ export function fillRateColor(rate: number): string {
 export function fillRateLabel(rate: number): string {
   return `${Math.round(rate * 100)}%`;
 }
+
+// ── Engine ────────────────────────────────────────────────────────────────────
+
+export interface EngineRunResult {
+  success:            boolean;
+  scope:              "night" | "week";
+  updated:            number;
+  locked_skipped:     number;
+  unresolved_cleared: number;
+  unresolved:         string[];
+  fill_rate:          number;   // 0–100
+  week_ending:        string;
+  message:            string;
+  error:              string | null;
+}
+
+/** Run the fill engine for a single night. May take up to 90 s. */
+export async function runEngineForNight(nightId: string): Promise<EngineRunResult> {
+  const res = await fetch(`${BASE}/v1/engine/night/${nightId}/run`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Engine API ${res.status}: ${body}`);
+  }
+  return res.json() as Promise<EngineRunResult>;
+}
+
+/** Run the fill engine for an entire week. May take up to 90 s. */
+export async function runEngineForWeek(weekId: string): Promise<EngineRunResult> {
+  const res = await fetch(`${BASE}/v1/engine/week/${weekId}/run`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Engine API ${res.status}: ${body}`);
+  }
+  return res.json() as Promise<EngineRunResult>;
+}

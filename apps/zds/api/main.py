@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import get_settings
 from .core.dependencies import get_redis_client, get_supabase_client
 from .observability import instrument_app
+from .routers import engine as engine_router
 from .routers import nights as nights_router
 from .routers import planning as planning_router
 from .routers import print as print_router
@@ -88,4 +89,5 @@ async def health():
 app.include_router(print_router.router)
 app.include_router(planning_router.router)
 app.include_router(nights_router.router)
+app.include_router(engine_router.router)
 app.include_router(view_router.router)
