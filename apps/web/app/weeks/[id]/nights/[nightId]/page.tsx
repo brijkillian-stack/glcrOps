@@ -52,6 +52,30 @@ function ChevronRightIcon() {
   return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 }
 
+// ── Coverage helpers ──────────────────────────────────────────────────────────
+
+/** True for tasks that represent cross-area coverage ("and Zone X", "and Restroom X"). */
+function isCoverageTask(t: string): boolean {
+  const l = t.toLowerCase();
+  return l.startsWith("and zone") || l.startsWith("and restroom") || l.startsWith("and aux") || l.startsWith("and admin");
+}
+
+/**
+ * Build the canonical coverage task string for a slot that needs coverage.
+ *   Zone 3           → "and Zone 3"
+ *   RR 6 (mens)      → "and Restroom 6 (Men's)"
+ *   RR 1 + 2 (womens)→ "and Restroom 1 + 2 (Women's)"
+ *   Admin            → "and Admin"
+ */
+function buildCoverageTaskName(slot: TMAssignment): string {
+  if (slot.zone_type === "restroom") {
+    const num = slot.zone_label.replace(/^RR\s*/i, "").trim();
+    const side = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
+    return side ? `and Restroom ${num} (${side})` : `and Restroom ${num}`;
+  }
+  return `and ${slot.zone_label}`;
+}
+
 // ── Break schedule constants (mirrors Python _BREAK_SCHEDULE in night.py) ─────
 
 /** [groupNum][waveNum] → [start_24h, end_24h, duration_min] */
@@ -83,8 +107,9 @@ export default function DailyPlannerPage() {
   const [ctxSlot, setCtxSlot] = useState<TMAssignment | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [pencilHoverSlot, setPencilHoverSlot] = useState<string | null>(null);
-  const [pickerSlot, setPickerSlot] = useState<TMAssignment | null>(null);
-  const [taskSlot, setTaskSlot]     = useState<TMAssignment | null>(null);
+  const [pickerSlot, setPickerSlot]     = useState<TMAssignment | null>(null);
+  const [taskSlot, setTaskSlot]         = useState<TMAssignment | null>(null);
+  const [coverageSlot, setCoverageSlot] = useState<TMAssignment | null>(null);
 
   // TM roster — cached by SWR, refreshes every 10 min
   const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
@@ -144,6 +169,20 @@ export default function DailyPlannerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.placements]);
 
+  /**
+   * Set of lowercased coverage task strings that are currently assigned to ANY slot.
+   * Used to show a "covered" indicator on empty cards whose coverage task is claimed.
+   */
+  const coveredBySet = useMemo(() => {
+    const s = new Set<string>();
+    (data?.placements ?? []).forEach((p) => {
+      (p.tasks ?? []).forEach((t) => {
+        if (isCoverageTask(t)) s.add(t.toLowerCase());
+      });
+    });
+    return s;
+  }, [data?.placements]);
+
   // Split overlap slots by window from the dedicated overlap_assignments table
   const overlapPmSlots = useMemo(
     () => overlapData.filter((s) => s.overlap_window === "pm"),
@@ -172,6 +211,26 @@ export default function DailyPlannerPage() {
     setTaskSlot(slot);
   }
 
+  function openCoveragePicker(slot: TMAssignment) {
+    setCtxSlot(null);
+    setCtxPos(undefined);
+    setCoverageSlot(slot);
+  }
+
+  async function addCoverage(coveringSlot: TMAssignment) {
+    if (!coverageSlot) return;
+    const taskName = buildCoverageTaskName(coverageSlot);
+    const existing = coveringSlot.tasks ?? [];
+    if (existing.includes(taskName)) return;  // already assigned
+    try {
+      await patchSlotTasks(nightId, coveringSlot.slot_id, [...existing, taskName]);
+      refresh();
+    } catch (err) {
+      console.error("addCoverage failed:", err);
+    }
+    setCoverageSlot(null);
+  }
+
   const ctxActions: ContextAction[] = ctxSlot
     ? [
         {
@@ -179,6 +238,20 @@ export default function DailyPlannerPage() {
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="5" cy="4" r="3" stroke="currentColor" strokeWidth="1.2"/><path d="M1 13c0-2 2-3.5 4-3.5s4 1.5 4 3.5M10 5h4M12 3v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
           onClick: () => openPicker(ctxSlot),
         },
+        // ← Add Coverage — only surfaces on unassigned slots
+        ...(!ctxSlot.tm_id
+          ? [{
+              label: "Add Coverage",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5.5 8.5L8.5 5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  <path d="M7.5 4.5L8.5 3.5a2 2 0 012.8 2.8L10 7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M6.5 9.5L5.5 10.5a2 2 0 01-2.8-2.8L4 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ),
+              onClick: () => openCoveragePicker(ctxSlot),
+            }]
+          : []),
         {
           label: "Clear slot",
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
@@ -311,6 +384,7 @@ export default function DailyPlannerPage() {
                       key={slot.slot_id}
                       slot={slot}
                       index={i}
+                      isCovered={!slot.tm_id && coveredBySet.has(buildCoverageTaskName(slot).toLowerCase())}
                       isPencilHover={pencilHoverSlot === slot.slot_id}
                       onPencilEnter={() => setPencilHoverSlot(slot.slot_id)}
                       onPencilLeave={() => setPencilHoverSlot(null)}
@@ -419,6 +493,13 @@ export default function DailyPlannerPage() {
         onClose={() => setTaskSlot(null)}
         onSaved={refresh}
       />
+
+      <CoveragePickerSheet
+        coveredSlot={coverageSlot}
+        allSlots={data?.placements ?? []}
+        onSelect={addCoverage}
+        onClose={() => setCoverageSlot(null)}
+      />
     </div>
   );
 }
@@ -428,6 +509,7 @@ export default function DailyPlannerPage() {
 interface ZoneCardProps {
   slot: TMAssignment;
   index: number;
+  isCovered?: boolean;          // empty slot that has coverage assigned elsewhere
   isPencilHover: boolean;
   onPencilEnter: () => void;
   onPencilLeave: () => void;
@@ -437,14 +519,19 @@ interface ZoneCardProps {
 function ZoneCard({
   slot,
   index,
+  isCovered = false,
   isPencilHover,
   onPencilEnter,
   onPencilLeave,
   onContextMenu,
 }: ZoneCardProps) {
-  const accent      = zoneAccentColor(slot.zone_id);   // zone-family bar — matches print exactly
-  const groupAccent = slot.group ? groupColor(slot.group) : "#E2E8F0"; // break group dot
+  const accent      = zoneAccentColor(slot.zone_id);
+  const groupAccent = slot.group ? groupColor(slot.group) : "#E2E8F0";
   const isEmpty = !slot.tm_id;
+
+  // Split tasks: regular vs coverage ("and Zone/Restroom X")
+  const regularTasks  = (slot.tasks ?? []).filter((t) => !isCoverageTask(t));
+  const coverageTasks = (slot.tasks ?? []).filter((t) => isCoverageTask(t));
 
   return (
     <motion.div
@@ -510,24 +597,36 @@ function ZoneCard({
           </div>
         </div>
 
-        {/* Tasks — show up to 3, "+N more" if overflow */}
-        {(slot.tasks ?? []).length > 0 && (
+        {/* Regular tasks — up to 3 shown, "+N more" overflow */}
+        {regularTasks.length > 0 && (
           <ul className="flex flex-col gap-0.5">
-            {(slot.tasks ?? []).slice(0, 3).map((t, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug"
-              >
+            {regularTasks.slice(0, 3).map((t, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
                 <TaskDotIcon />
                 <span className="truncate">{t}</span>
               </li>
             ))}
-            {(slot.tasks ?? []).length > 3 && (
+            {regularTasks.length > 3 && (
               <li className="text-[10px] font-semibold text-gray-400 pl-3">
-                +{(slot.tasks ?? []).length - 3} more
+                +{regularTasks.length - 3} more
               </li>
             )}
           </ul>
+        )}
+
+        {/* Coverage tasks — "and Zone/Restroom X" — bold, centered, separated */}
+        {coverageTasks.length > 0 && (
+          <div className={cn(
+            "flex flex-col gap-0.5 pt-1.5",
+            regularTasks.length > 0 && "border-t border-gray-100 mt-0.5"
+          )}>
+            {coverageTasks.map((t, i) => (
+              <div key={i} className="text-[11.5px] font-bold text-gray-700 text-center
+                                      leading-snug tracking-tight">
+                {t}
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Override indicator */}
@@ -538,6 +637,16 @@ function ZoneCard({
           </div>
         )}
       </div>
+
+      {/* Faint checkmark watermark — empty slot that has coverage assigned */}
+      {isEmpty && isCovered && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <svg width="44" height="44" viewBox="0 0 44 44" fill="none" className="opacity-[0.07]">
+            <path d="M8 22l10 10 18-18" stroke="#374151" strokeWidth="4.5"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      )}
 
       {/* Pencil hover overlay */}
       <AnimatePresence>
@@ -1081,6 +1190,174 @@ function TMPickerSheet({
                 </>
               )}
 
+              <div className="h-6" />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── Coverage Picker Sheet ─────────────────────────────────────────────────────
+// Lets the supervisor pick which filled slot will cover an unassigned one.
+// Selecting a covering slot writes "and Zone X" / "and Restroom X (Side)"
+// as a custom task on the covering slot's zone_assignment row.
+
+interface CoveragePickerSheetProps {
+  coveredSlot: TMAssignment | null;   // the empty slot that needs coverage
+  allSlots: TMAssignment[];           // all placements for tonight
+  onSelect: (coveringSlot: TMAssignment) => Promise<void>;
+  onClose: () => void;
+}
+
+function CoveragePickerSheet({
+  coveredSlot,
+  allSlots,
+  onSelect,
+  onClose,
+}: CoveragePickerSheetProps) {
+  const isOpen   = !!coveredSlot;
+  const [saving, setSaving] = useState<string | null>(null);  // slot_id being saved
+
+  if (!coveredSlot) return null;
+
+  const taskName = buildCoverageTaskName(coveredSlot);
+
+  // All filled slots except the covered slot itself, grouped by type
+  const filled = allSlots.filter(
+    (s) => s.tm_id && s.slot_id !== coveredSlot.slot_id
+  );
+  const filledZones = filled.filter((s) => s.zone_type === "zone");
+  const filledRRs   = filled.filter((s) => s.zone_type === "restroom");
+  const filledAux   = filled.filter((s) => s.zone_type === "auxiliary");
+
+  async function handleSelect(slot: TMAssignment) {
+    setSaving(slot.slot_id);
+    await onSelect(slot);
+    setSaving(null);
+  }
+
+  function SlotRow({ slot }: { slot: TMAssignment }) {
+    const accent       = zoneAccentColor(slot.zone_id);
+    const alreadyHas   = (slot.tasks ?? []).includes(taskName);
+    const isSaving     = saving === slot.slot_id;
+    const sideLabel    = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
+
+    return (
+      <button
+        onClick={() => !alreadyHas && handleSelect(slot)}
+        disabled={alreadyHas || isSaving}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-colors text-left",
+          alreadyHas ? "opacity-50 cursor-default" : "hover:bg-gray-50 active:bg-gray-100"
+        )}
+      >
+        {/* Zone-family accent bar */}
+        <div className="w-1 h-9 rounded-full shrink-0" style={{ backgroundColor: accent }} />
+
+        {/* Zone label + TM */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold text-gray-800 truncate">
+              {slot.zone_label}
+            </span>
+            {sideLabel && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                    style={{ backgroundColor: `${accent}22`, color: accent }}>
+                {sideLabel}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{slot.tm_name}</div>
+        </div>
+
+        {/* State indicator */}
+        {alreadyHas ? (
+          <span className="text-[10px] font-semibold text-green-600 bg-green-50
+                           px-2 py-0.5 rounded-full shrink-0">
+            Assigned
+          </span>
+        ) : isSaving ? (
+          <div className="w-4 h-4 rounded-full border-2 border-[#007AFF] border-t-transparent
+                          animate-spin shrink-0" />
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-gray-300 shrink-0">
+            <path d="M4 2l6 5-6 5" stroke="currentColor" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+    );
+  }
+
+  function SectionHeader({ label, count }: { label: string; count: number }) {
+    if (count === 0) return null;
+    return (
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400
+                      px-1 pt-3 pb-1.5 first:pt-1">
+        {label} · {count}
+      </div>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="coverage-backdrop"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={onClose}
+          />
+          <motion.div
+            key="coverage-sheet"
+            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl
+                       shadow-2xl flex flex-col max-h-[80dvh]"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pt-1 pb-4 shrink-0 flex items-start justify-between">
+              <div>
+                <h3 className="text-[16px] font-bold text-gray-900">Add Coverage</h3>
+                <p className="text-[12px] text-gray-400 mt-0.5">
+                  Who covers{" "}
+                  <span className="font-semibold text-gray-600">{coveredSlot.zone_label}</span>?
+                  Adds <span className="font-semibold text-gray-700">"{taskName}"</span> to their card.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center
+                           text-gray-500 hover:bg-gray-200 transition-colors shrink-0"
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <path d="M1 1l9 9M10 1L1 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Slot list */}
+            <div className="overflow-y-auto flex-1 px-4 pb-safe">
+              {filled.length === 0 && (
+                <p className="text-center text-[13px] text-gray-400 py-10">
+                  No filled slots available to assign coverage
+                </p>
+              )}
+              <SectionHeader label="Zones" count={filledZones.length} />
+              {filledZones.map((s) => <SlotRow key={s.slot_id} slot={s} />)}
+              <SectionHeader label="Restrooms" count={filledRRs.length} />
+              {filledRRs.map((s)  => <SlotRow key={s.slot_id} slot={s} />)}
+              <SectionHeader label="Auxiliary" count={filledAux.length} />
+              {filledAux.map((s)  => <SlotRow key={s.slot_id} slot={s} />)}
               <div className="h-6" />
             </div>
           </motion.div>

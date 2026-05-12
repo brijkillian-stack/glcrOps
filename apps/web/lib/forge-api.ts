@@ -179,7 +179,8 @@ export interface OverlapSlot {
 }
 
 /** Derive a short display label from position code: "PMOL1" → "PM OL 1" */
-export function overlapPositionLabel(position: string): string {
+export function overlapPositionLabel(position: string | null | undefined): string {
+  if (!position) return "—";
   return position
     .replace(/^PMOL(\d+)$/, "PM OL $1")
     .replace(/^AMOL(\d+)$/, "AM OL $1");

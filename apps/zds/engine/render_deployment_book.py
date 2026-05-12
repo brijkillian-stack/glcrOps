@@ -369,18 +369,24 @@ def icon_for_task(task: str) -> str:
     return ""
 
 def _render_task_li(task: str) -> str:
-    """Render a single task list item. Sweeper tasks get a distinct
-    'SWEEPER' pill + faint orange tint so they stand out against the regular
-    task lines — sweeper duty is operationally distinct (it's a route, not a
-    static task) and Brian wanted it more noticeable on the floor."""
+    """Render a single task list item.
+
+    Special rendering paths:
+      • Sweeper  — SWEEPER pill + orange tint; operationally a route, not a static task.
+      • Coverage — "and Zone/Restroom X" tasks from supervisor Add Coverage action.
+                   Rendered bold, centered, slightly larger with a thin top separator
+                   so it reads as a prominent callout at the foot of the task list.
+    """
     if not task: return "<li></li>"
-    if task.lower().startswith("sweeper"):
-        # Case-safe split: works for "Sweeper xyz" or "sweeper xyz" or just "Sweeper"
+    tl = task.lower()
+    if tl.startswith("sweeper"):
         rest = task.split(" ", 1)[1] if " " in task else ""
         return (f'<li class="sweeper-task">'
                 f'<span class="sweeper-pill">SWEEPER</span>'
                 f'<span class="sweeper-route">{esc(rest)}</span>'
                 f'</li>')
+    if tl.startswith(("and zone", "and restroom", "and aux", "and admin")):
+        return f'<li class="coverage-task">{esc(task)}</li>'
     return f'<li>{icon_for_task(task)}{esc(task)}</li>'
 
 def alert_to_short(text: str) -> str:
@@ -2108,6 +2114,27 @@ li.sweeper-task .sweeper-route {
   font-weight: 700; color: #C56C00;
   font-variant-numeric: tabular-nums;
 }
+
+/* === COVERAGE TASK — "and Zone/Restroom X" supervisor-assigned cross-area coverage
+   Rendered bold, centered, slightly larger (12px vs 10.5px default), with a thin
+   separator rule above so it reads as a distinct callout at the foot of the task list.
+   The card-coverage-outline class (border) is applied by _inject_coverage_outline(). */
+li.coverage-task {
+  display: block !important;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #1a1a1a;
+  list-style: none !important;
+  margin: 3px -2px 0;
+  padding: 3px 4px 1px;
+  border-top: 0.75px solid rgba(0,0,0,0.12);
+  letter-spacing: -0.01em;
+}
+li.coverage-task::before { content: none !important; }
+.zone-card.is-crowded li.coverage-task { font-size: 11px; }
+.zone-card.is-extra-crowded li.coverage-task { font-size: 10.5px; }
 
 /* === ZONE SHAPE ICONS (5/1/26 accessibility) ===
    Each zone (1-10) has a unique geometric mark; RR cards inherit the shape
