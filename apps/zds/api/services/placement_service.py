@@ -161,6 +161,51 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
+    async def patch_assignment_tm(self, slot_id: str, tm_id: Optional[str]) -> dict:
+        """Update the tm_id on a single zone_assignments row.
+
+        Sets is_filled=True when tm_id is provided, False when clearing.
+        Invalidates the night's assignment cache so the next GET is fresh.
+        Returns the updated row dict, or raises on error.
+        """
+        payload: dict = {
+            "tm_id":     tm_id,
+            "is_filled": tm_id is not None,
+            "is_empty":  tm_id is None,
+        }
+        try:
+            res = (
+                self.supabase.table("zone_assignments")
+                .update(payload)
+                .eq("id", slot_id)
+                .execute()
+            )
+            row = (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("patch_assignment_tm(%s, %s) failed: %s", slot_id, tm_id, exc)
+            raise
+
+        # Invalidate so the next placements fetch gets fresh data.
+        night_id = row.get("night_id")
+        if night_id:
+            await self.cache.delete(f"zds:night:{night_id}:assignments")
+
+        return row
+
+    async def get_night_breaks(self, night_id: str) -> list[dict]:
+        """Return break assignments for the night, cached for NIGHT_TTL seconds."""
+        key = f"zds:night:{night_id}:breaks"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            rows = self.db.fetch_break_assignments(night_id) or []
+        except Exception as exc:
+            log.warning("fetch_break_assignments(%s) failed: %s", night_id, exc)
+            return []
+        await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
+        return rows
+
     async def get_night_overlaps(self, night_id: str) -> list[dict]:
         key = f"zds:night:{night_id}:overlaps"
         cached = await self.cache.get(key)

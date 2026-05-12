@@ -53,119 +53,19 @@ export interface NightPlacements {
 export const placementsKey = (nightId: string) =>
   ["night-placements", nightId] as const;
 
-// ── Mock data builder ─────────────────────────────────────────────────────────
-
-const ZONE_COLORS: Record<string, GroupId> = {
-  Z1: "1", Z2: "1", Z3: "2", Z4: "2", Z5: "3",
-  Z6: "1", Z7: "2", Z8: "3", Z9: "1", Z10: "2",
-  Z11: "3", Z12: "1",
-  "RR-A": "2", "RR-B": "3", "RR-C": "1",
-  "AUX-1": "2", "AUX-2": "3",
-};
-
-const MOCK_TMS = [
-  { id: "tm-joy",     name: "Joy M.",     initials: "JM" },
-  { id: "tm-seth",    name: "Seth K.",    initials: "SK" },
-  { id: "tm-cookie",  name: "Cookie R.",  initials: "CR" },
-  { id: "tm-sheri",   name: "Sheri O.",   initials: "SO" },
-  { id: "tm-melissa", name: "Melissa T.", initials: "MT" },
-  { id: "tm-daryl",   name: "Daryl H.",   initials: "DH" },
-  { id: "tm-hena",    name: "Hena P.",    initials: "HP" },
-  { id: "tm-vera",    name: "Vera S.",    initials: "VS" },
-  { id: "tm-tony",    name: "Tony B.",    initials: "TB" },
-  { id: "tm-ace",     name: "Ace L.",     initials: "AL" },
-  { id: "tm-naye",    name: "Naye W.",    initials: "NW" },
-  { id: "tm-sere",    name: "Sere D.",    initials: "SD" },
-];
-
-function buildMockPlacements(nightId: string): NightPlacements {
-  const zones = [
-    { id: "Z1", label: "Zone 1", type: "zone" as const },
-    { id: "Z2", label: "Zone 2", type: "zone" as const },
-    { id: "Z3", label: "Zone 3", type: "zone" as const },
-    { id: "Z4", label: "Zone 4", type: "zone" as const },
-    { id: "Z5", label: "Zone 5", type: "zone" as const },
-    { id: "Z6", label: "Zone 6", type: "zone" as const },
-    { id: "Z7", label: "Zone 7", type: "zone" as const },
-    { id: "Z8", label: "Zone 8", type: "zone" as const },
-    { id: "Z9", label: "Zone 9", type: "zone" as const },
-    { id: "Z10", label: "Zone 10", type: "zone" as const },
-    { id: "Z11", label: "Zone 11", type: "zone" as const },
-    { id: "Z12", label: "Zone 12", type: "zone" as const },
-    { id: "RR-A", label: "Restrooms A", type: "restroom" as const },
-    { id: "RR-B", label: "Restrooms B", type: "restroom" as const },
-    { id: "RR-C", label: "Restrooms C", type: "restroom" as const },
-    { id: "AUX-1", label: "Auxiliary 1", type: "auxiliary" as const },
-    { id: "AUX-2", label: "Auxiliary 2", type: "auxiliary" as const },
-  ];
-
-  const placements: TMAssignment[] = zones.map((z, i) => {
-    const tm = i < MOCK_TMS.length ? MOCK_TMS[i] : null;
-    return {
-      slot_id: `${nightId}-${z.id}`,
-      zone_id: z.id,
-      zone_label: z.label,
-      zone_type: z.type,
-      tm_id: tm?.id ?? null,
-      tm_name: tm?.name ?? null,
-      tm_initials: tm?.initials ?? null,
-      group: ZONE_COLORS[z.id] ?? null,
-      tasks: tm ? [`Clean ${z.label}`, "Restock supplies"] : [],
-      is_override: false,
-    };
-  });
-
-  const break_waves: BreakWave[] = [
-    {
-      wave: "1",
-      label: "Break 1",
-      start_time: "01:00",
-      end_time: "01:30",
-      tm_ids: ["tm-joy", "tm-seth", "tm-cookie", "tm-sheri"],
-      tm_names: ["Joy M.", "Seth K.", "Cookie R.", "Sheri O."],
-    },
-    {
-      wave: "2",
-      label: "Break 2",
-      start_time: "02:30",
-      end_time: "03:00",
-      tm_ids: ["tm-melissa", "tm-daryl", "tm-hena", "tm-vera"],
-      tm_names: ["Melissa T.", "Daryl H.", "Hena P.", "Vera S."],
-    },
-    {
-      wave: "3",
-      label: "Break 3",
-      start_time: "04:00",
-      end_time: "04:30",
-      tm_ids: ["tm-tony", "tm-ace", "tm-naye", "tm-sere"],
-      tm_names: ["Tony B.", "Ace L.", "Naye W.", "Sere D."],
-    },
-  ];
-
-  return {
-    night_id: nightId,
-    date: "2026-05-08",
-    day_name: "Friday",
-    fill_rate: 0.85,
-    last_synced: new Date().toISOString(),
-    placements,
-    break_waves,
-  };
-}
 
 // ── SWR fetcher ───────────────────────────────────────────────────────────────
 
 async function fetchPlacements(nightId: string): Promise<NightPlacements> {
-  try {
-    const res = await fetch(`/api/forge/v1/nights/${nightId}/placements`);
-    if (!res.ok) throw new Error("API error");
-    const data = await res.json();
-    return { ...data, last_synced: new Date().toISOString() };
-  } catch {
-    // Fall back to mock data in dev / when API is down
-    await new Promise((r) => setTimeout(r, 300));  // fake latency
-    return buildMockPlacements(nightId);
+  const res = await fetch(`/api/forge/v1/nights/${nightId}/placements`, {
+    next: { revalidate: 30 },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Forge API ${res.status} at /v1/nights/${nightId}/placements: ${body}`);
   }
+  const data = await res.json();
+  return { ...data, last_synced: new Date().toISOString() };
 }
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
@@ -203,12 +103,21 @@ export function useNightPlacements(nightId: string) {
 
     await mutate(
       async () => {
-        // In prod: POST /api/forge/v1/nights/{nightId}/placements/{slotId}
-        // For now just return optimistic with a server timestamp
-        await new Promise((r) => setTimeout(r, 120)); // simulated round-trip
+        const res = await fetch(
+          `/api/forge/v1/nights/${nightId}/placements/${slotId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tm_id: tm?.id ?? null }),
+          }
+        );
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`assignTM ${res.status}: ${body}`);
+        }
         return { ...optimistic, last_synced: new Date().toISOString() };
       },
-      { optimisticData: optimistic, rollbackOnError: true, revalidate: false }
+      { optimisticData: optimistic, rollbackOnError: true, revalidate: true }
     );
   }
 
