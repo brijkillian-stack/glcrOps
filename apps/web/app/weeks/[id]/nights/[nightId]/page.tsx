@@ -7,8 +7,9 @@ import { GlcrHeader } from "@/components/ui/GlcrHeader";
 import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
-import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type GroupId } from "@/lib/sync";
+import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
 import { cn, groupColor } from "@/lib/utils";
+import { formatBreakTime } from "@/lib/shift-date";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -500,6 +501,10 @@ function OverlapsSection() {
 // ── Break Waves View ──────────────────────────────────────────────────────────
 // This view is the Break Sheet — shares the SAME SWR data as the zones view.
 // Any change here (moveBreakTM) immediately updates the zones view and vice versa.
+//
+// Layout: 3 wave columns (First / Main / Last Break).
+// Each column contains 3 group rows (Group 1 / 2 / 3) with their exact times.
+// TMs are draggable between waves; their group assignment is preserved.
 
 interface BreakWavesViewProps {
   waves: BreakWave[];
@@ -508,15 +513,16 @@ interface BreakWavesViewProps {
   onRefresh: () => void;
 }
 
+/** Accent color for each wave (First / Main / Last Break) */
+const WAVE_COLORS: Record<GroupId, string> = {
+  "1": "#3B82F6",   // blue  — First Break
+  "2": "#F59E0B",   // amber — Main Break
+  "3": "#10B981",   // green — Last Break
+};
+
 function BreakWavesView({ waves, onMoveTM, lastSynced, onRefresh }: BreakWavesViewProps) {
   const [dragging, setDragging] = useState<{ tmId: string; tmName: string; fromWave: GroupId } | null>(null);
   const [dropTarget, setDropTarget] = useState<GroupId | null>(null);
-
-  const WAVE_COLORS: Record<GroupId, string> = {
-    "1": "#3B82F6",
-    "2": "#F59E0B",
-    "3": "#10B981",
-  };
 
   function handleDragStart(tmId: string, tmName: string, fromWave: GroupId) {
     setDragging({ tmId, tmName, fromWave });
@@ -537,84 +543,127 @@ function BreakWavesView({ waves, onMoveTM, lastSynced, onRefresh }: BreakWavesVi
         <SyncBar lastSynced={lastSynced} onRefresh={onRefresh} className="text-gray-400" />
       </div>
       <p className="text-[12px] text-gray-400 -mt-2">
-        Drag TMs between waves · changes sync instantly to the Zone view
+        Drag TMs between waves · groups go on break at staggered times
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {waves.map((wave) => (
-          <div
-            key={wave.wave}
-            onDragOver={(e) => { e.preventDefault(); setDropTarget(wave.wave as GroupId); }}
-            onDragLeave={() => setDropTarget(null)}
-            onDrop={() => handleDrop(wave.wave as GroupId)}
-            className={cn(
-              "card rounded-3xl p-4 transition-all duration-150",
-              dropTarget === wave.wave && "ring-2 ring-[#007AFF] bg-blue-50/30"
-            )}
-          >
-            {/* Wave header */}
-            <div className="flex items-center gap-2 mb-3">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: WAVE_COLORS[wave.wave as GroupId] }}
-              />
-              <div>
-                <div className="text-[14px] font-bold text-gray-800">{wave.label}</div>
-                <div className="text-[11px] text-gray-400 font-medium">
-                  {wave.start_time} – {wave.end_time}
+        {waves.map((wave) => {
+          const totalTMs = wave.groups.reduce((n, g) => n + g.tm_ids.length, 0);
+          const waveColor = WAVE_COLORS[wave.wave as GroupId];
+          const isDropTarget = dropTarget === wave.wave;
+
+          return (
+            <div
+              key={wave.wave}
+              onDragOver={(e) => { e.preventDefault(); setDropTarget(wave.wave as GroupId); }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={() => handleDrop(wave.wave as GroupId)}
+              className={cn(
+                "card rounded-3xl p-4 transition-all duration-150",
+                isDropTarget && "ring-2 ring-[#007AFF] bg-blue-50/30"
+              )}
+            >
+              {/* Wave header */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: waveColor }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[14px] font-bold text-gray-800">{wave.label}</div>
+                </div>
+                <div className="badge bg-gray-100 text-gray-500 text-[11px] shrink-0">
+                  {totalTMs} TM{totalTMs !== 1 ? "s" : ""}
                 </div>
               </div>
-              <div className="ml-auto badge bg-gray-100 text-gray-500 text-[11px]">
-                {wave.tm_ids.length} TMs
-              </div>
-            </div>
 
-            {/* TM chips */}
-            <div className="flex flex-col gap-1.5">
-              <AnimatePresence>
-                {wave.tm_names.map((name, i) => (
-                  <motion.div
-                    key={wave.tm_ids[i]}
-                    layout
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.18 }}
-                    draggable
-                    onDragStart={() =>
-                      handleDragStart(wave.tm_ids[i], name, wave.wave as GroupId)
-                    }
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-2 rounded-xl",
-                      "bg-gray-50 hover:bg-gray-100 cursor-grab active:cursor-grabbing",
-                      "transition-colors duration-100 no-select",
-                      dragging?.tmId === wave.tm_ids[i] && "opacity-40"
-                    )}
-                  >
-                    <UserIcon initials={name.split(" ").map((n) => n[0]).join("").slice(0, 2)} />
-                    <span className="text-[13px] font-medium text-gray-700 truncate">
-                      {name}
-                    </span>
-                    {/* Drag handle dots */}
-                    <span className="ml-auto text-gray-300 shrink-0">
-                      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
-                        <circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/>
-                        <circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/>
-                        <circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/>
-                      </svg>
-                    </span>
-                  </motion.div>
+              {/* Per-group rows */}
+              <div className="flex flex-col gap-3">
+                {wave.groups.map((grpSlot) => (
+                  <BreakGroupRow
+                    key={grpSlot.group}
+                    grpSlot={grpSlot}
+                    waveId={wave.wave as GroupId}
+                    draggingTmId={dragging?.tmId ?? null}
+                    onDragStart={handleDragStart}
+                  />
                 ))}
-              </AnimatePresence>
+              </div>
 
-              {wave.tm_ids.length === 0 && (
-                <div className="text-[12px] text-gray-300 italic py-2 text-center">
-                  Drop TMs here
+              {/* Drop hint when hovering */}
+              {isDropTarget && (
+                <div className="mt-3 text-[11px] text-[#007AFF] font-semibold text-center
+                                py-1.5 border-2 border-dashed border-[#007AFF]/30 rounded-xl">
+                  Drop to move here
                 </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Break Group Row ───────────────────────────────────────────────────────────
+
+interface BreakGroupRowProps {
+  grpSlot: BreakGroupSlot;
+  waveId: GroupId;
+  draggingTmId: string | null;
+  onDragStart: (tmId: string, tmName: string, fromWave: GroupId) => void;
+}
+
+function BreakGroupRow({ grpSlot, waveId, draggingTmId, onDragStart }: BreakGroupRowProps) {
+  const accentColor = groupColor(grpSlot.group);
+  const timeLabel = `${formatBreakTime(grpSlot.start_time)} – ${formatBreakTime(grpSlot.end_time)}`;
+
+  return (
+    <div className="rounded-2xl bg-gray-50 overflow-hidden">
+      {/* Group header bar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: accentColor }} />
+        <span className="text-[11px] font-semibold text-gray-600">Group {grpSlot.group}</span>
+        <span className="ml-auto text-[11px] text-gray-400 font-mono">{timeLabel}</span>
+        <span className="ml-1 text-[10px] font-medium text-gray-300">
+          {grpSlot.duration_min}m
+        </span>
+      </div>
+
+      {/* TM chips */}
+      <div className="px-2 py-1.5 flex flex-col gap-1">
+        <AnimatePresence>
+          {grpSlot.tm_names.map((name, i) => (
+            <motion.div
+              key={grpSlot.tm_ids[i]}
+              layout
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15 }}
+              draggable
+              onDragStart={() => onDragStart(grpSlot.tm_ids[i], name, waveId)}
+              className={cn(
+                "flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white",
+                "border border-gray-100 cursor-grab active:cursor-grabbing",
+                "transition-colors duration-100 no-select",
+                draggingTmId === grpSlot.tm_ids[i] && "opacity-40"
+              )}
+            >
+              <UserIcon initials={name.split(" ").map((n) => n[0]).join("").slice(0, 2)} />
+              <span className="text-[12px] font-medium text-gray-700 truncate flex-1">{name}</span>
+              {/* Drag handle */}
+              <span className="text-gray-200 shrink-0">
+                <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+                  <circle cx="2" cy="2" r="1.5"/><circle cx="6" cy="2" r="1.5"/>
+                  <circle cx="2" cy="6" r="1.5"/><circle cx="6" cy="6" r="1.5"/>
+                  <circle cx="2" cy="10" r="1.5"/><circle cx="6" cy="10" r="1.5"/>
+                </svg>
+              </span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {grpSlot.tm_ids.length === 0 && (
+          <div className="text-[11px] text-gray-300 italic py-1 px-1">No TMs</div>
+        )}
       </div>
     </div>
   );

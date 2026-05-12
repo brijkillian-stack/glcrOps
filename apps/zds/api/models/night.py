@@ -16,12 +16,34 @@ GroupId = Literal["1", "2", "3"]
 ZoneType = Literal["zone", "restroom", "auxiliary"]
 
 
-# ── Break wave times (grave shift 11 PM → 7 AM) ───────────────────────────────
+# ── Break schedule — grave shift (11 PM → 7 AM) ──────────────────────────────
+#
+# Times are keyed by (group_num, break_wave) → (start_24h, end_24h, duration_min)
+# group_num: which break group the TM is in (1 | 2 | 3)
+# break_wave: which break in the night (1=first 15-min, 2=30-min, 3=last 15-min)
+#
+# Source: Brian's master prompt — committed to GLCR memory 2026-05-12.
 
-_BREAK_TIMES: dict[int, tuple[str, str]] = {
-    1: ("01:00", "01:30"),
-    2: ("02:30", "03:00"),
-    3: ("04:00", "04:30"),
+_BREAK_SCHEDULE: dict[tuple[int, int], tuple[str, str, int]] = {
+    # (group, wave): (start, end, duration_minutes)
+    (1, 1): ("00:45", "01:00", 15),   # Group 1 — first 15 min (12:45 AM)
+    (1, 2): ("02:30", "03:00", 30),   # Group 1 — 30 min
+    (1, 3): ("05:00", "05:15", 15),   # Group 1 — last 15 min
+
+    (2, 1): ("01:00", "01:15", 15),   # Group 2 — first 15 min (1:00 AM)
+    (2, 2): ("03:00", "03:30", 30),   # Group 2 — 30 min
+    (2, 3): ("05:00", "05:15", 15),   # Group 2 — last 15 min
+
+    (3, 1): ("01:15", "01:30", 15),   # Group 3 — first 15 min (1:15 AM)
+    (3, 2): ("03:30", "04:00", 30),   # Group 3 — 30 min
+    (3, 3): ("05:15", "05:30", 15),   # Group 3 — last 15 min
+}
+
+# Wave-level labels
+_WAVE_LABELS: dict[int, str] = {
+    1: "First Break",
+    2: "Main Break",
+    3: "Last Break",
 }
 
 
@@ -98,17 +120,31 @@ class TMAssignment(BaseModel):
         return data
 
 
-class BreakWave(BaseModel):
-    """One break wave — all TMs going on break at the same time."""
+class BreakGroupSlot(BaseModel):
+    """TMs in one break group within a wave, with their exact times."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    wave: GroupId           # "1" | "2" | "3"
-    label: str              # "Break 1" etc.
-    start_time: str         # "HH:MM" (24h)
-    end_time: str           # "HH:MM" (24h)
+    group: GroupId          # "1" | "2" | "3"
+    start_time: str         # "HH:MM" 24h — e.g. "00:45" (12:45 AM)
+    end_time: str           # "HH:MM" 24h
+    duration_min: int       # 15 or 30
     tm_ids: list[str] = []
     tm_names: list[str] = []
+
+
+class BreakWave(BaseModel):
+    """One break sequence (first/main/last) — contains per-group timing and TMs.
+
+    Each wave has three groups that go on break at staggered times.
+    Use groups[] to render per-group break cards with correct times.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    wave: GroupId           # "1" | "2" | "3" (sequence in the night)
+    label: str              # "First Break" | "Main Break" | "Last Break"
+    groups: list[BreakGroupSlot]  # one entry per group, sorted by group
 
 
 class NightPlacementsResponse(BaseModel):
@@ -174,44 +210,45 @@ def build_night_response(
 
     fill_rate = (filled / len(placements)) if placements else 0.0
 
-    # ── Break waves ───────────────────────────────────────────────────────────
-    waves_map: dict[int, dict] = {}
+    # ── Break waves (per-group timing) ───────────────────────────────────────
+    # Structure: waves_map[break_wave][group_num] = {tm_ids, tm_names}
+    waves_map: dict[int, dict[int, dict]] = {}
+
     for row in break_rows:
-        bw = int(row.get("break_wave") or 0)
-        if bw not in (1, 2, 3):
+        bw  = int(row.get("break_wave") or 0)
+        grp = int(row.get("group_num") or 0)
+        if bw not in (1, 2, 3) or grp not in (1, 2, 3):
             continue
         if bw not in waves_map:
-            start, end = _BREAK_TIMES.get(bw, ("??:??", "??:??"))
-            waves_map[bw] = {
-                "wave": str(bw),
-                "label": f"Break {bw}",
-                "start_time": start,
-                "end_time": end,
-                "tm_ids": [],
-                "tm_names": [],
-            }
+            waves_map[bw] = {}
+        if grp not in waves_map[bw]:
+            waves_map[bw][grp] = {"tm_ids": [], "tm_names": []}
         tid  = row.get("tm_id", "")
         tnam = row.get("tm_name", "")
         if tid:
-            waves_map[bw]["tm_ids"].append(tid)
+            waves_map[bw][grp]["tm_ids"].append(tid)
         if tnam:
-            waves_map[bw]["tm_names"].append(tnam)
+            waves_map[bw][grp]["tm_names"].append(tnam)
 
-    break_waves = [
-        BreakWave(**waves_map[bw]) for bw in sorted(waves_map)
-    ]
-    # Ensure all 3 waves exist even if no assignments yet
-    existing = {w.wave for w in break_waves}
+    break_waves: list[BreakWave] = []
     for bw in (1, 2, 3):
-        wstr = str(bw)
-        if wstr not in existing:
-            start, end = _BREAK_TIMES[bw]
-            break_waves.append(BreakWave(
-                wave=wstr, label=f"Break {bw}",
-                start_time=start, end_time=end,
-                tm_ids=[], tm_names=[],
+        group_slots: list[BreakGroupSlot] = []
+        for grp in (1, 2, 3):
+            start, end, dur = _BREAK_SCHEDULE.get((grp, bw), ("??:??", "??:??", 15))
+            slot_data = (waves_map.get(bw) or {}).get(grp) or {}
+            group_slots.append(BreakGroupSlot(
+                group        = str(grp),   # type: ignore[arg-type]
+                start_time   = start,
+                end_time     = end,
+                duration_min = dur,
+                tm_ids       = slot_data.get("tm_ids", []),
+                tm_names     = slot_data.get("tm_names", []),
             ))
-    break_waves.sort(key=lambda w: w.wave)
+        break_waves.append(BreakWave(
+            wave   = str(bw),             # type: ignore[arg-type]
+            label  = _WAVE_LABELS[bw],
+            groups = group_slots,
+        ))
 
     return NightPlacementsResponse(
         night_id    = night.get("id", ""),

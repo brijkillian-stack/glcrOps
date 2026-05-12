@@ -29,13 +29,28 @@ export interface TMAssignment {
   is_override: boolean;
 }
 
-export interface BreakWave {
-  wave: GroupId;      // "1" | "2" | "3"
-  label: string;      // "Break 1", etc.
-  start_time: string; // "01:30"
-  end_time: string;   // "02:00"
+/**
+ * Per-group slot within a break wave.
+ * Each group goes on break at staggered times (see break schedule below).
+ *
+ * Break schedule — grave shift 11 PM → 7 AM:
+ *   Group 1: Wave1 12:45a (15m) | Wave2 2:30a (30m) | Wave3 5:00a (15m)
+ *   Group 2: Wave1  1:00a (15m) | Wave2 3:00a (30m) | Wave3 5:00a (15m)
+ *   Group 3: Wave1  1:15a (15m) | Wave2 3:30a (30m) | Wave3 5:15a (15m)
+ */
+export interface BreakGroupSlot {
+  group: GroupId;       // "1" | "2" | "3"
+  start_time: string;   // "HH:MM" 24h — e.g. "00:45" = 12:45 AM
+  end_time: string;
+  duration_min: number; // 15 or 30
   tm_ids: string[];
   tm_names: string[];
+}
+
+export interface BreakWave {
+  wave: GroupId;        // "1" = First Break | "2" = Main Break | "3" = Last Break
+  label: string;        // "First Break" | "Main Break" | "Last Break"
+  groups: BreakGroupSlot[];  // one per group, sorted by group number
 }
 
 export interface NightPlacements {
@@ -123,6 +138,8 @@ export function useNightPlacements(nightId: string) {
 
   /**
    * Optimistically move a TM between break waves.
+   * Finds the TM's group in the source wave automatically, then moves them to
+   * the same group in the target wave (preserving their group assignment).
    * Also reflects in Daily Planner (same key).
    */
   async function moveBreakTM(
@@ -133,6 +150,10 @@ export function useNightPlacements(nightId: string) {
   ) {
     if (!data || fromWave === toWave) return;
 
+    // Locate which group this TM belongs to in the source wave
+    const srcWave = data.break_waves.find((w) => w.wave === fromWave);
+    const tmGroup = srcWave?.groups.find((g) => g.tm_ids.includes(tmId))?.group ?? null;
+
     const optimistic: NightPlacements = {
       ...data,
       last_synced: new Date().toISOString(),
@@ -140,15 +161,21 @@ export function useNightPlacements(nightId: string) {
         if (w.wave === fromWave) {
           return {
             ...w,
-            tm_ids: w.tm_ids.filter((id) => id !== tmId),
-            tm_names: w.tm_names.filter((n) => n !== tmName),
+            groups: w.groups.map((g) =>
+              g.group === tmGroup
+                ? { ...g, tm_ids: g.tm_ids.filter((id) => id !== tmId), tm_names: g.tm_names.filter((n) => n !== tmName) }
+                : g
+            ),
           };
         }
         if (w.wave === toWave) {
           return {
             ...w,
-            tm_ids: [...w.tm_ids, tmId],
-            tm_names: [...w.tm_names, tmName],
+            groups: w.groups.map((g) =>
+              g.group === tmGroup
+                ? { ...g, tm_ids: [...g.tm_ids, tmId], tm_names: [...g.tm_names, tmName] }
+                : g
+            ),
           };
         }
         return w;
