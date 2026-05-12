@@ -318,8 +318,9 @@ function ZoneCard({
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      onClick={onContextMenu}
       onContextMenu={onContextMenu}
-      onPointerEnter={(e) => e.pointerType === "pen" && onPencilEnter()}
+      onPointerEnter={onPencilEnter}
       onPointerLeave={onPencilLeave}
       className={cn(
         "card rounded-2xl overflow-hidden cursor-pointer no-select",
@@ -438,6 +439,7 @@ function RestroomPill({
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.04 }}
+      onClick={onContextMenu}
       onContextMenu={onContextMenu}
       className="card flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl
                  cursor-pointer no-select shrink-0 min-w-[160px]"

@@ -32,12 +32,14 @@ class NightRow(BaseModel):
     day_name: str             # "Friday" | "Saturday" … "Thursday"
     day_num: int              # 1–7
     page_num: int
-    in_rotation: int          # 1 = in rotation, 0 = off
-    breaks_5: int
-    breaks_9: int
-    breaks_4: int
+    in_rotation: int = 0     # 1 = in rotation, 0 = off (DB default: 0)
+    breaks_5: int = 0
+    breaks_9: int = 0
+    breaks_4: int = 0
+    break_mode: str = "BY_BREAK_WAVE"
+    status: str = "draft"
     is_locked: bool = False
-    locked_by: str = ""
-    locked_at: str = ""
+    locked_by: Optional[str] = None   # nullable in DB
+    locked_at: Optional[str] = None   # nullable in DB
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
