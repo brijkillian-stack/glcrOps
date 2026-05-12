@@ -25,6 +25,7 @@ Error handling
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 from typing import Optional
 
@@ -35,6 +36,40 @@ from ..core.dependencies import get_placement_service
 from ..services.placement_service import PlacementService
 
 log = logging.getLogger("zds.api.engine")
+
+# ── Lazy engine imports (same importlib pattern as placement_service.py) ──────
+# We must use importlib.import_module so that each module is registered under
+# its full package name (e.g. "apps.zds.database").  A bare
+# `from database import ...` would import it as a top-level module, causing
+# the relative import `from .engine_bridge import ...` inside database.py to
+# raise "attempted relative import with no known parent package".
+
+_ENGINE_BRIDGE_MODULE = "apps.zds.engine_bridge"
+_DATABASE_MODULE      = "apps.zds.database"
+
+
+def _load_engine_bridge():
+    for name in (_ENGINE_BRIDGE_MODULE, "zds.engine_bridge", "engine_bridge"):
+        try:
+            return importlib.import_module(name)
+        except ImportError:
+            continue
+    raise RuntimeError(
+        f"Could not import engine_bridge (tried {_ENGINE_BRIDGE_MODULE!r}, "
+        "'zds.engine_bridge', 'engine_bridge')"
+    )
+
+
+def _load_database():
+    for name in (_DATABASE_MODULE, "zds.database", "database"):
+        try:
+            return importlib.import_module(name)
+        except ImportError:
+            continue
+    raise RuntimeError(
+        f"Could not import database (tried {_DATABASE_MODULE!r}, "
+        "'zds.database', 'database')"
+    )
 
 router = APIRouter(prefix="/v1/engine", tags=["Engine"])
 
@@ -64,31 +99,24 @@ def _unavailable(detail: str) -> HTTPException:
 
 
 def _run_engine_sync(week_id: str, target_night_id: Optional[str] = None) -> dict:
-    """
-    Synchronous wrapper — called inside asyncio.to_thread so it doesn't
-    block the event loop.
+    """Synchronous wrapper — runs inside asyncio.to_thread.
 
-    Imports are inside the function to keep the module importable even when
-    the legacy database / engine_bridge modules aren't on sys.path.
+    Uses importlib loaders so database.py is always imported under its full
+    package name, keeping its internal relative imports (`from .engine_bridge`)
+    valid regardless of the server's working directory.
     """
     try:
-        from apps.zds.engine_bridge import run_fill_engine
-        from apps.zds.database import sync_engine_to_week
-    except ImportError:
-        try:
-            from zds.engine_bridge import run_fill_engine          # type: ignore[import]
-            from zds.database import sync_engine_to_week           # type: ignore[import]
-        except ImportError:
-            try:
-                from engine_bridge import run_fill_engine          # type: ignore[import]
-                from database import sync_engine_to_week           # type: ignore[import]
-            except ImportError as exc:
-                return {
-                    "success": False, "scope": "unknown",
-                    "updated": 0, "locked_skipped": 0, "unresolved_cleared": 0,
-                    "unresolved": [], "fill_rate": 0.0, "week_ending": "",
-                    "message": "", "error": f"Import failed: {exc}",
-                }
+        bridge_mod = _load_engine_bridge()
+        db_mod     = _load_database()
+        run_fill_engine    = bridge_mod.run_fill_engine
+        sync_engine_to_week = db_mod.sync_engine_to_week
+    except Exception as exc:
+        return {
+            "success": False, "scope": "unknown",
+            "updated": 0, "locked_skipped": 0, "unresolved_cleared": 0,
+            "unresolved": [], "fill_rate": 0.0, "week_ending": "",
+            "message": "", "error": f"Import failed: {exc}",
+        }
 
     scope = "night" if target_night_id else "week"
     log.info("Running fill engine [scope=%s week=%s night=%s]",

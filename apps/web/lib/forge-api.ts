@@ -290,3 +290,22 @@ export async function runEngineForWeek(weekId: string): Promise<EngineRunResult>
   }
   return res.json() as Promise<EngineRunResult>;
 }
+
+// ── Week status ───────────────────────────────────────────────────────────────
+
+/** Publish or unpublish a week. Returns the updated status. */
+export async function patchWeekStatus(
+  weekId: string,
+  status: "published" | "draft",
+): Promise<{ week_id: string; status: string; updated: boolean }> {
+  const res = await fetch(`${BASE}/v1/planning/weeks/${weekId}/status`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`patchWeekStatus ${res.status}: ${body}`);
+  }
+  return res.json();
+}

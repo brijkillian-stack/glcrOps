@@ -135,6 +135,62 @@ async def list_weeks(
         raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
 
 
+@router.patch(
+    "/weeks/{week_id}/status",
+    summary="Publish or unpublish a week",
+    responses={
+        200: {"description": "Status updated"},
+        400: {"description": "Invalid status value"},
+        404: {"description": "Week not found"},
+        503: {"description": "Update failed"},
+    },
+)
+async def patch_week_status(
+    week_id: str,
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Set a week's status to 'published' or 'draft'.
+
+    Used by the Publish/Unpublish button in the Week Overview and
+    Daily Planner.  Also invalidates the planning cache so the
+    next overview fetch reflects the new status.
+    """
+    new_status = (body.get("status") or "").strip().lower()
+    if new_status not in ("published", "draft", "archived"):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_status",
+                    "detail": f"status must be 'published', 'draft', or 'archived'; got {new_status!r}"},
+        )
+
+    try:
+        week = await placement_service.get_week(week_id)
+    except Exception as exc:
+        log.exception("get_week(%s) raised in patch_week_status", week_id)
+        raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
+
+    if week is None:
+        raise _not_found(f"Week not found: {week_id!r}")
+
+    # Write directly via the supabase client — PlacementService exposes it.
+    try:
+        placement_service.supabase.table("weeks").update(
+            {"status": new_status}
+        ).eq("id", week_id).execute()
+    except Exception as exc:
+        log.exception("weeks status update failed for %s", week_id)
+        raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
+
+    # Bust the planning cache so the next overview fetch is fresh.
+    try:
+        await placement_service.invalidate_week(week_id)
+    except Exception:
+        pass  # Non-fatal
+
+    return {"week_id": week_id, "status": new_status, "updated": True}
+
+
 @router.get(
     "/weekly/{week_id}",
     response_model=WeeklyPlanningOverviewResponse,

@@ -9,7 +9,8 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, runEngineForNight, type ActiveTM, type ZoneTask, type EngineRunResult } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, type ActiveTM, type ZoneTask, type EngineRunResult } from "@/lib/forge-api";
+import { mutate as globalMutate } from "swr";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
@@ -26,6 +27,12 @@ function EngineIcon() {
 }
 function WaveIcon() {
   return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 6.5c1-2 2-3 3-1s2 3 3 1 2-3 3-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>;
+}
+function LockClosedIcon() {
+  return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>;
+}
+function LockOpenIcon() {
+  return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 6V4.5a2 2 0 014 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>;
 }
 function UserIcon({ initials }: { initials: string }) {
   return (
@@ -116,6 +123,30 @@ export default function DailyPlannerPage() {
   const [engineRunning, setEngineRunning] = useState(false);
   const [engineToast, setEngineToast]     = useState<{ result: EngineRunResult } | null>(null);
   const engineToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Week publish state (shared SWR key with Week Overview) ────────────────
+  const { data: weekOverview } = useSWR(
+    weekId ? `forge:week:${weekId}` : null,
+    () => fetchWeekOverview(weekId),
+    { revalidateOnFocus: true, refreshInterval: 30_000 },
+  );
+  const weekStatus  = weekOverview?.week.status ?? "draft";
+  const isPublished = weekStatus === "published";
+  const [publishLoading, setPublishLoading] = useState(false);
+
+  async function handlePublish() {
+    if (publishLoading) return;
+    const nextStatus = isPublished ? "draft" : "published";
+    setPublishLoading(true);
+    try {
+      await patchWeekStatus(weekId, nextStatus);
+      globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      console.error("patchWeekStatus failed:", err);
+    } finally {
+      setPublishLoading(false);
+    }
+  }
 
   async function handleRunEngine() {
     if (engineRunning) return;
@@ -338,6 +369,28 @@ export default function DailyPlannerPage() {
               )}
               {engineRunning ? "Running…" : "Run Engine"}
             </button>
+            {/* Publish / Unpublish toggle */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                publishLoading
+                  ? "bg-white/10 text-white/40 cursor-wait"
+                  : isPublished
+                    ? "bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30"
+                    : "bg-white/10 text-white/80 hover:bg-white/20"
+              )}
+              onClick={handlePublish}
+              disabled={publishLoading}
+              title={isPublished ? "Click to unpublish this week" : "Publish this week"}
+            >
+              {publishLoading
+                ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : isPublished
+                  ? <LockClosedIcon />
+                  : <LockOpenIcon />}
+              {isPublished ? "Published" : "Publish"}
+            </button>
+
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
                          bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"

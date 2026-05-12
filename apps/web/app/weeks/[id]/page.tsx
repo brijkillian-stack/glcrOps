@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 import useSWR from "swr";
@@ -12,10 +12,14 @@ import {
   formatWeekEnding,
   coveragePctToRate,
   getWeekPrintUrl,
+  patchWeekStatus,
+  runEngineForNight,
   type WeeklyPlanningOverviewResponse,
   type NightPlanningSnapshot,
+  type EngineRunResult,
 } from "@/lib/forge-api";
 import { cn } from "@/lib/utils";
+import { mutate as globalMutate } from "swr";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -42,18 +46,54 @@ export default function WeekOverviewPage() {
   const [ctxNight, setCtxNight] = useState<NightPlanningSnapshot | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [publishLoading, setPublishLoading] = useState(false);
-  const [published, setPublished] = useState(false);
   const [hoveredNight, setHoveredNight] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync published state when data loads
-  const weekStatus = overview?.week.status ?? "draft";
-  const isPublished = published || weekStatus === "published";
+  // Engine state
+  const [engineNightId, setEngineNightId] = useState<string | null>(null);
+  const [engineToast, setEngineToast] = useState<{ result: EngineRunResult } | null>(null);
+  const engineToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function handlePublish() {
+  // Sync published state from server
+  const weekStatus = overview?.week.status ?? "draft";
+  const isPublished = weekStatus === "published";
+
+  async function handlePublish() {
+    if (publishLoading) return;
+    const nextStatus = isPublished ? "draft" : "published";
     setPublishLoading(true);
-    setTimeout(() => { setPublished(true); setPublishLoading(false); }, 900);
+    try {
+      await patchWeekStatus(weekId, nextStatus);
+      // Bust SWR cache so header badge and status update immediately
+      globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      console.error("patchWeekStatus failed:", err);
+    } finally {
+      setPublishLoading(false);
+    }
   }
+
+  const handleRunEngineForNight = useCallback(async (nightId: string) => {
+    if (engineNightId) return;
+    setEngineNightId(nightId);
+    setEngineToast(null);
+    try {
+      const result = await runEngineForNight(nightId);
+      setEngineToast({ result });
+      if (result.success) globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEngineToast({ result: {
+        success: false, scope: "night", updated: 0, locked_skipped: 0,
+        unresolved_cleared: 0, unresolved: [], fill_rate: 0,
+        week_ending: "", message: "", error: msg,
+      }});
+    } finally {
+      setEngineNightId(null);
+      if (engineToastTimer.current) clearTimeout(engineToastTimer.current);
+      engineToastTimer.current = setTimeout(() => setEngineToast(null), 8_000);
+    }
+  }, [engineNightId, weekId]);
 
   function openCtx(e: React.MouseEvent, night: NightPlanningSnapshot) {
     e.preventDefault();
@@ -65,7 +105,7 @@ export default function WeekOverviewPage() {
     ? [
         { label: "Open Planner", icon: <OpenIcon />, onClick: () => router.push(`/weeks/${weekId}/nights/${ctxNight.night_id}`) },
         { label: "Print Night", icon: <PrintIcon />, onClick: () => window.open(`/api/forge/v1/print/night/${ctxNight.night_id}.pdf`, "_blank") },
-        { label: "Run Engine", icon: <EngineIcon />, onClick: () => console.log("Engine for", ctxNight.night_id) },
+        { label: "Run Engine", icon: <EngineIcon />, onClick: () => handleRunEngineForNight(ctxNight.night_id), disabled: !!engineNightId },
         { label: "Assign TMs…", icon: <UserPlusIcon />, onClick: () => router.push(`/weeks/${weekId}/nights/${ctxNight.night_id}`) },
       ]
     : [];
@@ -109,14 +149,15 @@ export default function WeekOverviewPage() {
             </button>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              disabled={isPublished || publishLoading}
+              disabled={publishLoading}
               onClick={handlePublish}
               className={cn(
                 "flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-semibold no-select transition-all duration-200",
                 isPublished
-                  ? "bg-green-500/20 text-green-300 border border-green-500/30 cursor-default"
+                  ? "bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30"
                   : "bg-[#007AFF] text-white hover:bg-[#0056CC]"
               )}
+              title={isPublished ? "Click to unpublish" : "Publish week"}
             >
               {publishLoading
                 ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -196,6 +237,79 @@ export default function WeekOverviewPage() {
         actions={ctxActions}
         anchorPos={ctxPos}
       />
+
+      {/* ── Engine Run Toast ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {engineToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ type: "spring", damping: 22, stiffness: 320 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[min(420px,calc(100vw-32px))]"
+          >
+            <div className={cn(
+              "rounded-2xl px-4 py-3.5 shadow-2xl flex items-start gap-3",
+              engineToast.result.success
+                ? "bg-[#1C1C1E] border border-white/10"
+                : "bg-red-950 border border-red-800/60"
+            )}>
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                engineToast.result.success ? "bg-green-500/20" : "bg-red-500/20"
+              )}>
+                {engineToast.result.success ? (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.5 7l3 3 6-6" stroke="#34C759" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 4v4M7 10v.5" stroke="#FF3B30" strokeWidth="1.8" strokeLinecap="round"/>
+                    <circle cx="7" cy="7" r="5.5" stroke="#FF3B30" strokeWidth="1.3"/>
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className={cn(
+                  "text-[13px] font-semibold leading-snug",
+                  engineToast.result.success ? "text-white" : "text-red-200"
+                )}>
+                  {engineToast.result.success ? "Engine run complete" : "Engine run failed"}
+                </div>
+                <div className={cn(
+                  "text-[12px] mt-0.5 leading-snug",
+                  engineToast.result.success ? "text-white/60" : "text-red-300/80"
+                )}>
+                  {engineToast.result.success
+                    ? engineToast.result.message
+                    : engineToast.result.error ?? "Unknown error"}
+                </div>
+                {engineToast.result.success && engineToast.result.fill_rate > 0 && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all duration-700"
+                        style={{ width: `${engineToast.result.fill_rate}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-white/50 shrink-0">
+                      {engineToast.result.fill_rate.toFixed(0)}% filled
+                    </span>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setEngineToast(null)}
+                className="shrink-0 text-white/30 hover:text-white/70 transition-colors mt-0.5"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
