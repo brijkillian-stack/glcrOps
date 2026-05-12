@@ -2,12 +2,15 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { setAuthCookies, type UserRole } from '@/lib/auth';
 
-export default function LoginPage() {
+// ── Inner component — uses useSearchParams() ──────────────────────────────────
+// Must be wrapped in <Suspense> by the default export (Next.js 15 requirement).
+
+function LoginForm() {
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
@@ -30,7 +33,7 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       // ── 2. Fetch role from users table ────────────────────────────────────
-      let role: UserRole = 'ops_super'; // safe default (restricted access)
+      let role: UserRole = 'ops_super'; // safe default → restricted access
       try {
         const { data: userData, error: roleError } = await supabase
           .from('users')
@@ -42,18 +45,16 @@ export default function LoginPage() {
           role = userData.role as UserRole;
         }
       } catch {
-        // If the users table lookup fails, default to restricted access.
-        // This is intentionally safe — unknown roles get the least access.
-        console.warn('[auth] Could not fetch role from users table; defaulting to ops_super');
+        // If the users table lookup fails, default to restricted (safest choice).
+        console.warn('[auth] Could not fetch role; defaulting to ops_super');
       }
 
       // ── 3. Persist auth cookies ───────────────────────────────────────────
       setAuthCookies(role, stayLoggedIn);
 
-      // ── 4. Redirect ───────────────────────────────────────────────────────
-      // Honor ?next= param set by middleware when redirecting unauthenticated users.
+      // ── 4. Redirect — honor ?next= set by middleware ──────────────────────
       const next = searchParams.get('next');
-      router.push(next ?? '/');
+      router.push(next && next.startsWith('/') ? next : '/');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -124,5 +125,15 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Page export — Suspense required by Next.js 15 for useSearchParams() ───────
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
