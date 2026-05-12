@@ -48,24 +48,50 @@ _SHARED_DB_MODULE = "shared.db"
 
 
 def _load_zds_database():
-    """Import apps/zds/database.py via the package system."""
-    try:
-        return importlib.import_module(_DATABASE_MODULE)
-    except ImportError as exc:
-        raise RuntimeError(
-            f"Could not import {_DATABASE_MODULE!r}. Make sure the repo "
-            "root is on sys.path (uvicorn run from brijkillian-stack/)."
-        ) from exc
+    """Import apps/zds/database.py via the package system.
+
+    Tries the fully-qualified path first (running from repo root), then falls
+    back to the bare module name (running from apps/zds/ as Render does with
+    rootDir: apps/zds).
+    """
+    for module_name in (_DATABASE_MODULE, "database"):
+        try:
+            return importlib.import_module(module_name)
+        except ImportError:
+            continue
+    raise RuntimeError(
+        f"Could not import database module (tried {_DATABASE_MODULE!r} and 'database'). "
+        "Make sure the repo root or apps/zds is on sys.path."
+    )
 
 
 def _load_shared_db():
-    """Import shared/db.py via the package system."""
+    """Import shared/db.py via the package system.
+
+    Tries the fully-qualified path first, then attempts to locate the shared
+    package by inserting the repo root into sys.path (two levels up from
+    apps/zds/).
+    """
+    import sys
+    import os
+
+    try:
+        return importlib.import_module(_SHARED_DB_MODULE)
+    except ImportError:
+        pass
+
+    # When running from apps/zds/, the repo root isn't on sys.path.
+    # Walk up two directories to find brijkillian-stack/ and add it.
+    here = os.path.dirname(__file__)          # .../apps/zds/api/services/
+    repo_root = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
     try:
         return importlib.import_module(_SHARED_DB_MODULE)
     except ImportError as exc:
         raise RuntimeError(
-            f"Could not import {_SHARED_DB_MODULE!r}. Make sure the repo "
-            "root is on sys.path."
+            f"Could not import {_SHARED_DB_MODULE!r}. "
+            f"Tried adding {repo_root!r} to sys.path."
         ) from exc
 
 

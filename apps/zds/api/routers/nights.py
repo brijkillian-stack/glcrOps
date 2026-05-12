@@ -49,7 +49,10 @@ except ImportError:
     try:
         from zds.styles import ZONE_LABELS as _ZONE_LABELS
     except ImportError:
-        _ZONE_LABELS = {}
+        try:
+            from styles import ZONE_LABELS as _ZONE_LABELS  # type: ignore[import]
+        except ImportError:
+            _ZONE_LABELS = {}
 
 
 def _not_found(detail: str) -> HTTPException:
