@@ -64,22 +64,43 @@ _RENDERER_MODULE = "apps.zds.print_renderer"
 def _load_renderer():
     """Import apps/zds/print_renderer.py via the package system.
 
-    Tries the fully-qualified path first (running from repo root), then falls
-    back to the bare module name (running from apps/zds/ as Render does with
-    rootDir: apps/zds).
+    Ensures both the repo root and apps/ directory are on sys.path before
+    attempting the import.  print_renderer.py uses:
+      • ``from . import database``       — needs apps.zds package on path
+      • ``from shared.db import ...``    — needs repo root on path
 
-    Package-relative imports inside print_renderer.py (``from . import
-    database``, etc.) require the regular package machinery — not
-    spec_from_file_location which would break them.
+    Tries fully-qualified name first (repo-root launch), then bare name
+    (apps/zds rootDir launch).  Logs the actual ImportError on each attempt
+    so failures are diagnosable in Render logs.
     """
+    import sys
+    from pathlib import Path
+
+    # print_service.py → apps/zds/api/services/print_service.py
+    # .parent × 4 → repo root
+    _here = Path(__file__).resolve()
+    _repo_root = _here.parent.parent.parent.parent.parent  # repo root
+    _apps_dir  = _repo_root / "apps"
+
+    for _p in [str(_repo_root), str(_apps_dir)]:
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+            log.debug("_load_renderer: added %s to sys.path", _p)
+
+    errors: list[str] = []
     for module_name in (_RENDERER_MODULE, "print_renderer"):
         try:
-            return importlib.import_module(module_name)
-        except ImportError:
-            continue
+            mod = importlib.import_module(module_name)
+            log.info("_load_renderer: loaded renderer via %r", module_name)
+            return mod
+        except ImportError as exc:
+            log.warning("_load_renderer: import %r failed: %s", module_name, exc)
+            errors.append(f"{module_name!r}: {exc}")
+
     raise RuntimeError(
-        f"Could not import renderer (tried {_RENDERER_MODULE!r} and 'print_renderer'). "
-        "Make sure the repo root or apps/zds is on sys.path."
+        "Could not import renderer. Attempts:\n"
+        + "\n".join(f"  {e}" for e in errors)
+        + "\nMake sure the repo root is on sys.path."
     )
 
 
