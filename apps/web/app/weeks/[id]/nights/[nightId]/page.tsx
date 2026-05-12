@@ -68,12 +68,13 @@ function isCoverageTask(t: string): boolean {
  *   Admin            → "and Admin"
  */
 function buildCoverageTaskName(slot: TMAssignment): string {
+  const label = slot.zone_label ?? "";
   if (slot.zone_type === "restroom") {
-    const num = slot.zone_label.replace(/^RR\s*/i, "").trim();
+    const num = label.replace(/^RR\s*/i, "").trim();
     const side = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
     return side ? `and Restroom ${num} (${side})` : `and Restroom ${num}`;
   }
-  return `and ${slot.zone_label}`;
+  return `and ${label}`;
 }
 
 // ── Break schedule constants (mirrors Python _BREAK_SCHEDULE in night.py) ─────
