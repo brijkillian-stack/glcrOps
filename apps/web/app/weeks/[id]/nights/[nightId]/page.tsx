@@ -719,11 +719,13 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
   const isOpen = !!slot;
   const [activeTab, setActiveTab] = useState("zone");
   const [saving, setSaving] = useState(false);
+  const [customInput, setCustomInput] = useState("");
+  const customInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch tasks for this slot type + key when the sheet opens
+  // Fetch ALL tasks for this slot type when the sheet opens (no slot_key filter)
   const { data: allTasks = [] } = useSWR(
-    slot ? `forge:tasks:${slot.zone_type}:${slot.zone_id}` : null,
-    () => fetchZoneTasks(slot!.zone_type, slot!.zone_id),
+    slot ? `forge:tasks:${slot.zone_type}` : null,
+    () => fetchZoneTasks(slot!.zone_type),
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
@@ -737,8 +739,13 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
       prevSlotId.current = slot.slot_id;
       setSelected(new Set(slot.tasks ?? []));
       setActiveTab("zone");
+      setCustomInput("");
     }
   }, [slot]);
+
+  // Tasks that are selected but don't exist in the DB catalogue — these are custom
+  const catalogueNames = new Set(allTasks.map((t) => t.name));
+  const customTasks = [...selected].filter((name) => !catalogueNames.has(name));
 
   const tabTasks = allTasks.filter((t) => {
     const tab = CATEGORY_TABS.find((tb) => tb.id === activeTab);
@@ -752,6 +759,14 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
       else next.add(name);
       return next;
     });
+  }
+
+  function addCustomTask() {
+    const name = customInput.trim();
+    if (!name) return;
+    setSelected((prev) => new Set([...prev, name]));
+    setCustomInput("");
+    customInputRef.current?.focus();
   }
 
   async function save() {
@@ -798,7 +813,14 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
             <div className="px-5 pt-1 pb-3 shrink-0 flex items-start justify-between">
               <div>
                 <h3 className="text-[16px] font-bold text-gray-900">Assign Tasks</h3>
-                <p className="text-[12px] text-gray-400">{slot?.zone_label}</p>
+                <p className="text-[12px] text-gray-400">
+                  {slot?.zone_label}
+                  {selected.size > 0 && (
+                    <span className="ml-2 text-[#007AFF] font-semibold">
+                      {selected.size} selected
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -842,7 +864,7 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
             </div>
 
             {/* Task list */}
-            <div className="overflow-y-auto flex-1 px-4 pb-safe">
+            <div className="overflow-y-auto flex-1 px-4">
               {tabTasks.length === 0 && (
                 <p className="text-center text-[13px] text-gray-400 py-10">
                   No tasks for this slot type
@@ -889,7 +911,67 @@ function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
                   </button>
                 );
               })}
-              <div className="h-6" />
+
+              {/* Custom tasks section — always visible if any exist */}
+              {customTasks.length > 0 && (
+                <div className="mt-3 mb-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 px-1 mb-2">
+                    Custom
+                  </div>
+                  {customTasks.map((name) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-amber-50 mb-1"
+                    >
+                      <div className="w-5 h-5 rounded-full border-2 border-amber-400 bg-amber-400
+                                      flex items-center justify-center shrink-0">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <span className="flex-1 text-[14px] font-medium text-amber-900 truncate">
+                        {name}
+                      </span>
+                      <button
+                        onClick={() => toggle(name)}
+                        className="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center
+                                   text-amber-700 hover:bg-amber-300 transition-colors shrink-0"
+                      >
+                        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                          <path d="M1 1l7 7M8 1L1 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="h-4" />
+            </div>
+
+            {/* Custom task input — pinned above keyboard */}
+            <div className="px-4 pt-3 pb-safe border-t border-gray-100 shrink-0">
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={customInputRef}
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCustomTask()}
+                  placeholder="Add custom task…"
+                  className="flex-1 h-10 px-3.5 rounded-xl bg-gray-100 text-[14px]
+                             text-gray-800 placeholder:text-gray-400 outline-none
+                             focus:ring-2 focus:ring-[#C9A84C]/40"
+                />
+                <button
+                  onClick={addCustomTask}
+                  disabled={!customInput.trim()}
+                  className="h-10 px-4 rounded-xl bg-[#C9A84C] text-white text-[13px] font-semibold
+                             disabled:opacity-40 transition-opacity shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="h-3" />
             </div>
           </motion.div>
         </>

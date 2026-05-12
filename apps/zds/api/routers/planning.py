@@ -75,7 +75,6 @@ def _planning_unavailable(detail: str) -> HTTPException:
 )
 async def list_zone_tasks(
     slot_type: str | None = Query(None, description="zone | restroom | auxiliary"),
-    slot_key:  str | None = Query(None, description="e.g. zone_8, rr_1_2, trash_1"),
     placement_service: PlacementService = Depends(get_placement_service),
 ):
     """Return active zone_tasks, optionally filtered for a specific slot.
@@ -85,10 +84,7 @@ async def list_zone_tasks(
     Omit both to get the full catalogue.
     """
     try:
-        return await placement_service.list_zone_tasks(
-            slot_type=slot_type,
-            slot_key=slot_key,
-        )
+        return await placement_service.list_zone_tasks(slot_type=slot_type)
     except Exception as exc:
         log.exception("list_zone_tasks raised")
         raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})

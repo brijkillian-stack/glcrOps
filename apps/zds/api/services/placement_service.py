@@ -355,35 +355,17 @@ class PlacementService:
             log.warning("list_zone_tasks failed: %s", exc)
             return []
 
-        # Client-side filtering: match slot_type category and slot_key target_codes.
+        # Filter by slot_type → show all tasks for that broad category.
+        # We do NOT filter by slot_key — supervisors should be able to assign
+        # any task to any slot, not just the pre-mapped defaults.
         if slot_type:
-            # Map API slot_type → DB category.
             cat_map = {"zone": "zone", "restroom": "rr", "auxiliary": "aux"}
             wanted_cat = cat_map.get(slot_type)
-            # Always include overlap tasks regardless of slot_type.
             tasks = [
                 t for t in tasks
                 if t["category"] in ("overlap_am", "overlap_pm")
                 or t["category"] == wanted_cat
             ]
-
-        if slot_key:
-            # Expand combined keys like rr_1_2 → [rr_1, rr_2].
-            parts = {slot_key}
-            if "_" in slot_key:
-                # e.g. rr_1_2 → try rr_1 and rr_2 as targets
-                segs = slot_key.rsplit("_", 1)
-                if segs[-1].isdigit():
-                    parts.add(segs[0])  # rr_1_2 → rr_1
-
-            def _matches(task: dict) -> bool:
-                codes = task.get("target_codes") or []
-                # Overlap tasks are never slot-filtered.
-                if task["category"] in ("overlap_am", "overlap_pm"):
-                    return True
-                return any(c in parts for c in codes)
-
-            tasks = [t for t in tasks if _matches(t)]
 
         return tasks
 

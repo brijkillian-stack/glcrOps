@@ -159,15 +159,9 @@ export interface ZoneTask {
   display_order: number;
 }
 
-/** Fetch zone tasks, optionally filtered for a specific slot. */
-export async function fetchZoneTasks(
-  slotType?: string,
-  slotKey?: string,
-): Promise<ZoneTask[]> {
-  const params = new URLSearchParams();
-  if (slotType) params.set("slot_type", slotType);
-  if (slotKey)  params.set("slot_key",  slotKey);
-  const qs = params.toString() ? `?${params}` : "";
+/** Fetch zone tasks filtered by broad slot type (zone | restroom | auxiliary). */
+export async function fetchZoneTasks(slotType?: string): Promise<ZoneTask[]> {
+  const qs = slotType ? `?slot_type=${slotType}` : "";
   return get<ZoneTask[]>(`/v1/planning/tasks${qs}`);
 }
 
