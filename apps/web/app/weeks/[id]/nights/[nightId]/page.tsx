@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, fetchNightOverlaps, patchSlotTasks, overlapPositionLabel, type ActiveTM, type ZoneTask, type OverlapSlot } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, type ActiveTM, type ZoneTask } from "@/lib/forge-api";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
@@ -118,12 +118,6 @@ export default function DailyPlannerPage() {
     dedupingInterval: 600_000,
   });
 
-  // Overlap assignments — from overlap_assignments table (engine's pre-populated schedule)
-  const { data: overlapData = [] } = useSWR(
-    `forge:night:${nightId}:overlaps`,
-    () => fetchNightOverlaps(nightId),
-    { refreshInterval: 10_000, dedupingInterval: 3_000, revalidateOnFocus: true },
-  );
 
   // Separate zone types
   const zones     = data?.placements.filter((p) => p.zone_type === "zone")      ?? [];
@@ -184,15 +178,7 @@ export default function DailyPlannerPage() {
     return s;
   }, [data?.placements]);
 
-  // Split overlap slots by window from the dedicated overlap_assignments table
-  const overlapPmSlots = useMemo(
-    () => overlapData.filter((s) => s.overlap_window === "pm"),
-    [overlapData],
-  );
-  const overlapAmSlots = useMemo(
-    () => overlapData.filter((s) => s.overlap_window === "am"),
-    [overlapData],
-  );
+
 
   function openCtx(e: React.MouseEvent, slot: TMAssignment) {
     e.preventDefault();
@@ -425,11 +411,6 @@ export default function DailyPlannerPage() {
                 </div>
               </section>
 
-              {/* Overlaps section */}
-              <OverlapsSection
-                pmSlots={overlapPmSlots}
-                amSlots={overlapAmSlots}
-              />
             </motion.div>
           ) : (
             <motion.div
@@ -727,104 +708,6 @@ function RestroomPill({
   );
 }
 
-// ── Overlaps Section ──────────────────────────────────────────────────────────
-
-interface OverlapsSectionProps {
-  pmSlots: OverlapSlot[];   // rows with overlap_window === "pm"
-  amSlots: OverlapSlot[];   // rows with overlap_window === "am"
-}
-
-const OVERLAP_WINDOWS = [
-  { id: "pm", time: "11p – 1a", sublabel: "PM Overlap", accent: "#6366F1" },
-  { id: "am", time: "5a – 7a",  sublabel: "AM Overlap", accent: "#14B8A6" },
-] as const;
-
-function OverlapsSection({ pmSlots, amSlots }: OverlapsSectionProps) {
-  const slotsByWindow: Record<string, OverlapSlot[]> = { pm: pmSlots, am: amSlots };
-  const allSlots    = [...pmSlots, ...amSlots];
-  const totalFilled = allSlots.filter((s) => s.is_filled).length;
-  const totalSlots  = allSlots.length;
-
-  if (totalSlots === 0) return null;   // no overlap assignments seeded for this night
-
-  return (
-    <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="section-header !mb-0">Overlaps</h2>
-        <span className="text-[12px] font-semibold text-gray-400">
-          {totalFilled} / {totalSlots} filled
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        {OVERLAP_WINDOWS.map((win) => {
-          const slots = slotsByWindow[win.id];
-          if (slots.length === 0) return null;
-          return (
-            <div key={win.id} className="flex gap-4 items-start">
-              {/* Time label column */}
-              <div className="w-20 shrink-0 pt-3">
-                <div className="text-[14px] font-bold leading-tight"
-                     style={{ color: win.accent }}>
-                  {win.time}
-                </div>
-                <div className="text-[10px] font-semibold uppercase tracking-widest
-                                text-gray-400 mt-0.5 leading-tight">
-                  {win.sublabel}
-                </div>
-              </div>
-
-              {/* Cards grid */}
-              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
-                {slots.map((slot, i) => (
-                  <motion.div
-                    key={slot.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className={cn(
-                      "card rounded-2xl overflow-hidden",
-                      !slot.is_filled && "opacity-60"
-                    )}
-                  >
-                    {/* Accent top stripe */}
-                    <div className="h-[3px]" style={{ backgroundColor: win.accent }} />
-
-                    <div className="p-3 flex flex-col gap-1.5">
-                      {/* Position label */}
-                      <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                        {overlapPositionLabel(slot.position)}
-                      </div>
-
-                      {/* TM name */}
-                      <div className={cn(
-                        "text-[13px] font-bold leading-tight",
-                        !slot.is_filled ? "text-gray-300 italic font-normal" : "text-gray-900"
-                      )}>
-                        {slot.is_filled ? slot.tm_name : "Unfilled"}
-                      </div>
-
-                      {/* Task description */}
-                      {slot.task && (
-                        <div className="flex items-start gap-1.5 mt-0.5">
-                          <div className="w-1 h-1 rounded-full mt-1.5 shrink-0"
-                               style={{ backgroundColor: win.accent }} />
-                          <span className="text-[11px] text-gray-500 leading-snug truncate">
-                            {slot.task}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
 // ── TM Picker Sheet ───────────────────────────────────────────────────────────
 
