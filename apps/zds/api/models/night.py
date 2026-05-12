@@ -50,9 +50,13 @@ _WAVE_LABELS: dict[int, str] = {
 # ── Slot-type mapping from DB values to API values ────────────────────────────
 
 _SLOT_TYPE_MAP: dict[str, ZoneType] = {
+    # DB column values → API ZoneType
     "zone": "zone",
     "rr":   "restroom",
     "aux":  "auxiliary",
+    # Passthrough — already-mapped values survive a second call to _derive
+    "restroom":  "restroom",
+    "auxiliary": "auxiliary",
 }
 
 
