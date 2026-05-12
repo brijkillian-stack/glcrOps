@@ -46,7 +46,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -92,7 +92,7 @@ def _fetch_from_print_service(service_url: str, week_id: str, dest_pdf: Path) ->
     print(f"Fetching PDF from {endpoint}…")
 
     try:
-        resp = httpx.get(endpoint, timeout=60)
+        resp = httpx.get(endpoint, timeout=300)  # weasyprint cold render can take 2-5 min
     except Exception as exc:
         print(f"ERROR: Could not reach PrintService — {exc}", file=sys.stderr)
         sys.exit(1)
@@ -113,6 +113,85 @@ def _fetch_from_print_service(service_url: str, week_id: str, dest_pdf: Path) ->
 
     dest_pdf.write_bytes(resp.content)
     print(f"  Saved {len(resp.content):,} bytes → {dest_pdf.name}")
+
+
+def _fetch_html_render_locally(service_url: str, week_id: str, dest_pdf: Path) -> None:
+    """Fetch HTML from the server; render PDF locally with weasyprint.
+
+    Preferred over ``--source print-service`` on macOS dev machines where
+    weasyprint's system libraries are present locally but may be unavailable
+    inside the uvicorn process (hardened runtime, DYLD_LIBRARY_PATH stripping,
+    or first-run font-cache latency causing the server request to hang).
+
+    The HTML served by the print endpoint is identical to what the server would
+    feed to weasyprint, so the resulting PDF is byte-equivalent.
+    """
+    try:
+        import httpx
+    except ImportError:
+        print(
+            "ERROR: httpx required for --source print-service-html.\n"
+            "Install: pip install httpx",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    html_endpoint = f"{service_url.rstrip('/')}/v1/print/week/{week_id}.html"
+    print(f"Fetching HTML from {html_endpoint}…")
+
+    try:
+        resp = httpx.get(html_endpoint, timeout=60)
+    except Exception as exc:
+        print(f"ERROR: Could not reach PrintService — {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if resp.status_code == 404:
+        print(
+            f"ERROR: 404 — week {week_id!r} not found in the DB.\n"
+            "Verify PRINT_SERVICE_WEEK_ID is the correct UUID from public.weeks.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if resp.status_code != 200:
+        print(
+            f"ERROR: PrintService returned {resp.status_code}:\n{resp.text[:500]}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    html_content = resp.text
+    print(f"  Got {len(resp.content):,} bytes of HTML")
+
+    # Apply the same WeasyPrint compatibility injection that PrintService uses
+    # for PDF endpoints.  The renderer's HTML is designed for browser Cmd+P;
+    # WeasyPrint needs Flexbox overrides to resolve fr-unit heights correctly.
+    try:
+        sys.path.insert(0, str(Path(__file__).parents[2]))  # repo root on sys.path
+        from apps.zds.api.services.print_service import PrintService
+        html_content = PrintService._inject_weasyprint_compat(html_content)
+        print("  WeasyPrint compat CSS injected.")
+    except Exception as exc:
+        print(f"WARNING: Could not inject WeasyPrint compat CSS — {exc}", file=sys.stderr)
+
+    print("Rendering PDF locally with weasyprint (may take 1-3 min on first run)…")
+    try:
+        from weasyprint import HTML as WP_HTML  # type: ignore[import]
+    except ImportError:
+        print(
+            "ERROR: weasyprint not installed.\n"
+            "Install: pip install weasyprint",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        WP_HTML(string=html_content).write_pdf(str(dest_pdf))
+    except Exception as exc:
+        print(f"ERROR: weasyprint render failed — {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    size = dest_pdf.stat().st_size
+    print(f"  Rendered {size:,} bytes → {dest_pdf.name}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -140,12 +219,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--source",
-        choices=["browser-pdf", "print-service"],
+        choices=["browser-pdf", "print-service", "print-service-html"],
         default="browser-pdf",
         help=(
             "Where to get the golden PDF.  "
             "'browser-pdf' = manually placed in golden/ (classic).  "
-            "'print-service' = fetch from running Forge API."
+            "'print-service' = fetch PDF from running Forge API (server needs weasyprint).  "
+            "'print-service-html' = fetch HTML from server, render PDF locally (preferred on macOS)."
         ),
     )
     parser.add_argument(
@@ -188,12 +268,15 @@ def main(argv: list[str] | None = None) -> int:
     manifest   = GOLDEN_DIR / "manifest.json"
 
     # ── Obtain the source PDF ─────────────────────────────────────────────
-    if args.source == "print-service":
+    if args.source in ("print-service", "print-service-html"):
         if not args.service_url:
-            parser.error("--service-url (or PRINT_SERVICE_URL) required for --source print-service")
+            parser.error(f"--service-url (or PRINT_SERVICE_URL) required for --source {args.source}")
         if not args.service_week_id:
-            parser.error("--service-week-id (or PRINT_SERVICE_WEEK_ID) required for --source print-service")
-        _fetch_from_print_service(args.service_url, args.service_week_id, source_pdf)
+            parser.error(f"--service-week-id (or PRINT_SERVICE_WEEK_ID) required for --source {args.source}")
+        if args.source == "print-service":
+            _fetch_from_print_service(args.service_url, args.service_week_id, source_pdf)
+        else:
+            _fetch_html_render_locally(args.service_url, args.service_week_id, source_pdf)
     else:
         _require_browser_pdf(source_pdf)
 
@@ -249,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
         "page_count":      len(images),
         "render_dpi":      dpi,
         "golden_source":   args.source,
-        "regenerated_at":  datetime.utcnow().isoformat() + "Z",
+        "regenerated_at":  datetime.now(timezone.utc).isoformat(),
     }
     manifest.write_text(json.dumps(manifest_data, indent=2))
 

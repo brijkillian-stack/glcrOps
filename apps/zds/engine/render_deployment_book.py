@@ -1228,39 +1228,41 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
     page_num   = 2 * idx - 1
     page_total = 2 * total
 
-    return f"""<article class="page" style="--day-color:{day_color};">
+    week_dots = ''.join(
+        f'<div class="week-dot{"  cur" if i == current_idx else ""}">{d}</div>'
+        for i, d in enumerate(['F','S','S','M','T','W','T'])
+    )
+    return f"""<article class="page" data-screen-label="{weekday} {esc(day['date_short'])}" style="--day-color:{day_color};">
   <header class="mast">
-    <div class="mast-day">{day['day_num']}</div>
+    <div class="mast-day-num">{day['day_num']}</div>
     <div class="mast-meta">
       <div class="day-name">{weekday}</div>
-      <div class="month-str">{month_name} · Day {idx} of {total}</div>
-      <div class="status-row">
-        <span class="stat"><span class="num">{sum(v[0] for v in cs.values())}</span><span class="lbl">Filled</span></span>
-        <span class="stat"><span class="num">{sum(v[1] - v[0] for v in cs.values())}</span><span class="lbl">Open</span></span>
+      <div class="month">{month_name} · Day {idx} of {total}</div>
+      <div class="status">
         <span class="break-bar">
           <span class="lbl">Breaks</span>
-          <span class="break-dot g1">{g1}</span>
-          <span class="break-dot g2">{g2}</span>
-          <span class="break-dot g3">{g3}</span>
+          <span class="dot" data-group="1" title="Break 1">{g1}</span>
+          <span class="dot" data-group="2" title="Break 2">{g2}</span>
+          <span class="dot" data-group="3" title="Break 3">{g3}</span>
         </span>
       </div>
     </div>
-    <div class="mast-right">
-      <div class="shift-label">Grave · 11pm – 7am</div>
+    <div class="mast-context">
+      <div class="shift">Grave · 11pm – 7am</div>
       <div class="week-dots">
-        {''.join(
-          f'<div class="week-dot{"  cur" if i == current_idx else ""}">{d}</div>'
-          for i, d in enumerate(['F','S','S','M','T','W','T'])
-        )}
+        {week_dots}
       </div>
       <div class="group-key">
-        Group <span class="gp g1">1</span><span class="gp g2">2</span><span class="gp g3">3</span>
+        Group <span class="gp" data-group="1">1</span>
+        <span class="gp" data-group="2">2</span>
+        <span class="gp" data-group="3">3</span>
       </div>
     </div>
   </header>
   <div class="body">
     <section>
-      <h2 class="section-lbl">
+      <h2 class="section-label is-primary">
+        <svg class="glyph"><use href="#g-zones"/></svg>
         Zones <span class="meta">{cs["zones"][0]} / {cs["zones"][1]} filled</span>
       </h2>
       <div class="zones-grid">
@@ -1268,7 +1270,8 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
       </div>
     </section>
     <section>
-      <h2 class="section-lbl">
+      <h2 class="section-label">
+        <svg class="glyph"><use href="#g-restroom"/></svg>
         Restrooms <span class="meta">{cs["rr"][0]} / {cs["rr"][1]} filled</span>
       </h2>
       <div class="rr-grid">
@@ -1276,31 +1279,33 @@ def render_day_page(day, idx, total, days, current_idx, males=None, no_sweeper_t
       </div>
     </section>
     <section>
-      <h2 class="section-lbl">
+      <h2 class="section-label">
+        <svg class="glyph"><use href="#g-aux"/></svg>
         Auxiliary <span class="meta">{cs["aux"][0]} / {cs["aux"][1]} filled</span>
       </h2>
       <div class="{aux_strip_cls}">
 {aux_html}
       </div>
     </section>
-    <section>
-      <h2 class="section-lbl">
+    <section class="overlaps-section">
+      <h2 class="section-label">
+        <svg class="glyph"><use href="#g-overlap"/></svg>
         Overlaps <span class="meta">{cs["overlaps"][0]} / {cs["overlaps"][1]} filled</span>
       </h2>
       <div class="overlap-row">
-        <div class="overlap-time">11p – 1a<span class="kind">Late evening</span></div>
+        <div class="overlap-window">11p – 1a<span class="kind">Late evening</span></div>
         <div class="overlap-mini-grid">{pm_minis}</div>
       </div>
       <div class="overlap-row">
-        <div class="overlap-time">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="overlap-window">5a – 7a<span class="kind">Early AM</span></div>
         <div class="overlap-mini-grid">{am_minis}</div>
       </div>
     </section>
   </div>
   <footer class="page-foot">
-    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
-    <span class="foot-center"><span class="now">{weekday}</span> {esc(day['date_short'])} · Zone Deployment</span>
-    <span class="foot-pn"><span class="cur">{page_num}</span> / {page_total}</span>
+    <span class="slug-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="slug-path"><span class="now">{weekday}</span> {esc(day['date_short'])}<span class="sep">·</span>Zone Deployment</span>
+    <span class="slug-pn"><span class="pn-cur">{page_num}</span> / {page_total}</span>
   </footer>
 </article>"""
 
@@ -1344,54 +1349,53 @@ def render_break_sheet_page(day, idx, total, males=None, no_sweeper_tms=None, cu
         for i, d in enumerate(['F','S','S','M','T','W','T'])
     )
 
-    return f"""<article class="page" style="--day-color:{day_color};">
+    ol_filled_bs = sum(1 for n in day["pm_ol"] + day["am_ol"] if n)
+    return f"""<article class="page break-page" data-screen-label="{weekday} {esc(day['date_short'])} — Break Sheet" style="--day-color:{day_color};">
   <header class="mast">
-    <div class="mast-day outline">{day['day_num']}</div>
+    <div class="mast-day-num is-outline">{day['day_num']}</div>
     <div class="mast-meta">
       <div class="day-name">Break Sheet</div>
-      <div class="month-str">{weekday} · {month_name}</div>
-      <div class="status-row">
+      <div class="month">{weekday} · {month_name}</div>
+      <div class="status">
         <span class="stat"><span class="num">{in_rotation}</span><span class="lbl">In Rotation</span></span>
         <span class="break-bar">
           <span class="lbl">Breaks</span>
-          <span class="break-dot g1">{g1}</span>
-          <span class="break-dot g2">{g2}</span>
-          <span class="break-dot g3">{g3}</span>
+          <span class="dot" data-group="1">{g1}</span>
+          <span class="dot" data-group="2">{g2}</span>
+          <span class="dot" data-group="3">{g3}</span>
         </span>
       </div>
     </div>
-    <div class="mast-right">
-      <div class="shift-label">By Break Wave</div>
-      <div class="week-dots" style="margin-top:4px;">
+    <div class="mast-context">
+      <div class="shift">By Break Wave</div>
+      <div class="week-dots">
         {week_dots_bs}
       </div>
     </div>
   </header>
   <div class="body">
-    <div class="break-cols" style="max-height:5.4in; overflow:hidden;">
+    <div class="break-cols">
 {cols_html}
     </div>
-    <!-- Phase 4g polish: full-width hairline separator pulls the OVERLAPS
-         section visually away from the Break 1-2-3 columns above. Matches the
-         deployment-page treatment so both pages feel like the same family. -->
-    <section class="overlaps-section" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--hairline-strong);">
-      <h2 class="section-lbl" style="margin-bottom:6px;">
-        Overlaps <span class="meta">11p–1a &amp; 5a–7a</span>
+    <section class="overlaps-section">
+      <h2 class="section-label">
+        <svg class="glyph"><use href="#g-overlap"/></svg>
+        Overlaps <span class="meta">{ol_filled_bs} / 12 filled</span>
       </h2>
       <div class="overlap-row">
-        <div class="overlap-time">11p – 1a<span class="kind">Late evening</span></div>
+        <div class="overlap-window">11p – 1a<span class="kind">Late evening</span></div>
         <div class="overlap-mini-grid">{pm_minis_bs}</div>
       </div>
       <div class="overlap-row">
-        <div class="overlap-time">5a – 7a<span class="kind">Early AM</span></div>
+        <div class="overlap-window">5a – 7a<span class="kind">Early AM</span></div>
         <div class="overlap-mini-grid">{am_minis_bs}</div>
       </div>
     </section>
   </div>
   <footer class="page-foot">
-    <span class="foot-mark"><span class="swatch"></span>GLCR · Grave</span>
-    <span class="foot-center"><span class="now">{weekday}</span> {esc(day['date_short'])} · Break Sheet</span>
-    <span class="foot-pn"><span class="cur">{page_num}</span> / {page_total}</span>
+    <span class="slug-mark"><span class="swatch"></span>GLCR · Grave</span>
+    <span class="slug-path"><span class="now">{weekday}</span> {esc(day['date_short'])}<span class="sep">·</span>Break Sheet</span>
+    <span class="slug-pn">{page_num} / <span class="pn-cur">{page_total}</span></span>
   </footer>
 </article>"""
 
