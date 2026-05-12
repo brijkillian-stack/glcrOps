@@ -191,6 +191,20 @@ export async function fetchNightOverlaps(nightId: string): Promise<OverlapSlot[]
   return get<OverlapSlot[]>(`/v1/nights/${nightId}/overlaps`);
 }
 
+/** Assign or clear a TM on an overlap slot. Pass null to clear. */
+export async function patchOverlapTM(
+  nightId: string,
+  overlapId: string,
+  tmId: string | null,
+): Promise<void> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/overlaps/${overlapId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tm_id: tmId }),
+  });
+  if (!res.ok) throw new Error(`patchOverlapTM failed: ${res.status}`);
+}
+
 /** Move a TM between break waves. */
 export async function moveBreakTMApi(
   nightId: string,

@@ -181,6 +181,49 @@ async def get_night_overlaps(
     )
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# PATCH /v1/nights/{night_id}/overlaps/{overlap_id}
+# ═════════════════════════════════════════════════════════════════════════════
+
+class AssignOverlapTMPayload(BaseModel):
+    tm_id: Optional[str] = None   # None = clear the slot
+
+
+@router.patch(
+    "/{night_id}/overlaps/{overlap_id}",
+    summary="Assign or clear a TM on an overlap slot",
+    responses={
+        200: {"description": "Overlap slot updated"},
+        404: {"description": "Overlap slot not found"},
+        503: {"description": "Update failed"},
+    },
+)
+async def patch_overlap_assignment(
+    night_id: str,
+    overlap_id: str,
+    payload: AssignOverlapTMPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Assign a TM to an overlap slot or clear it (tm_id=null).
+
+    Writes directly to ``overlap_assignments`` and invalidates the night's
+    overlaps cache so the next GET /overlaps returns fresh data.
+    """
+    try:
+        row = await placement_service.patch_overlap_tm(
+            overlap_id=overlap_id,
+            tm_id=payload.tm_id,
+        )
+    except Exception as exc:
+        log.exception("patch_overlap_tm(%s) raised", overlap_id)
+        raise _unavailable(str(exc))
+
+    if not row:
+        raise _not_found(f"Overlap slot not found: {overlap_id!r}")
+
+    return {"overlap_id": overlap_id, "tm_id": payload.tm_id, "updated": True}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AssignTMPayload(BaseModel):

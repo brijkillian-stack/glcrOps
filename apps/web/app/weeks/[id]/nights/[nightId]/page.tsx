@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, fetchNightOverlaps, patchOverlapTM, overlapPositionLabel, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry, type OverlapSlot } from "@/lib/forge-api";
 import { mutate as globalMutate } from "swr";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
@@ -111,7 +111,7 @@ export default function DailyPlannerPage() {
   // Wire Supabase Realtime when ready (no-op stub for now)
   useRealtimeSync(nightId);
 
-  const [activeSection, setActiveSection] = useState<"zones" | "breaks" | "schedule" | "trail">("zones");
+  const [activeSection, setActiveSection] = useState<"zones" | "breaks" | "overlaps" | "schedule" | "trail">("zones");
   const [ctxSlot, setCtxSlot] = useState<TMAssignment | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [pencilHoverSlot, setPencilHoverSlot] = useState<string | null>(null);
@@ -521,7 +521,7 @@ export default function DailyPlannerPage() {
 
           {/* Ops Quick Actions */}
           <div className="ml-auto flex gap-2 flex-wrap justify-end">
-            {(["zones", "breaks", "schedule", "trail"] as const).map((s) => (
+            {(["zones", "breaks", "overlaps", "schedule", "trail"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setActiveSection(s)}
@@ -532,7 +532,7 @@ export default function DailyPlannerPage() {
                     : "bg-white/10 text-white/60 hover:bg-white/20"
                 )}
               >
-                {s === "zones" ? "Zones" : s === "breaks" ? "Break Waves" : s === "schedule" ? "Schedule" : "Trail"}
+                {s === "zones" ? "Zones" : s === "breaks" ? "Break Waves" : s === "overlaps" ? "Overlaps" : s === "schedule" ? "Schedule" : "Trail"}
               </button>
             ))}
           </div>
@@ -615,6 +615,16 @@ export default function DailyPlannerPage() {
                 lastSynced={lastSynced}
                 onRefresh={refresh}
               />
+            </motion.div>
+          ) : activeSection === "overlaps" ? (
+            <motion.div
+              key="overlaps"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <OverlapsView nightId={nightId} tmRoster={tmRoster ?? []} />
             </motion.div>
           ) : activeSection === "schedule" ? (
             <motion.div
@@ -2421,6 +2431,299 @@ function TrailView({ nightId }: { nightId: string }) {
         ))}
       </div>
     </div>
+  );
+}
+
+
+// ── Overlaps View ─────────────────────────────────────────────────────────────
+
+function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: ActiveTM[] }) {
+  const { data: overlaps, mutate } = useSWR(
+    `forge:overlaps:${nightId}`,
+    () => fetchNightOverlaps(nightId),
+    { revalidateOnFocus: true, refreshInterval: 30_000 },
+  );
+
+  // Which overlap slot has the TM picker open
+  const [pickerOverlap, setPickerOverlap] = useState<OverlapSlot | null>(null);
+  const [saving, setSaving] = useState<string | null>(null); // overlap id being saved
+
+  async function handleAssign(overlap: OverlapSlot, tm: ActiveTM | null) {
+    setSaving(overlap.id);
+    const tmId = tm?.id ?? null;
+    // Optimistic update
+    mutate(
+      (prev) => prev?.map((o) =>
+        o.id === overlap.id
+          ? { ...o, tm_id: tmId, tm_name: tm?.display_name ?? "", is_filled: tmId !== null }
+          : o
+      ),
+      false,
+    );
+    setPickerOverlap(null);
+    try {
+      await patchOverlapTM(nightId, overlap.id, tmId);
+    } catch (err) {
+      console.error("patchOverlapTM failed:", err);
+    } finally {
+      setSaving(null);
+      mutate(); // revalidate
+    }
+  }
+
+  if (!overlaps) {
+    return (
+      <div className="flex flex-col gap-3 animate-pulse">
+        <div className="h-5 w-32 rounded bg-gray-200" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-20 rounded-2xl bg-gray-200" />
+          ))}
+        </div>
+        <div className="h-5 w-32 rounded bg-gray-200 mt-2" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-20 rounded-2xl bg-gray-200" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const pmSlots = overlaps.filter((o) => o.overlap_window === "pm");
+  const amSlots = overlaps.filter((o) => o.overlap_window === "am");
+
+  function OverlapCard({ slot }: { slot: OverlapSlot }) {
+    const isSaving = saving === slot.id;
+    const isEmpty  = !slot.tm_id;
+
+    return (
+      <button
+        onClick={() => setPickerOverlap(slot)}
+        disabled={isSaving}
+        className={cn(
+          "card rounded-2xl p-3.5 text-left w-full transition-all duration-150 no-select",
+          "hover:shadow-card-hover active:scale-[0.98]",
+          isEmpty ? "opacity-80" : "opacity-100",
+        )}
+      >
+        {/* Position badge + task */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">
+            {overlapPositionLabel(slot.position)}
+          </span>
+          {isSaving && (
+            <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
+            </svg>
+          )}
+        </div>
+        <div className="text-[11px] text-gray-500 leading-snug mb-2.5 line-clamp-2">{slot.task || "—"}</div>
+        {/* TM */}
+        {slot.tm_id ? (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center
+                            text-[9px] font-bold text-blue-700 ring-1 ring-blue-200 shrink-0">
+              {slot.tm_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2)}
+            </div>
+            <span className="text-[12px] font-semibold text-gray-700 truncate">{slot.tm_name}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="#CBD5E1" strokeWidth="1.2" strokeDasharray="3 2"/>
+              <path d="M7 4v3M7 8.5v.5" stroke="#CBD5E1" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            Unassigned
+          </div>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* PM Overlaps */}
+      <section>
+        <h2 className="section-header">PM Overlaps</h2>
+        {pmSlots.length === 0 ? (
+          <p className="text-[13px] text-gray-400 py-4">No PM overlap slots for this night.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {pmSlots.map((slot) => <OverlapCard key={slot.id} slot={slot} />)}
+          </div>
+        )}
+      </section>
+
+      {/* AM Overlaps */}
+      <section>
+        <h2 className="section-header">AM Overlaps</h2>
+        {amSlots.length === 0 ? (
+          <p className="text-[13px] text-gray-400 py-4">No AM overlap slots for this night.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {amSlots.map((slot) => <OverlapCard key={slot.id} slot={slot} />)}
+          </div>
+        )}
+      </section>
+
+      {/* TM Picker Sheet */}
+      <OverlapPickerSheet
+        overlap={pickerOverlap}
+        tms={tmRoster}
+        onSelect={(tm) => pickerOverlap && handleAssign(pickerOverlap, tm)}
+        onClear={() => pickerOverlap && handleAssign(pickerOverlap, null)}
+        onClose={() => setPickerOverlap(null)}
+      />
+    </div>
+  );
+}
+
+
+// ── Overlap Picker Sheet ──────────────────────────────────────────────────────
+
+interface OverlapPickerSheetProps {
+  overlap: OverlapSlot | null;
+  tms: ActiveTM[];
+  onSelect: (tm: ActiveTM) => void;
+  onClear: () => void;
+  onClose: () => void;
+}
+
+function OverlapPickerSheet({ overlap, tms, onSelect, onClear, onClose }: OverlapPickerSheetProps) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isOpen = !!overlap;
+
+  useEffect(() => {
+    if (isOpen) {
+      setQuery("");
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [isOpen, overlap?.id]);
+
+  const q = query.toLowerCase();
+  const filtered = tms.filter((tm) => !q || tm.display_name.toLowerCase().includes(q));
+
+  const label = overlap ? overlapPositionLabel(overlap.position) : "";
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="overlap-picker-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[2px]"
+            onClick={onClose}
+          />
+          {/* Sheet */}
+          <motion.div
+            key="overlap-picker-sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 320, mass: 0.8 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-[28px] shadow-2xl
+                       flex flex-col max-h-[80dvh]"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pt-2 pb-3 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C] mb-0.5">{label}</div>
+                  <div className="text-[14px] font-semibold text-gray-800 line-clamp-1">
+                    {overlap?.task || "Assign TM"}
+                  </div>
+                </div>
+                {overlap?.tm_id && (
+                  <button
+                    onClick={onClear}
+                    className="text-[12px] text-red-500 hover:text-red-600 font-medium px-3 py-1.5
+                               rounded-xl bg-red-50 hover:bg-red-100 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Search */}
+              <div className="mt-3 relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                     width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M9.5 9.5l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search team members…"
+                  className="w-full pl-8 pr-4 py-2.5 rounded-2xl bg-gray-50 text-[13px]
+                             placeholder-gray-400 outline-none border border-gray-100
+                             focus:border-[#C9A84C]/50 focus:bg-white transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* TM List */}
+            <div className="overflow-y-auto flex-1 px-3 py-2">
+              {filtered.length === 0 ? (
+                <div className="text-center text-[13px] text-gray-400 py-8">No team members found</div>
+              ) : (
+                filtered.map((tm) => {
+                  const initials  = tm.display_name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+                  const isCurrent = tm.id === overlap?.tm_id;
+                  return (
+                    <button
+                      key={tm.id}
+                      onClick={() => onSelect(tm)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-colors text-left",
+                        isCurrent ? "bg-[#007AFF]/08" : "hover:bg-gray-50"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center",
+                        "text-[12px] font-bold ring-1 shrink-0",
+                        isCurrent
+                          ? "bg-[#007AFF]/15 text-[#007AFF] ring-[#007AFF]/20"
+                          : "bg-gray-100 text-gray-600 ring-gray-200"
+                      )}>
+                        {initials}
+                      </div>
+                      <span className={cn(
+                        "text-[14px] font-medium truncate",
+                        isCurrent ? "text-[#007AFF]" : "text-gray-800"
+                      )}>
+                        {tm.display_name}
+                      </span>
+                      {isCurrent && (
+                        <svg className="ml-auto shrink-0 text-[#007AFF]" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Safe area bottom padding */}
+            <div className="h-safe-bottom pb-4" />
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 

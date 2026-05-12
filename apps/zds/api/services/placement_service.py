@@ -433,6 +433,35 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
+    async def patch_overlap_tm(self, overlap_id: str, tm_id: Optional[str]) -> dict:
+        """Update the tm_id on a single overlap_assignments row.
+
+        Sets is_filled=True when tm_id is provided, False when clearing.
+        Invalidates the night's overlaps cache.
+        Returns the updated row dict, or raises on error.
+        """
+        payload: dict = {
+            "tm_id":     tm_id,
+            "is_filled": tm_id is not None,
+        }
+        try:
+            res = (
+                self.supabase.table("overlap_assignments")
+                .update(payload)
+                .eq("id", overlap_id)
+                .execute()
+            )
+            row = (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("patch_overlap_tm(%s, %s) failed: %s", overlap_id, tm_id, exc)
+            raise
+
+        night_id = row.get("night_id")
+        if night_id:
+            await self.cache.delete(f"zds:night:{night_id}:overlaps")
+
+        return row
+
     # ── Phase 1 invalidation hooks ────────────────────────────────────────
 
     async def invalidate_night(self, night_id: str) -> None:
