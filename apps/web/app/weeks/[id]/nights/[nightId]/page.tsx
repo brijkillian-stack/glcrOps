@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 import useSWR from "swr";
@@ -80,11 +80,34 @@ export default function DailyPlannerPage() {
     dedupingInterval: 600_000,
   });
 
+  // All zone tasks for overlap derivation — long cache, rarely changes
+  const { data: allTasks = [] } = useSWR("forge:tasks:all", () => fetchZoneTasks(), {
+    revalidateOnFocus: false,
+    dedupingInterval: 600_000,
+  });
+
+  // task name → category lookup for deriving overlap slots from saved tasks
+  const taskCategoryMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    allTasks.forEach((t) => { m[t.name] = t.category; });
+    return m;
+  }, [allTasks]);
+
   // Separate zone types
   const zones      = data?.placements.filter((p) => p.zone_type === "zone")       ?? [];
   const restrooms  = data?.placements.filter((p) => p.zone_type === "restroom")   ?? [];
   const auxiliary  = data?.placements.filter((p) => p.zone_type === "auxiliary")  ?? [];
   const breakWaves = data?.break_waves ?? [];
+
+  // Overlap slots: placements that have at least one overlap_am / overlap_pm task saved
+  const overlapPmSlots = useMemo(() =>
+    (data?.placements ?? []).filter((p) =>
+      (p.tasks ?? []).some((t) => taskCategoryMap[t] === "overlap_pm")
+    ), [data?.placements, taskCategoryMap]);
+  const overlapAmSlots = useMemo(() =>
+    (data?.placements ?? []).filter((p) =>
+      (p.tasks ?? []).some((t) => taskCategoryMap[t] === "overlap_am")
+    ), [data?.placements, taskCategoryMap]);
 
   function openCtx(e: React.MouseEvent, slot: TMAssignment) {
     e.preventDefault();
@@ -237,7 +260,7 @@ export default function DailyPlannerPage() {
               {/* Zone cards grid */}
               <section>
                 <h2 className="section-header">Zones</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {zones.map((slot, i) => (
                     <ZoneCard
                       key={slot.slot_id}
@@ -283,7 +306,11 @@ export default function DailyPlannerPage() {
               </section>
 
               {/* Overlaps section */}
-              <OverlapsSection />
+              <OverlapsSection
+                pmSlots={overlapPmSlots}
+                amSlots={overlapAmSlots}
+                taskCategoryMap={taskCategoryMap}
+              />
             </motion.div>
           ) : (
             <motion.div
@@ -548,36 +575,122 @@ function RestroomPill({
 
 // ── Overlaps Section ──────────────────────────────────────────────────────────
 
-function OverlapsSection() {
-  // Placeholder — in prod: fetched from the weekly planning overview
-  const overlaps = [
-    { label: "Fri 01:00–02:00", zones: ["Z3", "Z4"], note: "PM handoff" },
-    { label: "Fri 04:30–05:00", zones: ["Z9", "Z12"], note: "AM handoff" },
-  ];
+interface OverlapsSectionProps {
+  pmSlots: TMAssignment[];         // slots with overlap_pm tasks (11p–1a)
+  amSlots: TMAssignment[];         // slots with overlap_am tasks (5a–7a)
+  taskCategoryMap: Record<string, string>;
+}
+
+const OVERLAP_WINDOWS = [
+  {
+    id:       "pm",
+    time:     "11p – 1a",
+    sublabel: "Late Evening",
+    cat:      "overlap_pm",
+    accent:   "#6366F1",  // indigo
+  },
+  {
+    id:       "am",
+    time:     "5a – 7a",
+    sublabel: "Early AM",
+    cat:      "overlap_am",
+    accent:   "#14B8A6",  // teal
+  },
+] as const;
+
+function OverlapsSection({ pmSlots, amSlots, taskCategoryMap }: OverlapsSectionProps) {
+  const slotsByWindow: Record<string, TMAssignment[]> = { pm: pmSlots, am: amSlots };
+  const totalFilled  = [...pmSlots, ...amSlots].filter((s) => s.tm_id).length;
+  const totalSlots   = pmSlots.length + amSlots.length;
+
+  if (totalSlots === 0) return null;  // hide section entirely if no overlap slots
 
   return (
     <section>
-      <h2 className="section-header">Overlaps</h2>
-      <div className="flex flex-col gap-2">
-        {overlaps.map((o, i) => (
-          <div
-            key={i}
-            className="card flex items-center gap-4 px-4 py-3 rounded-2xl no-select"
-          >
-            <div className="flex-1">
-              <div className="text-[13px] font-semibold text-gray-800">{o.label}</div>
-              <div className="text-[11px] text-gray-400 mt-0.5">{o.note}</div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="section-header !mb-0">Overlaps</h2>
+        <span className="text-[12px] font-semibold text-gray-400">
+          {totalFilled} / {totalSlots} filled
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        {OVERLAP_WINDOWS.map((win) => {
+          const slots = slotsByWindow[win.id];
+          if (slots.length === 0) return null;
+          return (
+            <div key={win.id} className="flex gap-4 items-start">
+              {/* Time label column */}
+              <div className="w-20 shrink-0 pt-3">
+                <div className="text-[14px] font-bold leading-tight"
+                     style={{ color: win.accent }}>
+                  {win.time}
+                </div>
+                <div className="text-[10px] font-semibold uppercase tracking-widest
+                                text-gray-400 mt-0.5 leading-tight">
+                  {win.sublabel}
+                </div>
+              </div>
+
+              {/* Cards grid */}
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                {slots.map((slot, i) => {
+                  const overlapTasks = (slot.tasks ?? []).filter(
+                    (t) => taskCategoryMap[t] === win.cat
+                  );
+                  const isEmpty = !slot.tm_id;
+                  return (
+                    <motion.div
+                      key={slot.slot_id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className={cn(
+                        "card rounded-2xl overflow-hidden",
+                        isEmpty && "opacity-60"
+                      )}
+                    >
+                      {/* Accent top stripe */}
+                      <div className="h-[3px]" style={{ backgroundColor: win.accent }} />
+
+                      <div className="p-3 flex flex-col gap-1.5">
+                        {/* Zone label */}
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                          {slot.zone_label}
+                        </div>
+
+                        {/* TM name */}
+                        <div className={cn(
+                          "text-[13px] font-bold leading-tight",
+                          isEmpty ? "text-gray-300 italic font-normal" : "text-gray-900"
+                        )}>
+                          {slot.tm_name ?? "Unfilled"}
+                        </div>
+
+                        {/* Overlap tasks */}
+                        {overlapTasks.length > 0 && (
+                          <ul className="flex flex-col gap-0.5 mt-0.5">
+                            {overlapTasks.map((t, ti) => (
+                              <li key={ti}
+                                  className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
+                                <div className="w-1 h-1 rounded-full mt-1.5 shrink-0"
+                                     style={{ backgroundColor: win.accent }} />
+                                <span className="truncate">{t}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {overlapTasks.length === 0 && isEmpty && (
+                          <div className="text-[11px] text-gray-300 italic">No tasks set</div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex gap-1.5">
-              {o.zones.map((z) => (
-                <span key={z} className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600
-                                          text-[11px] font-semibold">
-                  {z}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
