@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import get_settings
 from .core.dependencies import get_redis_client, get_supabase_client
+from .observability import instrument_app
 from .routers import planning as planning_router
 from .routers import print as print_router
 
@@ -30,6 +31,7 @@ log = logging.getLogger("zds.api")
 async def lifespan(app: FastAPI):
     """Warm singletons on boot, log infra status, clean shutdown."""
     settings = get_settings()
+    instrument_app(app, env=settings.env)
     log.info("ZDS Forge starting (env=%s, debug=%s)", settings.env, settings.debug)
 
     # Touch the supabase singleton so a misconfigured env surfaces at

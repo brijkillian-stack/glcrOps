@@ -128,3 +128,45 @@ jobs:
           path: tests/print_regression/diffs/
           retention-days: 30
           if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Tier 1 integrity guard: ensure golden PNG count is never wrong.
+  # Catches accidental golden corruption before it reaches main.
+  # ─────────────────────────────────────────────────────────────────────────────
+  golden-guard:
+    name: "Golden guard — PNG count sanity"
+    runs-on: ubuntu-latest
+    needs: tier1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Pull LFS objects
+        run: git lfs pull
+
+      - name: Assert PNG count matches manifest
+        run: |
+          python3 - << 'EOF'
+          import json, glob, sys
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("tests/print_regression/golden/manifest.json").read_text()
+          )
+          week_key   = manifest["week_key"]
+          expected   = manifest["page_count"]
+          pngs       = sorted(glob.glob(
+              f"tests/print_regression/golden/zone_deployment_book_{week_key}/page_*.png"
+          ))
+          actual = len(pngs)
+
+          if actual != expected:
+              print(f"FAIL: manifest says {expected} pages, found {actual} PNGs.")
+              print(f"  Week: {week_key}")
+              print(f"  PNGs: {[p.split('/')[-1] for p in pngs]}")
+              sys.exit(1)
+
+          print(f"OK: {actual} PNGs match manifest (week={week_key})")
+          EOF
