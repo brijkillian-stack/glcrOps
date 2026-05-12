@@ -11,3 +11,14 @@ redis>=5.0.0
 python-dotenv>=1.0.0
 prometheus-client>=0.20.0
 sentry-sdk[fastapi]>=2.0.0
+
+# ── Print renderer dependencies ───────────────────────────────────────────────
+# render_deployment_book.py imports openpyxl at module level (used for the
+# xlsx data path; the Supabase path never calls load_workbook but the import
+# still happens at load time).
+openpyxl>=3.1.0
+
+# WeasyPrint converts renderer HTML → PDF for the /print/*.pdf endpoints.
+# Requires system packages on Linux: libpango-1.0-0 libcairo2 libgdk-pixbuf2.0-0
+# Render's Ubuntu 22.04 environment has these pre-installed.
+weasyprint>=60.0
