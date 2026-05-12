@@ -145,6 +145,70 @@ export function getNightPrintUrl(nightId: string, format: "html" | "pdf") {
   return `${BASE}/v1/print/night/${nightId}.${format}`;
 }
 
+// ── Zone Tasks ────────────────────────────────────────────────────────────────
+
+export type TaskCategory = "zone" | "rr" | "aux" | "overlap_am" | "overlap_pm";
+
+export interface ZoneTask {
+  id: string;
+  name: string;
+  code: string;
+  category: TaskCategory;
+  target_codes: string[];
+  description: string | null;
+  display_order: number;
+}
+
+/** Fetch zone tasks, optionally filtered for a specific slot. */
+export async function fetchZoneTasks(
+  slotType?: string,
+  slotKey?: string,
+): Promise<ZoneTask[]> {
+  const params = new URLSearchParams();
+  if (slotType) params.set("slot_type", slotType);
+  if (slotKey)  params.set("slot_key",  slotKey);
+  const qs = params.toString() ? `?${params}` : "";
+  return get<ZoneTask[]>(`/v1/planning/tasks${qs}`);
+}
+
+/** Move a TM between break waves. */
+export async function moveBreakTMApi(
+  nightId: string,
+  tmId: string,
+  fromWave: number,
+  toWave: number,
+): Promise<void> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/breaks/move`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tm_id: tmId, from_wave: fromWave, to_wave: toWave }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`moveBreakTM ${res.status}: ${body}`);
+  }
+}
+
+/** Update custom tasks on a slot. */
+export async function patchSlotTasks(
+  nightId: string,
+  slotId: string,
+  tasks: string[],
+): Promise<void> {
+  const res = await fetch(
+    `${BASE}/v1/nights/${nightId}/placements/${slotId}/tasks`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`patchSlotTasks ${res.status}: ${body}`);
+  }
+}
+
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
 export function formatWeekEnding(isoDate: string): string {

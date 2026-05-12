@@ -181,3 +181,108 @@ async def patch_night_placement(
         raise _not_found(f"Slot not found: {slot_id!r}")
 
     return {"slot_id": slot_id, "tm_id": payload.tm_id, "updated": True}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PATCH /v1/nights/{night_id}/placements/{slot_id}/tasks
+# ═════════════════════════════════════════════════════════════════════════════
+
+class SlotTasksPayload(BaseModel):
+    tasks: list[str]   # ordered list of task name strings
+
+
+@router.patch(
+    "/{night_id}/placements/{slot_id}/tasks",
+    summary="Replace custom task list on a slot",
+    responses={
+        200: {"description": "Tasks updated"},
+        404: {"description": "Slot not found"},
+        503: {"description": "Update failed"},
+    },
+)
+async def patch_slot_tasks(
+    night_id: str,
+    slot_id: str,
+    payload: SlotTasksPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Replace the custom_tasks array on a zone_assignments row.
+
+    tasks is the complete desired list of task name strings — the caller
+    sends the full updated array, not a delta.  Sending an empty list
+    clears all custom tasks for the slot.
+
+    Invalidates the night assignment cache so the next GET /placements
+    returns fresh data including the updated task list.
+    """
+    try:
+        row = await placement_service.patch_slot_tasks(
+            slot_id=slot_id,
+            tasks=payload.tasks,
+        )
+    except Exception as exc:
+        log.exception("patch_slot_tasks(%s) raised", slot_id)
+        raise _unavailable(str(exc))
+
+    if not row:
+        raise _not_found(f"Slot not found: {slot_id!r}")
+
+    return {"slot_id": slot_id, "tasks": payload.tasks, "updated": True}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PATCH /v1/nights/{night_id}/breaks/move
+# ═════════════════════════════════════════════════════════════════════════════
+
+class BreakMovePayload(BaseModel):
+    tm_id:     str
+    from_wave: int   # 1 | 2 | 3
+    to_wave:   int   # 1 | 2 | 3
+
+
+@router.patch(
+    "/{night_id}/breaks/move",
+    summary="Move a TM between break waves",
+    responses={
+        200: {"description": "Break wave updated"},
+        404: {"description": "Night not found or TM not in wave"},
+        503: {"description": "Update failed"},
+    },
+)
+async def move_break_tm(
+    night_id: str,
+    payload: BreakMovePayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Move a TM from one break wave to another within a night.
+
+    Updates all break_assignments rows for this night/TM where
+    break_wave == from_wave, setting break_wave = to_wave.
+    Invalidates the breaks cache.
+
+    The Next.js sync layer calls this optimistically after moveBreakTM
+    so break changes survive a page refresh.
+    """
+    try:
+        count = await placement_service.move_break_tm(
+            night_id=night_id,
+            tm_id=payload.tm_id,
+            from_wave=payload.from_wave,
+            to_wave=payload.to_wave,
+        )
+    except Exception as exc:
+        log.exception("move_break_tm(night=%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    if count == 0:
+        raise _not_found(
+            f"TM {payload.tm_id!r} not found in wave {payload.from_wave} for night {night_id!r}"
+        )
+
+    return {
+        "night_id":  night_id,
+        "tm_id":     payload.tm_id,
+        "from_wave": payload.from_wave,
+        "to_wave":   payload.to_wave,
+        "rows_moved": count,
+    }

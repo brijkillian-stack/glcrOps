@@ -274,6 +274,119 @@ class PlacementService:
 
         return row
 
+    async def patch_slot_tasks(self, slot_id: str, tasks: list[str]) -> dict:
+        """Replace the custom_tasks array on a single zone_assignments row.
+
+        tasks is a list of task name strings (from zone_tasks.name).
+        Invalidates the night's assignment cache.
+        Returns the updated row dict.
+        """
+        try:
+            res = (
+                self.supabase.table("zone_assignments")
+                .update({"custom_tasks": tasks})
+                .eq("id", slot_id)
+                .execute()
+            )
+            row = (res.data or [{}])[0]
+        except Exception as exc:
+            log.warning("patch_slot_tasks(%s) failed: %s", slot_id, exc)
+            raise
+
+        night_id = row.get("night_id")
+        if night_id:
+            await self.cache.delete(f"zds:night:{night_id}:assignments")
+        return row
+
+    async def move_break_tm(
+        self,
+        night_id: str,
+        tm_id: str,
+        from_wave: int,
+        to_wave: int,
+    ) -> int:
+        """Move a TM from one break wave to another within a night.
+
+        Updates all break_assignments rows for this night + tm_id that
+        match from_wave, setting break_wave = to_wave.
+        Invalidates the breaks cache.
+        Returns the count of rows updated.
+        """
+        try:
+            res = (
+                self.supabase.table("break_assignments")
+                .update({"break_wave": to_wave})
+                .eq("night_id", night_id)
+                .eq("tm_id", tm_id)
+                .eq("break_wave", from_wave)
+                .execute()
+            )
+            count = len(res.data or [])
+        except Exception as exc:
+            log.warning(
+                "move_break_tm(night=%s, tm=%s, %s→%s) failed: %s",
+                night_id, tm_id, from_wave, to_wave, exc,
+            )
+            raise
+
+        await self.cache.delete(f"zds:night:{night_id}:breaks")
+        return count
+
+    async def list_zone_tasks(
+        self,
+        slot_type: Optional[str] = None,
+        slot_key: Optional[str] = None,
+    ) -> list[dict]:
+        """Return active zone_tasks, optionally filtered by slot type / key.
+
+        Results are NOT cached — the task catalogue rarely changes and
+        callers can SWR-dedupe at the component level.
+        """
+        query = (
+            self.supabase.table("zone_tasks")
+            .select("id, name, code, category, target_codes, description, display_order")
+            .eq("active", True)
+            .order("display_order")
+        )
+        try:
+            res = query.execute()
+            tasks = res.data or []
+        except Exception as exc:
+            log.warning("list_zone_tasks failed: %s", exc)
+            return []
+
+        # Client-side filtering: match slot_type category and slot_key target_codes.
+        if slot_type:
+            # Map API slot_type → DB category.
+            cat_map = {"zone": "zone", "restroom": "rr", "auxiliary": "aux"}
+            wanted_cat = cat_map.get(slot_type)
+            # Always include overlap tasks regardless of slot_type.
+            tasks = [
+                t for t in tasks
+                if t["category"] in ("overlap_am", "overlap_pm")
+                or t["category"] == wanted_cat
+            ]
+
+        if slot_key:
+            # Expand combined keys like rr_1_2 → [rr_1, rr_2].
+            parts = {slot_key}
+            if "_" in slot_key:
+                # e.g. rr_1_2 → try rr_1 and rr_2 as targets
+                segs = slot_key.rsplit("_", 1)
+                if segs[-1].isdigit():
+                    parts.add(segs[0])  # rr_1_2 → rr_1
+
+            def _matches(task: dict) -> bool:
+                codes = task.get("target_codes") or []
+                # Overlap tasks are never slot-filtered.
+                if task["category"] in ("overlap_am", "overlap_pm"):
+                    return True
+                return any(c in parts for c in codes)
+
+            tasks = [t for t in tasks if _matches(t)]
+
+        return tasks
+
     async def get_night_breaks(self, night_id: str) -> list[dict]:
         """Return break assignments for the night, cached for NIGHT_TTL seconds."""
         key = f"zds:night:{night_id}:breaks"

@@ -11,6 +11,7 @@
  */
 
 import useSWR, { mutate as globalMutate } from "swr";
+import { moveBreakTMApi } from "@/lib/forge-api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -184,10 +185,10 @@ export function useNightPlacements(nightId: string) {
 
     await mutate(
       async () => {
-        await new Promise((r) => setTimeout(r, 120));
+        await moveBreakTMApi(nightId, tmId, Number(fromWave), Number(toWave));
         return { ...optimistic, last_synced: new Date().toISOString() };
       },
-      { optimisticData: optimistic, rollbackOnError: true, revalidate: false }
+      { optimisticData: optimistic, rollbackOnError: true, revalidate: true }
     );
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 import useSWR from "swr";
@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, type ActiveTM } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, patchSlotTasks, type ActiveTM, type ZoneTask } from "@/lib/forge-api";
 import { cn, groupColor } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
@@ -72,6 +72,7 @@ export default function DailyPlannerPage() {
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [pencilHoverSlot, setPencilHoverSlot] = useState<string | null>(null);
   const [pickerSlot, setPickerSlot] = useState<TMAssignment | null>(null);
+  const [taskSlot, setTaskSlot]     = useState<TMAssignment | null>(null);
 
   // TM roster — cached by SWR, refreshes every 10 min
   const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
@@ -97,6 +98,12 @@ export default function DailyPlannerPage() {
     setPickerSlot(slot);
   }
 
+  function openTaskPicker(slot: TMAssignment) {
+    setCtxSlot(null);
+    setCtxPos(undefined);
+    setTaskSlot(slot);
+  }
+
   const ctxActions: ContextAction[] = ctxSlot
     ? [
         {
@@ -109,6 +116,11 @@ export default function DailyPlannerPage() {
           icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
           onClick: () => { assignTM(ctxSlot.slot_id, null); setCtxSlot(null); },
           disabled: !ctxSlot.tm_id,
+        },
+        {
+          label: "Assign Tasks",
+          icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="2" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>,
+          onClick: () => openTaskPicker(ctxSlot),
         },
         {
           label: `Move to Break 1`,
@@ -314,6 +326,12 @@ export default function DailyPlannerPage() {
           setPickerSlot(null);
         }}
         onClose={() => setPickerSlot(null)}
+      />
+
+      <TaskPickerSheet
+        slot={taskSlot}
+        nightId={nightId}
+        onClose={() => setTaskSlot(null)}
       />
     </div>
   );
@@ -674,6 +692,203 @@ function TMPickerSheet({ slot, tms, onSelect, onClear, onClose }: TMPickerSheetP
               })}
 
               {/* Bottom safe area spacer */}
+              <div className="h-6" />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── Task Picker Sheet ─────────────────────────────────────────────────────────
+
+const CATEGORY_TABS: { id: string; label: string; cats: string[] }[] = [
+  { id: "zone",   label: "Zone",    cats: ["zone", "rr", "aux"] },
+  { id: "am",     label: "AM",      cats: ["overlap_am"] },
+  { id: "pm",     label: "PM",      cats: ["overlap_pm"] },
+];
+
+interface TaskPickerSheetProps {
+  slot: TMAssignment | null;
+  nightId: string;
+  onClose: () => void;
+}
+
+function TaskPickerSheet({ slot, nightId, onClose }: TaskPickerSheetProps) {
+  const isOpen = !!slot;
+  const [activeTab, setActiveTab] = useState("zone");
+  const [saving, setSaving] = useState(false);
+
+  // Fetch tasks for this slot type + key when the sheet opens
+  const { data: allTasks = [] } = useSWR(
+    slot ? `forge:tasks:${slot.zone_type}:${slot.zone_id}` : null,
+    () => fetchZoneTasks(slot!.zone_type, slot!.zone_id),
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // Local selected state — initialised from slot.tasks when sheet opens
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Sync selected set whenever slot changes (new sheet open)
+  const prevSlotId = useRef<string | null>(null);
+  useEffect(() => {
+    if (slot && slot.slot_id !== prevSlotId.current) {
+      prevSlotId.current = slot.slot_id;
+      setSelected(new Set(slot.tasks ?? []));
+      setActiveTab("zone");
+    }
+  }, [slot]);
+
+  const tabTasks = allTasks.filter((t) => {
+    const tab = CATEGORY_TABS.find((tb) => tb.id === activeTab);
+    return tab ? tab.cats.includes(t.category) : false;
+  });
+
+  function toggle(name: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  async function save() {
+    if (!slot) return;
+    setSaving(true);
+    try {
+      await patchSlotTasks(nightId, slot.slot_id, [...selected]);
+      onClose();
+    } catch (err) {
+      console.error("patchSlotTasks failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="task-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={onClose}
+          />
+          <motion.div
+            key="task-sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl
+                       shadow-2xl flex flex-col max-h-[82dvh]"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pt-1 pb-3 shrink-0 flex items-start justify-between">
+              <div>
+                <h3 className="text-[16px] font-bold text-gray-900">Assign Tasks</h3>
+                <p className="text-[12px] text-gray-400">{slot?.zone_label}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="h-8 px-4 rounded-xl bg-[#007AFF] text-white text-[13px] font-semibold
+                             disabled:opacity-50 transition-opacity"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center
+                             text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                    <path d="M1 1l9 9M10 1L1 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Segmented tab control */}
+            <div className="px-5 pb-3 shrink-0">
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+                {CATEGORY_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
+                      activeTab === tab.id
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Task list */}
+            <div className="overflow-y-auto flex-1 px-4 pb-safe">
+              {tabTasks.length === 0 && (
+                <p className="text-center text-[13px] text-gray-400 py-10">
+                  No tasks for this slot type
+                </p>
+              )}
+              {tabTasks.map((task) => {
+                const checked = selected.has(task.name);
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => toggle(task.name)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl transition-colors text-left",
+                      checked ? "bg-[#007AFF]/06" : "hover:bg-gray-50"
+                    )}
+                  >
+                    {/* Checkbox */}
+                    <div className={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                      checked
+                        ? "border-[#007AFF] bg-[#007AFF]"
+                        : "border-gray-300 bg-white"
+                    )}>
+                      {checked && (
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={cn(
+                        "text-[14px] font-medium truncate",
+                        checked ? "text-[#007AFF]" : "text-gray-800"
+                      )}>
+                        {task.name}
+                      </div>
+                      {task.description && (
+                        <div className="text-[11px] text-gray-400 truncate mt-0.5">
+                          {task.description}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRightIcon />
+                  </button>
+                );
+              })}
               <div className="h-6" />
             </div>
           </motion.div>
