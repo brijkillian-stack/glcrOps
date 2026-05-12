@@ -165,6 +165,31 @@ export async function fetchZoneTasks(slotType?: string): Promise<ZoneTask[]> {
   return get<ZoneTask[]>(`/v1/planning/tasks${qs}`);
 }
 
+// ── Overlap Assignments ───────────────────────────────────────────────────────
+
+/** One row from overlap_assignments — a PM or AM overlap slot for a night. */
+export interface OverlapSlot {
+  id: string;
+  overlap_window: "pm" | "am";
+  position: string;    // "PMOL1"–"PMOL6" | "AMOL1"–"AMOL6"
+  is_filled: boolean;
+  task: string;        // task description, e.g. "Vacuum, Bottles & Glass"
+  tm_id: string | null;
+  tm_name: string;     // "" when unfilled
+}
+
+/** Derive a short display label from position code: "PMOL1" → "PM OL 1" */
+export function overlapPositionLabel(position: string): string {
+  return position
+    .replace(/^PMOL(\d+)$/, "PM OL $1")
+    .replace(/^AMOL(\d+)$/, "AM OL $1");
+}
+
+/** Fetch PM + AM overlap assignments for a single night. */
+export async function fetchNightOverlaps(nightId: string): Promise<OverlapSlot[]> {
+  return get<OverlapSlot[]>(`/v1/nights/${nightId}/overlaps`);
+}
+
 /** Move a TM between break waves. */
 export async function moveBreakTMApi(
   nightId: string,

@@ -4,6 +4,8 @@ Public surface
 ──────────────
     GET /v1/nights/{night_id}/placements
             → NightPlacementsResponse (application/json)
+    GET /v1/nights/{night_id}/overlaps
+            → list[OverlapSlotResponse] (application/json)
 
 Returns all zone/restroom/aux slot assignments and break-wave groupings
 for a single night.  This is the primary feed for the Daily Planner and
@@ -140,6 +142,46 @@ async def get_night_placements(
 # ═════════════════════════════════════════════════════════════════════════════
 # PATCH /v1/nights/{night_id}/placements/{slot_id}
 # ═════════════════════════════════════════════════════════════════════════════
+
+# ═════════════════════════════════════════════════════════════════════════════
+# GET /v1/nights/{night_id}/overlaps
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/{night_id}/overlaps",
+    summary="Overlap slot assignments for a night",
+    responses={
+        200: {"description": "PM + AM overlap assignments for the night"},
+        503: {"description": "Overlap data temporarily unavailable"},
+    },
+)
+async def get_night_overlaps(
+    night_id: str,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return all PM/AM overlap slot assignments for one night.
+
+    Reads from ``overlap_assignments`` — the engine's pre-populated overlap
+    schedule.  Each row has a position (PMOL1…PMOL6 / AMOL1…AMOL6),
+    an overlap_window ("pm" | "am"), a task description, and an optional TM.
+
+    The Next.js Daily Planner uses this to render the Overlaps section
+    without relying on inferred ``custom_tasks`` data on zone assignments.
+    """
+    try:
+        rows = await placement_service.get_night_overlaps(night_id)
+    except Exception as exc:
+        log.exception("get_night_overlaps(%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content=rows,
+        headers={"Cache-Control": _CACHE_CONTROL},
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 class AssignTMPayload(BaseModel):
     tm_id: Optional[str] = None   # None = clear the slot
