@@ -43,6 +43,27 @@ log = logging.getLogger(__name__)
 
 PLANNING_TTL = 15   # seconds; intentionally short for a live planning tool
 
+# ── Per-day target capacity (Brian's spec 5/12/26) ────────────────────────────
+# "100% fill rate" is defined against these targets, not against the raw slot
+# count in the DB.  This lets the rings and metrics reflect operational targets
+# rather than the total number of seats that *could* be filled.
+#
+#   Friday / Saturday  → 25 staffed = 100%
+#   Sunday             → 20 staffed = 100%
+#   Monday–Thursday    → 18 staffed = 100%
+#
+# coverage_pct is capped at 100 so over-staffed nights don't exceed the ring.
+_TARGET_CAPACITY: dict[str, int] = {
+    "Friday":    25,
+    "Saturday":  25,
+    "Sunday":    20,
+    "Monday":    18,
+    "Tuesday":   18,
+    "Wednesday": 18,
+    "Thursday":  18,
+}
+_DEFAULT_TARGET = 18  # fallback for any unexpected day_name
+
 
 class PlanningService:
     """Aggregate planning data for a week from PlacementService."""
@@ -103,7 +124,11 @@ class PlanningService:
                 if a.get("tm_id") not in (None, "", "null")
             )
             gap_count    = total_slots - filled_slots
-            coverage_pct = (filled_slots / total_slots * 100.0) if total_slots else 0.0
+            # coverage_pct uses the per-day *target* capacity as the denominator
+            # so the fill ring reflects operational targets, not raw slot counts.
+            # Capped at 100 so over-staffed nights don't exceed the ring.
+            target       = _TARGET_CAPACITY.get(day_name, _DEFAULT_TARGET)
+            coverage_pct = min((filled_slots / target * 100.0) if target else 0.0, 100.0)
 
             # Gather TM ids for fatigue index.
             for a in assignments:

@@ -126,11 +126,13 @@ export default function WeekOverviewPage() {
     );
   }
 
-  // Compute fill rate across all nights (planning service only counts in_rotation nights
-  // in metrics; fall back to a simple slots-based calc so the strip isn't always 0%).
-  const totalSlots = overview.nights.reduce((s, n) => s + n.total_slots, 0);
-  const totalFilled = overview.nights.reduce((s, n) => s + n.filled_slots, 0);
-  const weekFillRate = totalSlots > 0 ? totalFilled / totalSlots : 0;
+  // Compute fill rate as the average of per-night coverage_pct (which uses
+  // per-day target capacity on the backend, not raw slot counts).
+  // Only in-rotation nights count; convert 0-100 → 0-1 for FillRing.
+  const inRotationNights = overview.nights.filter((n) => n.in_rotation);
+  const weekFillRate = inRotationNights.length > 0
+    ? inRotationNights.reduce((s, n) => s + n.coverage_pct, 0) / inRotationNights.length / 100
+    : 0;
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#F5F5F7]">
