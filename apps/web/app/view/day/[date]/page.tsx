@@ -207,25 +207,24 @@ function ZoneSection({ title, slots, readOnly, onCardClick, onCardContextMenu }:
 // ── Break Sheet ───────────────────────────────────────────────────────────────
 
 function BreakSheet({ placements }: { placements: TMAssignment[] }) {
-  const waves = useMemo(() => {
-    const grouped: Record<string, { ids: string[]; names: string[] }> = {
-      "1": { ids: [], names: [] },
-      "2": { ids: [], names: [] },
-      "3": { ids: [], names: [] },
-    };
+  // Build group-centric structure: each group has its own 3 break times,
+  // and all TMs in that group attend all three breaks together.
+  const groups = useMemo(() => {
+    const roster: Record<string, string[]> = { "1": [], "2": [], "3": [] };
+    const seen = new Set<string>();
     for (const p of placements) {
-      if (p.tm_id && p.tm_name && p.group && p.group in grouped) {
-        grouped[p.group].ids.push(p.tm_id);
-        grouped[p.group].names.push(p.tm_name);
-      }
+      if (!p.tm_id || !p.tm_name || !p.group || !(p.group in roster)) continue;
+      if (seen.has(p.tm_id)) continue;
+      seen.add(p.tm_id);
+      roster[p.group].push(p.tm_name);
     }
-    return (["1","2","3"] as GroupId[]).map(waveId => ({
-      wave:  waveId,
-      label: WAVE_LABELS[waveId],
-      groups: (["1","2","3"] as GroupId[]).map(grpId => {
+    return (["1","2","3"] as GroupId[]).map(grpId => ({
+      group: grpId,
+      names: roster[grpId],
+      // All three waves for this group — times are fixed per group
+      breaks: (["1","2","3"] as GroupId[]).map(waveId => {
         const [start, end, dur] = BREAK_TIMES[grpId][waveId];
-        return { group: grpId, start, end, dur,
-          names: [...grouped[grpId].names] };
+        return { wave: waveId, label: WAVE_LABELS[waveId], start, end, dur };
       }),
     }));
   }, [placements]);
@@ -236,28 +235,70 @@ function BreakSheet({ placements }: { placements: TMAssignment[] }) {
         Break Schedule
       </h2>
       <div className="flex flex-col gap-3">
-        {waves.map(wave => (
-          <div key={wave.wave} className="card rounded-2xl p-3">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-              {wave.label}
+        {groups.map(g => (
+          <div key={g.group} className="card rounded-2xl overflow-hidden">
+
+            {/* Group header */}
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100/80">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: groupColor(g.group) }} />
+              <span className="text-[12px] font-bold text-gray-700 uppercase tracking-wide">
+                Group {g.group}
+              </span>
+              <span className="text-[11px] text-gray-400 ml-auto">
+                {g.names.length} TM{g.names.length !== 1 ? "s" : ""}
+              </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {wave.groups.map(g => (
-                <div key={g.group} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <div className="w-2 h-2 rounded-full" style={{ background: groupColor(g.group) }} />
-                    <span className="text-[10px] font-semibold text-gray-500">
-                      Grp {g.group} · {formatBreakTime(g.start)}–{formatBreakTime(g.end)}
-                      {" "}({g.dur}m)
-                    </span>
-                  </div>
-                  {g.names.length === 0 ? (
-                    <div className="text-[11px] text-gray-300 italic">—</div>
-                  ) : g.names.map((name, i) => (
-                    <div key={i} className="text-[12px] font-medium text-gray-800 leading-snug">{name}</div>
+
+            {/* Two-column body: break times | TM roster */}
+            <div className="grid grid-cols-2 divide-x divide-gray-100">
+
+              {/* Break times — fixed schedule for this group */}
+              <div className="px-3 py-2.5">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                  Breaks
+                </div>
+                <div className="flex flex-col gap-2">
+                  {g.breaks.map(b => (
+                    <div key={b.wave} className="flex items-start gap-2">
+                      {/* Wave color dot */}
+                      <div
+                        className="w-1.5 h-1.5 rounded-full mt-1 shrink-0"
+                        style={{ background: b.wave === "1" ? "#60a5fa" : b.wave === "2" ? "#a78bfa" : "#34d399" }}
+                      />
+                      <div>
+                        <div className="text-[10px] font-semibold text-gray-500 leading-none mb-0.5">
+                          {b.label}
+                        </div>
+                        <div className="text-[12px] font-bold text-gray-800 leading-none">
+                          {formatBreakTime(b.start)}
+                          <span className="text-[10px] font-medium text-gray-400 ml-1">
+                            {b.dur}m
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              ))}
+              </div>
+
+              {/* TM roster — same people attend all three breaks */}
+              <div className="px-3 py-2.5">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                  Team
+                </div>
+                {g.names.length === 0 ? (
+                  <div className="text-[12px] text-gray-300 italic">No TMs assigned</div>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {g.names.map((name, i) => (
+                      <div key={i} className="text-[12px] font-medium text-gray-800 leading-snug">
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         ))}

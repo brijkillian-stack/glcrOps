@@ -337,18 +337,21 @@ class PlacementService:
         self,
         slot_type: Optional[str] = None,
         slot_key: Optional[str] = None,
+        include_inactive: bool = False,
     ) -> list[dict]:
-        """Return active zone_tasks, optionally filtered by slot type / key.
+        """Return zone_tasks, optionally filtered by slot type / key.
 
         Results are NOT cached — the task catalogue rarely changes and
         callers can SWR-dedupe at the component level.
+        Pass include_inactive=True to return all tasks (for the Control Panel).
         """
         query = (
             self.supabase.table("zone_tasks")
-            .select("id, name, code, category, target_codes, description, display_order")
-            .eq("active", True)
+            .select("id, name, code, category, target_codes, description, display_order, active, archived_at")
             .order("display_order")
         )
+        if not include_inactive:
+            query = query.eq("active", True)
         try:
             res = query.execute()
             tasks = res.data or []

@@ -171,12 +171,64 @@ export interface ZoneTask {
   target_codes: string[];
   description: string | null;
   display_order: number;
+  active?: boolean;
+  archived_at?: string | null;
 }
 
 /** Fetch zone tasks filtered by broad slot type (zone | restroom | auxiliary). */
 export async function fetchZoneTasks(slotType?: string): Promise<ZoneTask[]> {
   const qs = slotType ? `?slot_type=${slotType}` : "";
   return get<ZoneTask[]>(`/v1/planning/tasks${qs}`);
+}
+
+/** Fetch ALL zone tasks including inactive ones (for Control Panel). */
+export async function fetchAllZoneTasks(): Promise<ZoneTask[]> {
+  return get<ZoneTask[]>("/v1/planning/tasks?include_inactive=true");
+}
+
+export interface CreateZoneTaskPayload {
+  name: string;
+  category: TaskCategory;
+  code?: string;
+  description?: string;
+  display_order?: number;
+  target_codes?: string[];
+}
+
+export async function createZoneTask(payload: CreateZoneTaskPayload): Promise<ZoneTask> {
+  const res = await fetch(`${BASE}/v1/planning/tasks`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
+  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`createZoneTask ${res.status}: ${b}`); }
+  return res.json();
+}
+
+export interface PatchZoneTaskPayload {
+  name?: string;
+  category?: TaskCategory;
+  code?: string;
+  description?: string;
+  display_order?: number;
+  target_codes?: string[];
+  active?: boolean;
+}
+
+export async function patchZoneTask(taskId: string, patch: PatchZoneTaskPayload): Promise<ZoneTask> {
+  const res = await fetch(`${BASE}/v1/planning/tasks/${taskId}`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(patch),
+  });
+  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`patchZoneTask ${res.status}: ${b}`); }
+  return res.json();
+}
+
+export async function deleteZoneTask(taskId: string): Promise<{ task_id: string; deleted: boolean }> {
+  const res = await fetch(`${BASE}/v1/planning/tasks/${taskId}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`deleteZoneTask ${res.status}: ${b}`); }
+  return res.json();
 }
 
 // ── Overlap Assignments ───────────────────────────────────────────────────────

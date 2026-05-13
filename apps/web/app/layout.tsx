@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { SWRProvider } from "@/components/SWRProvider";
+import { QuickLaunch } from "@/components/QuickLaunch";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,7 +34,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className="bg-[#F5F5F7] min-h-dvh overflow-x-hidden">
-        <SWRProvider>{children}</SWRProvider>
+        <SWRProvider>
+          {children}
+          <QuickLaunch />
+        </SWRProvider>
       </body>
     </html>
   );

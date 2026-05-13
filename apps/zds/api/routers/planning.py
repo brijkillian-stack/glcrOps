@@ -75,19 +75,132 @@ def _planning_unavailable(detail: str) -> HTTPException:
 )
 async def list_zone_tasks(
     slot_type: str | None = Query(None, description="zone | restroom | auxiliary"),
+    include_inactive: bool = Query(False, description="Include archived/inactive tasks"),
     placement_service: PlacementService = Depends(get_placement_service),
 ):
     """Return active zone_tasks, optionally filtered for a specific slot.
 
     Used by the Daily Planner task picker sheet.  Pass slot_type + slot_key
     to get only the tasks relevant to that slot (plus AM/PM overlap tasks).
-    Omit both to get the full catalogue.
+    Omit both to get the full catalogue.  Pass include_inactive=true to
+    return all tasks regardless of active status (for the Control Panel).
     """
     try:
-        return await placement_service.list_zone_tasks(slot_type=slot_type)
+        return await placement_service.list_zone_tasks(
+            slot_type=slot_type,
+            include_inactive=include_inactive,
+        )
     except Exception as exc:
         log.exception("list_zone_tasks raised")
         raise HTTPException(status_code=503, detail={"error": "unavailable", "detail": str(exc)})
+
+
+@router.post(
+    "/tasks",
+    summary="Create a zone task",
+    status_code=201,
+)
+async def create_zone_task(
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Create a new zone_tasks row.  Body fields: name (required), category,
+    code, description, display_order, target_codes.
+    """
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail={"error": "missing_name", "detail": "name is required"})
+
+    VALID_CATS = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
+    category = body.get("category", "zone")
+    if category not in VALID_CATS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_category", "detail": f"category must be one of {sorted(VALID_CATS)}"},
+        )
+
+    row = {
+        "name":          name,
+        "category":      category,
+        "code":          body.get("code") or None,
+        "description":   body.get("description") or None,
+        "display_order": body.get("display_order") if body.get("display_order") is not None else 100,
+        "target_codes":  body.get("target_codes") or [],
+        "active":        True,
+    }
+
+    try:
+        res = placement_service.supabase.table("zone_tasks").insert(row).execute()
+        created = (res.data or [{}])[0]
+    except Exception as exc:
+        log.exception("create_zone_task failed")
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    return created
+
+
+@router.patch(
+    "/tasks/{task_id}",
+    summary="Update a zone task",
+)
+async def patch_zone_task(
+    task_id: str,
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Partial update for a zone_tasks row.  Any combination of:
+    name, category, code, description, display_order, target_codes, active.
+    """
+    VALID_CATS = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
+    allowed = {"name", "category", "code", "description", "display_order", "target_codes", "active"}
+    patch = {k: v for k, v in body.items() if k in allowed}
+
+    if not patch:
+        raise HTTPException(status_code=400, detail={"error": "empty_patch", "detail": "No patchable fields provided"})
+
+    if "category" in patch and patch["category"] not in VALID_CATS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_category", "detail": f"category must be one of {sorted(VALID_CATS)}"},
+        )
+
+    try:
+        res = placement_service.supabase.table("zone_tasks").update(patch).eq("id", task_id).execute()
+        rows = res.data or []
+    except Exception as exc:
+        log.exception("patch_zone_task(%s) failed", task_id)
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    if not rows:
+        raise HTTPException(status_code=404, detail={"error": "not_found", "detail": f"Task {task_id!r} not found"})
+
+    return rows[0]
+
+
+@router.delete(
+    "/tasks/{task_id}",
+    summary="Soft-delete (deactivate) a zone task",
+)
+async def delete_zone_task(
+    task_id: str,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Soft-delete by setting active=False and archived_at=now().
+    Tasks are never hard-deleted so historical assignments remain readable.
+    """
+    import datetime
+    patch = {"active": False, "archived_at": datetime.datetime.utcnow().isoformat()}
+    try:
+        res = placement_service.supabase.table("zone_tasks").update(patch).eq("id", task_id).execute()
+        rows = res.data or []
+    except Exception as exc:
+        log.exception("delete_zone_task(%s) failed", task_id)
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    if not rows:
+        raise HTTPException(status_code=404, detail={"error": "not_found", "detail": f"Task {task_id!r} not found"})
+
+    return {"task_id": task_id, "deleted": True}
 
 
 @router.get(
