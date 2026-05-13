@@ -18,13 +18,19 @@ import {
   createZoneTask,
   patchZoneTask,
   deleteZoneTask,
+  reorderZoneTasks,
   fetchTabConfig,
   patchTabConfig,
   fetchBreakSchedule,
   patchBreakSchedule,
   DEFAULT_BREAK_SCHEDULE,
+  DAY_CODES,
   type ZoneTask,
   type TaskCategory,
+  type LaborCategory,
+  type TaskFrequency,
+  type ShiftPhase,
+  type DayCode,
   type TaskTab,
   type BreakSchedule,
   type BreakSlot,
@@ -162,9 +168,79 @@ export default function ControlPanelPage() {
   );
 }
 
+// ── Reporting field config ────────────────────────────────────────────────────
+
+const LABOR_CATS: { id: LaborCategory; label: string; color: string }[] = [
+  { id: "cleaning",   label: "Cleaning",   color: "#34C759" },
+  { id: "inspection", label: "Inspection", color: "#007AFF" },
+  { id: "coverage",   label: "Coverage",   color: "#C9A84C" },
+  { id: "compliance", label: "Compliance", color: "#FF3B30" },
+  { id: "security",   label: "Security",   color: "#AF52DE" },
+  { id: "other",      label: "Other",      color: "#8E8E93" },
+];
+
+const FREQUENCIES: { id: TaskFrequency; label: string }[] = [
+  { id: "once_per_shift", label: "Once per shift" },
+  { id: "ongoing",        label: "Ongoing"        },
+  { id: "as_needed",      label: "As needed"      },
+];
+
+const SHIFT_PHASES: { id: ShiftPhase; label: string }[] = [
+  { id: "all",       label: "All shift"  },
+  { id: "opening",   label: "Opening"   },
+  { id: "mid_shift", label: "Mid-shift" },
+  { id: "closing",   label: "Closing"   },
+];
+
+const DAY_LABELS: Record<string, string> = {
+  fri: "F", sat: "Sa", sun: "Su", mon: "M", tue: "T", wed: "W", thu: "Th",
+};
+
+function laborColor(cat?: LaborCategory | null) {
+  return LABOR_CATS.find((c) => c.id === cat)?.color ?? "#8E8E93";
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Tasks Tab
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ── Empty task editor state ───────────────────────────────────────────────────
+interface EditState {
+  name: string;
+  category: TaskCategory;
+  code: string;
+  description: string;
+  labor_category: LaborCategory | "";
+  is_compliance_required: boolean;
+  frequency: TaskFrequency;
+  shift_phase: ShiftPhase;
+  estimated_duration_min: string;
+  days_active: DayCode[];
+  notes: string;
+}
+
+const EMPTY_EDIT: EditState = {
+  name: "", category: "zone", code: "", description: "",
+  labor_category: "", is_compliance_required: false,
+  frequency: "once_per_shift", shift_phase: "all",
+  estimated_duration_min: "", days_active: [...DAY_CODES], notes: "",
+};
+
+function taskToEdit(t: ZoneTask): EditState {
+  return {
+    name:                   t.name,
+    category:               t.category,
+    code:                   t.code ?? "",
+    description:            t.description ?? "",
+    labor_category:         t.labor_category ?? "",
+    is_compliance_required: t.is_compliance_required ?? false,
+    frequency:              t.frequency ?? "once_per_shift",
+    shift_phase:            t.shift_phase ?? "all",
+    estimated_duration_min: t.estimated_duration_min != null ? String(t.estimated_duration_min) : "",
+    days_active:            t.days_active ?? [...DAY_CODES],
+    notes:                  t.notes ?? "",
+  };
+}
 
 function TasksTab() {
   const { data: tasks, mutate, isLoading } = useSWR(
@@ -173,64 +249,80 @@ function TasksTab() {
     { revalidateOnFocus: true },
   );
 
-  const [filterCat, setFilterCat] = useState<string>("all");
+  const [filterCat,    setFilterCat]    = useState<string>("all");
   const [showInactive, setShowInactive] = useState(false);
-  const [editingId, setEditingId]     = useState<string | null>(null);
-  const [addingNew, setAddingNew]     = useState(false);
-  const [savingId, setSavingId]       = useState<string | null>(null);
-  const [deletingId, setDeletingId]   = useState<string | null>(null);
-  const [error, setError]             = useState<string | null>(null);
+  const [editingId,    setEditingId]    = useState<string | null>(null);
+  const [addingNew,    setAddingNew]    = useState(false);
+  const [savingId,     setSavingId]     = useState<string | null>(null);
+  const [deletingId,   setDeletingId]   = useState<string | null>(null);
+  const [error,        setError]        = useState<string | null>(null);
+  const [reordering,   setReordering]   = useState(false);
 
-  // Edit form state
-  const [editName, setEditName]           = useState("");
-  const [editCategory, setEditCategory]   = useState<TaskCategory>("zone");
-  const [editCode, setEditCode]           = useState("");
-  const [editOrder, setEditOrder]         = useState<number>(100);
+  // Unified edit form (used for both edit and create)
+  const [editState, setEditState] = useState<EditState>(EMPTY_EDIT);
 
-  // New task form
-  const [newName, setNewName]         = useState("");
-  const [newCategory, setNewCategory] = useState<TaskCategory>("zone");
-  const [newCode, setNewCode]         = useState("");
-  const [newOrder, setNewOrder]       = useState<number>(100);
-  const [creating, setCreating]       = useState(false);
+  // Drag-to-reorder state
+  const [localOrder, setLocalOrder]   = useState<ZoneTask[]>([]);
+  const dragSrcIdx                    = useRef<number | null>(null);
+  const dragOverIdx                   = useRef<number | null>(null);
+  const newNameRef                    = useRef<HTMLInputElement>(null);
 
-  const newNameRef = useRef<HTMLInputElement>(null);
+  // Keep localOrder in sync with fetched tasks (but not while reordering)
+  useEffect(() => {
+    if (tasks && !reordering) setLocalOrder(tasks);
+  }, [tasks, reordering]);
 
-  const filtered = (tasks ?? []).filter((t) => {
-    if (!showInactive && !t.active) return false;
+  const filtered = localOrder.filter((t) => {
+    if (!showInactive && t.active === false) return false;
     if (filterCat !== "all" && t.category !== filterCat) return false;
     return true;
   });
 
-  // Group by category for display
   const grouped: Record<string, ZoneTask[]> = {};
-  for (const t of filtered) {
-    (grouped[t.category] ??= []).push(t);
+  for (const t of filtered) { (grouped[t.category] ??= []).push(t); }
+
+  function setField<K extends keyof EditState>(k: K, v: EditState[K]) {
+    setEditState((p) => ({ ...p, [k]: v }));
+  }
+
+  function toggleDay(day: DayCode) {
+    setEditState((p) => ({
+      ...p,
+      days_active: p.days_active.includes(day)
+        ? p.days_active.filter((d) => d !== day)
+        : [...p.days_active, day],
+    }));
   }
 
   function startEdit(task: ZoneTask) {
     setEditingId(task.id);
-    setEditName(task.name);
-    setEditCategory((task.category as TaskCategory) ?? "zone");
-    setEditCode(task.code ?? "");
-    setEditOrder(task.display_order ?? 100);
+    setEditState(taskToEdit(task));
+    setError(null);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setError(null);
+  function cancelEdit() { setEditingId(null); setError(null); }
+
+  function buildPatch(state: EditState) {
+    return {
+      name:                   state.name.trim(),
+      category:               state.category,
+      code:                   state.code.trim() || null,
+      description:            state.description.trim() || null,
+      labor_category:         (state.labor_category || null) as LaborCategory | null,
+      is_compliance_required: state.is_compliance_required,
+      frequency:              state.frequency,
+      shift_phase:            state.shift_phase,
+      estimated_duration_min: state.estimated_duration_min ? Number(state.estimated_duration_min) : null,
+      days_active:            state.days_active,
+      notes:                  state.notes.trim() || null,
+    };
   }
 
   async function saveEdit(task: ZoneTask) {
     setSavingId(task.id);
     setError(null);
     try {
-      await patchZoneTask(task.id, {
-        name:          editName.trim(),
-        category:      editCategory,
-        code:          editCode.trim() || undefined,
-        display_order: editOrder,
-      });
+      await patchZoneTask(task.id, buildPatch(editState));
       await mutate();
       setEditingId(null);
     } catch (err) {
@@ -241,9 +333,8 @@ function TasksTab() {
   }
 
   async function handleDelete(task: ZoneTask) {
-    if (!confirm(`Archive "${task.name}"? It will be hidden from task lists but historical assignments are preserved.`)) return;
+    if (!confirm(`Archive "${task.name}"? Historical assignments are preserved.`)) return;
     setDeletingId(task.id);
-    setError(null);
     try {
       await deleteZoneTask(task.id);
       await mutate();
@@ -259,34 +350,67 @@ function TasksTab() {
     try {
       await patchZoneTask(task.id, { active: true });
       await mutate();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Restore failed");
     } finally {
       setSavingId(null);
     }
   }
 
   async function handleCreate() {
-    if (!newName.trim()) return;
-    setCreating(true);
+    if (!editState.name.trim()) return;
+    setSavingId("new");
     setError(null);
     try {
-      await createZoneTask({
-        name:          newName.trim(),
-        category:      newCategory,
-        code:          newCode.trim() || undefined,
-        display_order: newOrder,
-      });
+      await createZoneTask(buildPatch(editState) as any);
       await mutate();
-      setNewName("");
-      setNewCode("");
-      setNewOrder(100);
+      setEditState(EMPTY_EDIT);
       setAddingNew(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
-      setCreating(false);
+      setSavingId(null);
     }
+  }
+
+  // ── Drag handlers ─────────────────────────────────────────────────────────
+
+  function onDragStart(idx: number) { dragSrcIdx.current = idx; }
+
+  function onDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    dragOverIdx.current = idx;
+  }
+
+  function onDrop(catTasks: ZoneTask[]) {
+    const src = dragSrcIdx.current;
+    const dst = dragOverIdx.current;
+    dragSrcIdx.current = null;
+    dragOverIdx.current = null;
+    if (src === null || dst === null || src === dst) return;
+
+    // Reorder within this category slice
+    const next = [...catTasks];
+    const [moved] = next.splice(src, 1);
+    next.splice(dst, 0, moved);
+
+    // Merge back into localOrder (other categories unchanged)
+    const catSet = new Set(catTasks.map((t) => t.id));
+    const others = localOrder.filter((t) => !catSet.has(t.id));
+    // Reconstruct full order: non-cat tasks interleaved by original position,
+    // with this category's new order inserted at the position of the first cat task
+    const firstCatIdx = localOrder.findIndex((t) => catSet.has(t.id));
+    const newOrder = [
+      ...localOrder.slice(0, firstCatIdx).filter((t) => !catSet.has(t.id)),
+      ...next,
+      ...localOrder.slice(firstCatIdx).filter((t) => !catSet.has(t.id)),
+    ];
+    setLocalOrder(newOrder);
+
+    // Persist — fire-and-forget, mutate to confirm
+    setReordering(true);
+    reorderZoneTasks(newOrder.map((t) => t.id))
+      .then(() => mutate())
+      .catch((e) => setError(e.message))
+      .finally(() => setReordering(false));
   }
 
   const activeCats = filterCat === "all"
@@ -297,52 +421,29 @@ function TasksTab() {
     <div className="flex flex-col gap-5">
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Category filter pills */}
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFilterCat("all")}
-            className={cn(
-              "h-7 px-3 rounded-full text-[12px] font-semibold transition-colors no-select",
-              filterCat === "all"
-                ? "bg-[#1A2340] text-white"
-                : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300",
-            )}
-          >
-            All
-          </button>
+            className={cn("h-7 px-3 rounded-full text-[12px] font-semibold transition-colors no-select",
+              filterCat === "all" ? "bg-[#1A2340] text-white" : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300")}
+          >All</button>
           {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setFilterCat(cat.id)}
+            <button key={cat.id} onClick={() => setFilterCat(cat.id)}
               className="h-7 px-3 rounded-full text-[12px] font-semibold transition-colors no-select"
-              style={
-                filterCat === cat.id
-                  ? { backgroundColor: cat.color, color: "#fff" }
-                  : { backgroundColor: cat.bg, color: cat.color }
-              }
-            >
+              style={filterCat === cat.id ? { backgroundColor: cat.color, color: "#fff" } : { backgroundColor: cat.bg, color: cat.color }}>
               {cat.label}
             </button>
           ))}
         </div>
-
         <div className="flex items-center gap-2 ml-auto">
-          {/* Show inactive toggle */}
           <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-              className="accent-[#1A2340]"
-            />
+            <input type="checkbox" checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#1A2340]" />
             Show archived
           </label>
-
-          {/* Add button */}
           <button
-            onClick={() => { setAddingNew(true); setTimeout(() => newNameRef.current?.focus(), 50); }}
-            className="flex items-center gap-1.5 h-8 px-4 rounded-xl text-[13px] font-semibold bg-[#1A2340] text-white hover:bg-[#2a3a60] active:scale-95 transition-all duration-100 no-select"
-          >
+            onClick={() => { setAddingNew(true); setEditState(EMPTY_EDIT); setTimeout(() => newNameRef.current?.focus(), 50); }}
+            className="flex items-center gap-1.5 h-8 px-4 rounded-xl text-[13px] font-semibold bg-[#1A2340] text-white hover:bg-[#2a3a60] active:scale-95 transition-all duration-100 no-select">
             <PlusIcon /> Add Task
           </button>
         </div>
@@ -356,74 +457,21 @@ function TasksTab() {
         </div>
       )}
 
-      {/* New task row */}
-      {addingNew && (
-        <div className="bg-white rounded-2xl shadow-sm border border-[#C9A84C]/40 overflow-hidden">
-          <div className="px-4 py-3 bg-[#C9A84C]/08 border-b border-[#C9A84C]/20 text-[13px] font-semibold text-[#8B6914]">
-            New Task
-          </div>
-          <div className="p-4 flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[180px]">
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Name *</label>
-              <input
-                ref={newNameRef}
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setAddingNew(false); }}
-                placeholder="Task name…"
-                className="w-full h-9 px-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340]"
-              />
-            </div>
-            <div className="w-36">
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Category</label>
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value as TaskCategory)}
-                className="w-full h-9 px-2 rounded-xl border border-gray-200 text-[13px] bg-white focus:outline-none focus:border-[#1A2340]"
-              >
-                {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
-            </div>
-            <div className="w-24">
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Code</label>
-              <input
-                type="text"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                placeholder="e.g. Z9"
-                className="w-full h-9 px-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340]"
-              />
-            </div>
-            <div className="w-24">
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Order</label>
-              <input
-                type="number"
-                value={newOrder}
-                onChange={(e) => setNewOrder(Number(e.target.value))}
-                className="w-full h-9 px-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340]"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleCreate}
-                disabled={creating || !newName.trim()}
-                className="h-9 px-4 rounded-xl bg-[#1A2340] text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#2a3a60] active:scale-95 transition-all"
-              >
-                {creating ? "Adding…" : "Add"}
-              </button>
-              <button
-                onClick={() => { setAddingNew(false); setError(null); }}
-                className="h-9 px-3 rounded-xl text-gray-500 hover:bg-gray-100 text-[13px]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* New / Edit task form */}
+      {(addingNew || editingId) && (
+        <TaskEditForm
+          state={editState}
+          isNew={addingNew}
+          saving={savingId === "new" || (editingId != null && savingId === editingId)}
+          onChange={setField}
+          onToggleDay={toggleDay}
+          onSave={editingId ? () => { const t = tasks?.find(t => t.id === editingId); if (t) saveEdit(t); } : handleCreate}
+          onCancel={() => { setAddingNew(false); setEditingId(null); setError(null); }}
+          newNameRef={newNameRef}
+        />
       )}
 
-      {/* Task list */}
+      {/* Skeleton */}
       {isLoading && !tasks && (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -438,49 +486,39 @@ function TasksTab() {
         </div>
       )}
 
-      {/* Group by category */}
+      {/* Task groups */}
       {activeCats.map((catId) => {
         const rows = grouped[catId];
         if (!rows?.length) return null;
         const cfg = catConfig(catId);
-
         return (
           <div key={catId} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* Section header */}
-            <div
-              className="px-4 py-2.5 flex items-center gap-2 border-b"
-              style={{ backgroundColor: cfg.bg, borderColor: `${cfg.color}22` }}
-            >
+            <div className="px-4 py-2.5 flex items-center gap-2 border-b"
+              style={{ backgroundColor: cfg.bg, borderColor: `${cfg.color}22` }}>
               <span className="text-[12px] font-bold tracking-wide" style={{ color: cfg.color }}>
                 {cfg.label.toUpperCase()}
               </span>
               <span className="text-[11px] font-medium" style={{ color: cfg.color, opacity: 0.7 }}>
                 {rows.length} task{rows.length !== 1 ? "s" : ""}
               </span>
+              <span className="ml-auto text-[10px] text-gray-300 font-medium">drag to reorder</span>
             </div>
-
-            {/* Rows */}
             <div className="divide-y divide-gray-50">
-              {rows.map((task) => (
+              {rows.map((task, rowIdx) => (
                 <TaskRow
                   key={task.id}
                   task={task}
+                  idx={rowIdx}
                   isEditing={editingId === task.id}
                   isSaving={savingId === task.id}
                   isDeleting={deletingId === task.id}
-                  editName={editName}
-                  editCategory={editCategory}
-                  editCode={editCode}
-                  editOrder={editOrder}
-                  onEditName={setEditName}
-                  onEditCategory={setEditCategory}
-                  onEditCode={setEditCode}
-                  onEditOrder={setEditOrder}
-                  onStartEdit={() => startEdit(task)}
+                  onStartEdit={() => { setAddingNew(false); startEdit(task); }}
                   onCancelEdit={cancelEdit}
-                  onSave={() => saveEdit(task)}
                   onDelete={() => handleDelete(task)}
                   onRestore={() => handleRestore(task)}
+                  onDragStart={() => onDragStart(rowIdx)}
+                  onDragOver={(e) => onDragOver(e, rowIdx)}
+                  onDrop={() => onDrop(rows)}
                 />
               ))}
             </div>
@@ -491,138 +529,237 @@ function TasksTab() {
   );
 }
 
-// ── Task row ──────────────────────────────────────────────────────────────────
+// ── Task edit form (shared for create + edit) ─────────────────────────────────
 
-interface TaskRowProps {
-  task: ZoneTask;
-  isEditing: boolean;
-  isSaving: boolean;
-  isDeleting: boolean;
-  editName: string;
-  editCategory: TaskCategory;
-  editCode: string;
-  editOrder: number;
-  onEditName: (v: string) => void;
-  onEditCategory: (v: TaskCategory) => void;
-  onEditCode: (v: string) => void;
-  onEditOrder: (v: number) => void;
-  onStartEdit: () => void;
-  onCancelEdit: () => void;
+interface TaskEditFormProps {
+  state: EditState;
+  isNew: boolean;
+  saving: boolean;
+  onChange: <K extends keyof EditState>(k: K, v: EditState[K]) => void;
+  onToggleDay: (day: DayCode) => void;
   onSave: () => void;
-  onDelete: () => void;
-  onRestore: () => void;
+  onCancel: () => void;
+  newNameRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-function TaskRow({
-  task, isEditing, isSaving, isDeleting,
-  editName, editCategory, editCode, editOrder,
-  onEditName, onEditCategory, onEditCode, onEditOrder,
-  onStartEdit, onCancelEdit, onSave, onDelete, onRestore,
-}: TaskRowProps) {
-  const inactive = task.active === false;
+function TaskEditForm({ state, isNew, saving, onChange, onToggleDay, onSave, onCancel, newNameRef }: TaskEditFormProps) {
+  const inputCls = "w-full h-9 px-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340] bg-white";
+  const selectCls = "w-full h-9 px-2 rounded-xl border border-gray-200 text-[13px] bg-white focus:outline-none focus:border-[#1A2340]";
+  const labelCls = "block text-[11px] font-semibold text-gray-400 mb-1 uppercase tracking-wide";
 
-  if (isEditing) {
-    return (
-      <div className="px-4 py-3 bg-blue-50/60 flex flex-wrap gap-2.5 items-center">
-        <input
-          autoFocus
-          type="text"
-          value={editName}
-          onChange={(e) => onEditName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancelEdit(); }}
-          className="flex-1 min-w-[150px] h-8 px-3 rounded-lg border border-blue-200 bg-white text-[13px] focus:outline-none focus:border-[#1A2340]"
-        />
-        <select
-          value={editCategory}
-          onChange={(e) => onEditCategory(e.target.value as TaskCategory)}
-          className="w-28 h-8 px-2 rounded-lg border border-blue-200 bg-white text-[13px] focus:outline-none"
-        >
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
-        <input
-          type="text"
-          value={editCode}
-          onChange={(e) => onEditCode(e.target.value)}
-          placeholder="Code"
-          className="w-20 h-8 px-2 rounded-lg border border-blue-200 bg-white text-[13px] focus:outline-none"
-        />
-        <input
-          type="number"
-          value={editOrder}
-          onChange={(e) => onEditOrder(Number(e.target.value))}
-          placeholder="Order"
-          className="w-16 h-8 px-2 rounded-lg border border-blue-200 bg-white text-[13px] focus:outline-none"
-        />
-        <div className="flex gap-1.5">
-          <button
-            onClick={onSave}
-            disabled={isSaving || !editName.trim()}
-            className="h-8 px-3 rounded-lg bg-[#1A2340] text-white text-[12px] font-semibold flex items-center gap-1.5 disabled:opacity-40"
-          >
-            {isSaving ? "…" : <><CheckIcon /> Save</>}
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-[#C9A84C]/40 overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#C9A84C]/20 flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-[#8B6914]">{isNew ? "New Task" : "Edit Task"}</span>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><XIcon /></button>
+      </div>
+
+      <div className="p-4 flex flex-col gap-4">
+        {/* Row 1: Name + Category + Code */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className={labelCls}>Name *</label>
+            <input ref={newNameRef} type="text" value={state.name}
+              onChange={(e) => onChange("name", e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancel(); }}
+              placeholder="Task name…" className={inputCls} autoFocus={isNew} />
+          </div>
+          <div className="w-36">
+            <label className={labelCls}>Category</label>
+            <select value={state.category} onChange={(e) => onChange("category", e.target.value as TaskCategory)} className={selectCls}>
+              {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="w-24">
+            <label className={labelCls}>Code</label>
+            <input type="text" value={state.code} onChange={(e) => onChange("code", e.target.value)}
+              placeholder="e.g. Z9" className={inputCls} />
+          </div>
+        </div>
+
+        {/* Row 2: Labor cat + Frequency + Phase + Duration */}
+        <div className="flex flex-wrap gap-3">
+          <div className="w-36">
+            <label className={labelCls}>Labor Category</label>
+            <select value={state.labor_category}
+              onChange={(e) => onChange("labor_category", e.target.value as LaborCategory | "")} className={selectCls}>
+              <option value="">— none —</option>
+              {LABOR_CATS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="w-36">
+            <label className={labelCls}>Frequency</label>
+            <select value={state.frequency} onChange={(e) => onChange("frequency", e.target.value as TaskFrequency)} className={selectCls}>
+              {FREQUENCIES.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className={labelCls}>Shift Phase</label>
+            <select value={state.shift_phase} onChange={(e) => onChange("shift_phase", e.target.value as ShiftPhase)} className={selectCls}>
+              {SHIFT_PHASES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+          </div>
+          <div className="w-28">
+            <label className={labelCls}>Duration (min)</label>
+            <input type="number" min={1} max={480} value={state.estimated_duration_min}
+              onChange={(e) => onChange("estimated_duration_min", e.target.value)}
+              placeholder="e.g. 30" className={inputCls} />
+          </div>
+          {/* Compliance toggle */}
+          <div className="flex flex-col justify-end pb-0.5">
+            <label className={labelCls}>Compliance</label>
+            <button
+              onClick={() => onChange("is_compliance_required", !state.is_compliance_required)}
+              className={cn("h-9 px-3 rounded-xl border text-[12px] font-semibold transition-colors flex items-center gap-1.5",
+                state.is_compliance_required
+                  ? "bg-red-50 border-red-200 text-red-600"
+                  : "bg-white border-gray-200 text-gray-400 hover:border-gray-300")}
+            >
+              {state.is_compliance_required ? "✓ Required" : "Not required"}
+            </button>
+          </div>
+        </div>
+
+        {/* Row 3: Days active */}
+        <div>
+          <label className={labelCls}>Days Active</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {DAY_CODES.map((day) => {
+              const active = state.days_active.includes(day);
+              return (
+                <button key={day} onClick={() => onToggleDay(day)}
+                  className={cn("w-9 h-9 rounded-xl text-[11px] font-bold transition-colors",
+                    active ? "bg-[#1A2340] text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200")}>
+                  {DAY_LABELS[day]}
+                </button>
+              );
+            })}
+            <button onClick={() => onChange("days_active", [...DAY_CODES])}
+              className="h-9 px-2.5 rounded-xl text-[11px] text-gray-400 hover:bg-gray-100 transition-colors">
+              All
+            </button>
+          </div>
+        </div>
+
+        {/* Row 4: Description + Notes */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className={labelCls}>Description</label>
+            <textarea value={state.description} onChange={(e) => onChange("description", e.target.value)}
+              rows={2} placeholder="Short description shown in task picker…"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340] bg-white resize-none" />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className={labelCls}>Internal Notes</label>
+            <textarea value={state.notes} onChange={(e) => onChange("notes", e.target.value)}
+              rows={2} placeholder="Reporting notes, instructions…"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340] bg-white resize-none" />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onSave} disabled={saving || !state.name.trim()}
+            className="h-9 px-5 rounded-xl bg-[#1A2340] text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#2a3a60] active:scale-95 transition-all">
+            {saving ? "Saving…" : isNew ? "Create Task" : "Save Changes"}
           </button>
-          <button
-            onClick={onCancelEdit}
-            className="h-8 px-3 rounded-lg text-gray-500 hover:bg-gray-100 text-[12px]"
-          >
+          <button onClick={onCancel} className="h-9 px-4 rounded-xl text-gray-500 hover:bg-gray-100 text-[13px]">
             Cancel
           </button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+// ── Task row ──────────────────────────────────────────────────────────────────
+
+interface TaskRowProps {
+  task: ZoneTask;
+  idx: number;
+  isEditing: boolean;
+  isSaving: boolean;
+  isDeleting: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
+  onRestore: () => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+}
+
+function TaskRow({ task, isEditing, isSaving, isDeleting, onStartEdit, onCancelEdit, onDelete, onRestore, onDragStart, onDragOver, onDrop }: TaskRowProps) {
+  const inactive = task.active === false;
 
   return (
     <div
+      draggable={!inactive}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={cn(
-        "px-4 py-3 flex items-center gap-3 group transition-colors",
-        inactive ? "opacity-40" : "hover:bg-gray-50/70",
+        "px-3 py-2.5 flex items-center gap-2.5 group transition-colors",
+        inactive ? "opacity-40" : "hover:bg-gray-50/70 cursor-grab active:cursor-grabbing",
+        isEditing && "bg-blue-50/40",
       )}
     >
-      {/* Order badge */}
-      <span className="w-7 text-center text-[11px] font-mono text-gray-300 shrink-0">
-        {task.display_order}
-      </span>
+      {/* Drag handle */}
+      {!inactive && (
+        <div className="text-gray-200 group-hover:text-gray-350 transition-colors shrink-0 cursor-grab">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="none">
+            <circle cx="3" cy="2.5" r="1.2" fill="currentColor"/>
+            <circle cx="7" cy="2.5" r="1.2" fill="currentColor"/>
+            <circle cx="3" cy="7"   r="1.2" fill="currentColor"/>
+            <circle cx="7" cy="7"   r="1.2" fill="currentColor"/>
+            <circle cx="3" cy="11.5" r="1.2" fill="currentColor"/>
+            <circle cx="7" cy="11.5" r="1.2" fill="currentColor"/>
+          </svg>
+        </div>
+      )}
 
       {/* Name */}
-      <span className={cn("flex-1 text-[14px] font-medium", inactive && "line-through text-gray-400")}>
+      <span className={cn("flex-1 text-[13px] font-medium truncate", inactive && "line-through text-gray-400")}>
         {task.name}
       </span>
 
-      {/* Code */}
-      {task.code && (
-        <span className="text-[11px] font-mono text-gray-400 shrink-0">{task.code}</span>
-      )}
-
-      {/* Category pill */}
-      <CategoryPill cat={task.category ?? ""} />
+      {/* Reporting badges (shown on non-hover, compact) */}
+      <div className="flex items-center gap-1.5 shrink-0 opacity-70 group-hover:opacity-0 transition-opacity">
+        {task.labor_category && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+            style={{ color: laborColor(task.labor_category), backgroundColor: `${laborColor(task.labor_category)}18` }}>
+            {task.labor_category}
+          </span>
+        )}
+        {task.is_compliance_required && (
+          <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-md">C</span>
+        )}
+        {task.frequency && task.frequency !== "once_per_shift" && (
+          <span className="text-[10px] text-gray-400 font-medium">
+            {task.frequency === "ongoing" ? "∞" : "?"}
+          </span>
+        )}
+        {task.code && (
+          <span className="text-[10px] font-mono text-gray-400">{task.code}</span>
+        )}
+        <CategoryPill cat={task.category ?? ""} />
+      </div>
 
       {/* Actions — shown on hover */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         {inactive ? (
-          <button
-            onClick={onRestore}
-            disabled={isSaving}
-            title="Restore"
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-500 hover:bg-emerald-50 disabled:opacity-50 transition-colors"
-          >
+          <button onClick={onRestore} disabled={isSaving} title="Restore"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-500 hover:bg-emerald-50 disabled:opacity-50 transition-colors">
             <RestoreIcon />
           </button>
         ) : (
           <>
-            <button
-              onClick={onStartEdit}
-              title="Edit"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-[#1A2340] transition-colors"
-            >
+            <button onClick={onStartEdit} title="Edit"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-[#1A2340] transition-colors">
               <PencilIcon />
             </button>
-            <button
-              onClick={onDelete}
-              disabled={isDeleting}
-              title="Archive"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={onDelete} disabled={isDeleting} title="Archive"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 transition-colors">
               {isDeleting ? <span className="text-[10px]">…</span> : <TrashIcon />}
             </button>
           </>

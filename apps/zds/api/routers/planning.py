@@ -256,28 +256,38 @@ async def create_zone_task(
     placement_service: PlacementService = Depends(get_placement_service),
 ):
     """Create a new zone_tasks row.  Body fields: name (required), category,
-    code, description, display_order, target_codes.
+    code, description, display_order, target_codes, labor_category,
+    is_compliance_required, frequency, shift_phase, estimated_duration_min,
+    days_active, notes.
     """
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail={"error": "missing_name", "detail": "name is required"})
 
-    VALID_CATS = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
+    VALID_CATS       = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
+    VALID_LABOR      = {"cleaning", "inspection", "coverage", "compliance", "security", "other", None}
+    VALID_FREQUENCY  = {"once_per_shift", "ongoing", "as_needed"}
+    VALID_PHASE      = {"all", "opening", "mid_shift", "closing"}
+
     category = body.get("category", "zone")
     if category not in VALID_CATS:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "invalid_category", "detail": f"category must be one of {sorted(VALID_CATS)}"},
-        )
+        raise HTTPException(status_code=400, detail={"error": "invalid_category"})
 
     row = {
-        "name":          name,
-        "category":      category,
-        "code":          body.get("code") or None,
-        "description":   body.get("description") or None,
-        "display_order": body.get("display_order") if body.get("display_order") is not None else 100,
-        "target_codes":  body.get("target_codes") or [],
-        "active":        True,
+        "name":                    name,
+        "category":                category,
+        "code":                    body.get("code") or None,
+        "description":             body.get("description") or None,
+        "display_order":           body.get("display_order") if body.get("display_order") is not None else 100,
+        "target_codes":            body.get("target_codes") or [],
+        "active":                  True,
+        "labor_category":          body.get("labor_category") or None,
+        "is_compliance_required":  bool(body.get("is_compliance_required", False)),
+        "frequency":               body.get("frequency") or "once_per_shift",
+        "shift_phase":             body.get("shift_phase") or "all",
+        "estimated_duration_min":  body.get("estimated_duration_min") or None,
+        "days_active":             body.get("days_active") or ["fri","sat","sun","mon","tue","wed","thu"],
+        "notes":                   body.get("notes") or None,
     }
 
     try:
@@ -303,7 +313,11 @@ async def patch_zone_task(
     name, category, code, description, display_order, target_codes, active.
     """
     VALID_CATS = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
-    allowed = {"name", "category", "code", "description", "display_order", "target_codes", "active"}
+    allowed = {
+        "name", "category", "code", "description", "display_order", "target_codes", "active",
+        "labor_category", "is_compliance_required", "frequency", "shift_phase",
+        "estimated_duration_min", "days_active", "notes",
+    }
     patch = {k: v for k, v in body.items() if k in allowed}
 
     if not patch:
@@ -352,6 +366,36 @@ async def delete_zone_task(
         raise HTTPException(status_code=404, detail={"error": "not_found", "detail": f"Task {task_id!r} not found"})
 
     return {"task_id": task_id, "deleted": True}
+
+
+@router.post(
+    "/tasks/reorder",
+    summary="Bulk-update display_order for a list of tasks",
+)
+async def reorder_zone_tasks(
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Accept an ordered list of task IDs and assign display_order = index * 10.
+
+    Body: { ids: ["uuid1", "uuid2", ...] }
+    The caller sends the full ordered list; we assign display_order in sequence.
+    """
+    ids = body.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail={"error": "invalid_body", "detail": "Expected { ids: [...] }"})
+
+    try:
+        for idx, task_id in enumerate(ids):
+            placement_service.supabase.table("zone_tasks") \
+                .update({"display_order": idx * 10}) \
+                .eq("id", task_id) \
+                .execute()
+    except Exception as exc:
+        log.exception("reorder_zone_tasks failed")
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    return {"reordered": len(ids)}
 
 
 @router.get(

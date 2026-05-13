@@ -234,16 +234,31 @@ export async function patchBreakSchedule(schedule: BreakSchedule): Promise<{ upd
   return res.json();
 }
 
+export type LaborCategory = "cleaning" | "inspection" | "coverage" | "compliance" | "security" | "other";
+export type TaskFrequency = "once_per_shift" | "ongoing" | "as_needed";
+export type ShiftPhase    = "all" | "opening" | "mid_shift" | "closing";
+
+export const DAY_CODES = ["fri", "sat", "sun", "mon", "tue", "wed", "thu"] as const;
+export type DayCode = typeof DAY_CODES[number];
+
 export interface ZoneTask {
   id: string;
   name: string;
-  code: string;
+  code: string | null;
   category: TaskCategory;
   target_codes: string[];
   description: string | null;
   display_order: number;
   active?: boolean;
   archived_at?: string | null;
+  // Reporting fields
+  labor_category?: LaborCategory | null;
+  is_compliance_required?: boolean;
+  frequency?: TaskFrequency;
+  shift_phase?: ShiftPhase;
+  estimated_duration_min?: number | null;
+  days_active?: DayCode[];
+  notes?: string | null;
 }
 
 /** Fetch zone tasks filtered by broad slot type (zone | restroom | auxiliary). */
@@ -264,6 +279,13 @@ export interface CreateZoneTaskPayload {
   description?: string;
   display_order?: number;
   target_codes?: string[];
+  labor_category?: LaborCategory | null;
+  is_compliance_required?: boolean;
+  frequency?: TaskFrequency;
+  shift_phase?: ShiftPhase;
+  estimated_duration_min?: number | null;
+  days_active?: DayCode[];
+  notes?: string | null;
 }
 
 export async function createZoneTask(payload: CreateZoneTaskPayload): Promise<ZoneTask> {
@@ -279,11 +301,18 @@ export async function createZoneTask(payload: CreateZoneTaskPayload): Promise<Zo
 export interface PatchZoneTaskPayload {
   name?: string;
   category?: TaskCategory;
-  code?: string;
-  description?: string;
+  code?: string | null;
+  description?: string | null;
   display_order?: number;
   target_codes?: string[];
   active?: boolean;
+  labor_category?: LaborCategory | null;
+  is_compliance_required?: boolean;
+  frequency?: TaskFrequency;
+  shift_phase?: ShiftPhase;
+  estimated_duration_min?: number | null;
+  days_active?: DayCode[];
+  notes?: string | null;
 }
 
 export async function patchZoneTask(taskId: string, patch: PatchZoneTaskPayload): Promise<ZoneTask> {
@@ -299,6 +328,17 @@ export async function patchZoneTask(taskId: string, patch: PatchZoneTaskPayload)
 export async function deleteZoneTask(taskId: string): Promise<{ task_id: string; deleted: boolean }> {
   const res = await fetch(`${BASE}/v1/planning/tasks/${taskId}`, { method: "DELETE" });
   if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`deleteZoneTask ${res.status}: ${b}`); }
+  return res.json();
+}
+
+/** Bulk-reorder tasks: send the full ordered list of IDs, server assigns display_order = index * 10 */
+export async function reorderZoneTasks(ids: string[]): Promise<{ reordered: number }> {
+  const res = await fetch(`${BASE}/v1/planning/tasks/reorder`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ ids }),
+  });
+  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`reorderZoneTasks ${res.status}: ${b}`); }
   return res.json();
 }
 

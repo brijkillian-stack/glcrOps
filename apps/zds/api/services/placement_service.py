@@ -347,7 +347,11 @@ class PlacementService:
         """
         query = (
             self.supabase.table("zone_tasks")
-            .select("id, name, code, category, target_codes, description, display_order, active, archived_at")
+            .select(
+                "id, name, code, category, target_codes, description, display_order, "
+                "active, archived_at, estimated_duration_min, days_active, notes, "
+                "labor_category, is_compliance_required, frequency, shift_phase"
+            )
             .order("display_order")
         )
         if not include_inactive:
