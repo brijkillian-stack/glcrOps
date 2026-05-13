@@ -21,6 +21,8 @@ import {
   fetchActiveTMs,
   getNightPrintUrl,
   getWeekPrintUrl,
+  fetchBreakSchedule,
+  DEFAULT_BREAK_SCHEDULE,
   type ActiveTM,
 } from "@/lib/forge-api";
 import {
@@ -36,15 +38,8 @@ import { getShiftDate } from "@/lib/shift-date";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
 
-// ── Break schedule constants (matches Python _BREAK_SCHEDULE) ─────────────────
-const BREAK_TIMES: Record<string, Record<string, [string, string, number]>> = {
-  "1": { "1": ["00:45", "01:00", 15], "2": ["02:30", "03:00", 30], "3": ["05:00", "05:15", 15] },
-  "2": { "1": ["01:00", "01:15", 15], "2": ["03:00", "03:30", 30], "3": ["05:00", "05:15", 15] },
-  "3": { "1": ["01:15", "01:30", 15], "2": ["03:30", "04:00", 30], "3": ["05:15", "05:30", 15] },
-};
-const WAVE_LABELS: Record<string, string> = {
-  "1": "First Break", "2": "Main Break", "3": "Last Break",
-};
+// Break schedule is now fetched from DB via fetchBreakSchedule().
+// DEFAULT_BREAK_SCHEDULE (imported from forge-api) is used as fallback.
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -207,6 +202,13 @@ function ZoneSection({ title, slots, readOnly, onCardClick, onCardContextMenu }:
 // ── Break Sheet ───────────────────────────────────────────────────────────────
 
 function BreakSheet({ placements }: { placements: TMAssignment[] }) {
+  // Fetch break schedule from DB; fall back to hardcoded defaults
+  const { data: schedule = DEFAULT_BREAK_SCHEDULE } = useSWR(
+    "view:break_schedule",
+    fetchBreakSchedule,
+    { revalidateOnFocus: false, dedupingInterval: 120_000 },
+  );
+
   // Build group-centric structure: each group has its own 3 break times,
   // and all TMs in that group attend all three breaks together.
   const groups = useMemo(() => {
@@ -221,13 +223,18 @@ function BreakSheet({ placements }: { placements: TMAssignment[] }) {
     return (["1","2","3"] as GroupId[]).map(grpId => ({
       group: grpId,
       names: roster[grpId],
-      // All three waves for this group — times are fixed per group
       breaks: (["1","2","3"] as GroupId[]).map(waveId => {
-        const [start, end, dur] = BREAK_TIMES[grpId][waveId];
-        return { wave: waveId, label: WAVE_LABELS[waveId], start, end, dur };
+        const slot = schedule.times?.[grpId]?.[waveId]
+          ?? DEFAULT_BREAK_SCHEDULE.times[grpId][waveId];
+        const [start, end, dur] = slot;
+        return {
+          wave:  waveId,
+          label: schedule.wave_labels?.[waveId] ?? DEFAULT_BREAK_SCHEDULE.wave_labels[waveId],
+          start, end, dur,
+        };
       }),
     }));
-  }, [placements]);
+  }, [placements, schedule]);
 
   return (
     <section>

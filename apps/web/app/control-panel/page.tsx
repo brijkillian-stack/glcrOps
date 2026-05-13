@@ -20,9 +20,14 @@ import {
   deleteZoneTask,
   fetchTabConfig,
   patchTabConfig,
+  fetchBreakSchedule,
+  patchBreakSchedule,
+  DEFAULT_BREAK_SCHEDULE,
   type ZoneTask,
   type TaskCategory,
   type TaskTab,
+  type BreakSchedule,
+  type BreakSlot,
 } from "@/lib/forge-api";
 import { cn } from "@/lib/utils";
 
@@ -889,23 +894,298 @@ function TabConfigTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Break Schedule Tab (stub — full build in next iteration)
+// Break Schedule Tab
 // ══════════════════════════════════════════════════════════════════════════════
 
+const GROUPS  = ["1", "2", "3"] as const;
+const WAVES   = ["1", "2", "3"] as const;
+
+const WAVE_COLORS: Record<string, string> = {
+  "1": "#60a5fa",   // blue   — First Break
+  "2": "#a78bfa",   // purple — Main Break
+  "3": "#34d399",   // green  — Last Break
+};
+
+const GROUP_COLORS: Record<string, string> = {
+  "1": "#C9A84C",
+  "2": "#007AFF",
+  "3": "#34C759",
+};
+
+/** Parse "HH:MM" into total minutes from midnight */
+function timeToMins(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** Format total minutes (may be > 24h for early-AM times) back to "HH:MM" */
+function minsToTime(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Display a 24h "HH:MM" string as 12h "h:MM AM/PM" */
+function fmt12(t: string): string {
+  const [hStr, mStr] = t.split(":");
+  let h = parseInt(hStr, 10);
+  const m = mStr;
+  const period = h < 12 ? "AM" : "PM";
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${period}`;
+}
+
+/** Deep-clone a BreakSchedule so edits don't mutate SWR cache */
+function cloneSchedule(s: BreakSchedule): BreakSchedule {
+  return {
+    wave_labels: { ...s.wave_labels },
+    times: Object.fromEntries(
+      Object.entries(s.times).map(([g, waves]) => [
+        g,
+        Object.fromEntries(
+          Object.entries(waves).map(([w, slot]) => [w, [...slot] as BreakSlot])
+        ),
+      ])
+    ),
+  };
+}
+
 function BreaksTab() {
+  const { data: savedSchedule, mutate, isLoading } = useSWR(
+    "control:break_schedule",
+    fetchBreakSchedule,
+    { revalidateOnFocus: true },
+  );
+
+  const [schedule, setSchedule] = useState<BreakSchedule>(DEFAULT_BREAK_SCHEDULE);
+  const [dirty, setDirty]     = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (savedSchedule && !dirty) {
+      setSchedule(cloneSchedule(savedSchedule));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedSchedule]);
+
+  function markDirty() { setDirty(true); setSuccess(false); }
+
+  function updateWaveLabel(waveId: string, label: string) {
+    setSchedule((prev) => ({
+      ...prev,
+      wave_labels: { ...prev.wave_labels, [waveId]: label },
+    }));
+    markDirty();
+  }
+
+  function updateSlotStart(grp: string, wave: string, start: string) {
+    setSchedule((prev) => {
+      const next = cloneSchedule(prev);
+      const slot = next.times[grp][wave];
+      const startMins = timeToMins(start);
+      const dur       = slot[2];
+      const endMins   = (startMins + dur) % (24 * 60);
+      next.times[grp][wave] = [start, minsToTime(endMins), dur];
+      return next;
+    });
+    markDirty();
+  }
+
+  function updateSlotDuration(grp: string, wave: string, dur: number) {
+    setSchedule((prev) => {
+      const next = cloneSchedule(prev);
+      const slot  = next.times[grp][wave];
+      const startMins = timeToMins(slot[0]);
+      const endMins   = (startMins + dur) % (24 * 60);
+      next.times[grp][wave] = [slot[0], minsToTime(endMins), dur];
+      return next;
+    });
+    markDirty();
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await patchBreakSchedule(schedule);
+      await mutate();
+      setDirty(false);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleReset() {
+    if (!savedSchedule) return;
+    setSchedule(cloneSchedule(savedSchedule));
+    setDirty(false);
+    setError(null);
+  }
+
+  if (isLoading && !savedSchedule) {
+    return (
+      <div className="flex flex-col gap-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-40 rounded-2xl shimmer-bg" />
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-[#C9A84C]/10 flex items-center justify-center mx-auto mb-4">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="9" stroke="#C9A84C" strokeWidth="1.8" />
-          <path d="M12 7v5l3 3" stroke="#C9A84C" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
+    <div className="flex flex-col gap-5">
+      {/* Header card */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
+        <div className="text-[13px] font-semibold text-gray-700 mb-1">Break Schedule</div>
+        <div className="text-[12px] text-gray-400 leading-relaxed">
+          3 groups × 3 waves. Each group's TMs take their breaks together.
+          Changing start time auto-adjusts end time by the same duration. Times are 24-hour (graves shift spans midnight).
+        </div>
       </div>
-      <div className="text-[15px] font-semibold text-gray-700 mb-1">Break Schedule Editor</div>
-      <div className="text-[13px] text-gray-400">
-        Configure group break times, wave windows, and duration rules.
-        <br />Coming in the next build.
+
+      {/* Wave label editors */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+          Wave Labels
+        </div>
+        <div className="px-4 py-3 flex flex-wrap gap-3">
+          {WAVES.map((waveId) => (
+            <div key={waveId} className="flex items-center gap-2">
+              <div
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: WAVE_COLORS[waveId] }}
+              />
+              <input
+                type="text"
+                value={schedule.wave_labels?.[waveId] ?? ""}
+                onChange={(e) => updateWaveLabel(waveId, e.target.value)}
+                className="w-36 h-8 px-3 rounded-lg border border-gray-200 text-[13px] font-medium focus:outline-none focus:border-[#1A2340] bg-gray-50"
+              />
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* Error / success */}
+      {error && (
+        <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-3 text-red-400 hover:text-red-600"><XIcon /></button>
+        </div>
+      )}
+      {success && (
+        <div className="px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-medium">
+          Break schedule saved — the break sheet will pick it up on next load.
+        </div>
+      )}
+
+      {/* Group grid */}
+      {GROUPS.map((grpId) => (
+        <div key={grpId} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Group header */}
+          <div
+            className="px-4 py-2.5 flex items-center gap-2 border-b"
+            style={{ borderColor: `${GROUP_COLORS[grpId]}22`, backgroundColor: `${GROUP_COLORS[grpId]}10` }}
+          >
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: GROUP_COLORS[grpId] }} />
+            <span className="text-[12px] font-bold tracking-wide" style={{ color: GROUP_COLORS[grpId] }}>
+              GROUP {grpId}
+            </span>
+          </div>
+
+          {/* Wave rows */}
+          <div className="divide-y divide-gray-50">
+            {WAVES.map((waveId) => {
+              const slot = schedule.times?.[grpId]?.[waveId]
+                ?? DEFAULT_BREAK_SCHEDULE.times[grpId][waveId];
+              const [start, end, dur] = slot;
+              const label = schedule.wave_labels?.[waveId] ?? waveId;
+
+              return (
+                <div key={waveId} className="px-4 py-3 flex items-center gap-4 flex-wrap">
+                  {/* Wave dot + label */}
+                  <div className="flex items-center gap-2 w-28 shrink-0">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: WAVE_COLORS[waveId] }} />
+                    <span className="text-[12px] font-semibold text-gray-600 truncate">{label}</span>
+                  </div>
+
+                  {/* Start time */}
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] font-medium text-gray-400">Start</label>
+                    <input
+                      type="time"
+                      value={start}
+                      onChange={(e) => updateSlotStart(grpId, waveId, e.target.value)}
+                      className="h-9 px-2.5 rounded-lg border border-gray-200 text-[13px] font-mono focus:outline-none focus:border-[#1A2340] bg-gray-50 w-28"
+                    />
+                  </div>
+
+                  {/* Arrow */}
+                  <svg width="16" height="10" viewBox="0 0 16 10" fill="none" className="text-gray-300 shrink-0 mt-3">
+                    <path d="M1 5h12M9 1l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+
+                  {/* End time (computed, read-only) */}
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] font-medium text-gray-400">End</label>
+                    <div className="h-9 px-2.5 rounded-lg border border-gray-100 text-[13px] font-mono text-gray-400 bg-gray-50 flex items-center w-28">
+                      {end}
+                    </div>
+                  </div>
+
+                  {/* Duration */}
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] font-medium text-gray-400">Duration (min)</label>
+                    <input
+                      type="number"
+                      min={5}
+                      max={60}
+                      step={5}
+                      value={dur}
+                      onChange={(e) => updateSlotDuration(grpId, waveId, parseInt(e.target.value, 10) || dur)}
+                      className="h-9 px-2.5 rounded-lg border border-gray-200 text-[13px] font-mono focus:outline-none focus:border-[#1A2340] bg-gray-50 w-24"
+                    />
+                  </div>
+
+                  {/* 12h preview */}
+                  <div className="text-[12px] text-gray-400 font-medium mt-3 shrink-0">
+                    {fmt12(start)} – {fmt12(end)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* Save / Reset bar */}
+      {dirty && (
+        <div className="sticky bottom-4 flex items-center justify-between gap-3 bg-[#1A2340] text-white px-5 py-3 rounded-2xl shadow-xl">
+          <span className="text-[13px] font-medium text-white/70">You have unsaved changes</span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleReset}
+              className="h-9 px-4 rounded-xl text-white/60 hover:text-white text-[13px] transition-colors"
+            >
+              Reset
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="h-9 px-5 rounded-xl bg-[#C9A84C] text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-[#b8973d] transition-colors"
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

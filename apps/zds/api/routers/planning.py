@@ -135,6 +135,88 @@ async def patch_tab_config(
     return {"updated": True, "tabs": tabs}
 
 
+_DEFAULT_BREAK_SCHEDULE = {
+    "wave_labels": {"1": "First Break", "2": "Main Break", "3": "Last Break"},
+    "times": {
+        "1": {"1": ["00:45", "01:00", 15], "2": ["02:30", "03:00", 30], "3": ["05:00", "05:15", 15]},
+        "2": {"1": ["01:00", "01:15", 15], "2": ["03:00", "03:30", 30], "3": ["05:00", "05:15", 15]},
+        "3": {"1": ["01:15", "01:30", 15], "2": ["03:30", "04:00", 30], "3": ["05:15", "05:30", 15]},
+    },
+}
+
+
+@router.get(
+    "/settings/break_schedule",
+    summary="Get break schedule configuration",
+)
+async def get_break_schedule(
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return the 3×3 break schedule (group × wave → start/end/duration).
+    Falls back to hardcoded defaults if the DB row is missing.
+    """
+    try:
+        res = placement_service.supabase.table("zds_settings") \
+            .select("value") \
+            .eq("key", "break_schedule") \
+            .single() \
+            .execute()
+        return (res.data or {}).get("value", _DEFAULT_BREAK_SCHEDULE)
+    except Exception:
+        return _DEFAULT_BREAK_SCHEDULE
+
+
+@router.patch(
+    "/settings/break_schedule",
+    summary="Update break schedule configuration",
+)
+async def patch_break_schedule(
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Upsert the break_schedule setting.
+    Body: { wave_labels: {1:..., 2:..., 3:...}, times: {grp: {wave: [start, end, dur]}} }
+    """
+    import re as _re
+    _TIME_RE = _re.compile(r"^\d{2}:\d{2}$")
+
+    wave_labels = body.get("wave_labels")
+    times       = body.get("times")
+
+    if not isinstance(wave_labels, dict) or not isinstance(times, dict):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_body", "detail": "Expected { wave_labels: {...}, times: {...} }"},
+        )
+
+    for grp, waves in times.items():
+        if not isinstance(waves, dict):
+            raise HTTPException(status_code=400, detail={"error": "invalid_times"})
+        for wave, slot in waves.items():
+            if not isinstance(slot, list) or len(slot) != 3:
+                raise HTTPException(status_code=400, detail={"error": "invalid_slot", "detail": f"group {grp} wave {wave}"})
+            start, end, dur = slot
+            if not _TIME_RE.match(str(start)) or not _TIME_RE.match(str(end)):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"error": "invalid_time_format", "detail": f"Times must be HH:MM, got {start!r}/{end!r}"},
+                )
+            if not isinstance(dur, int) or dur <= 0:
+                raise HTTPException(status_code=400, detail={"error": "invalid_duration", "detail": f"duration must be a positive int, got {dur!r}"})
+
+    value = {"wave_labels": wave_labels, "times": times}
+    try:
+        placement_service.supabase.table("zds_settings").upsert(
+            {"key": "break_schedule", "value": value},
+            on_conflict="key",
+        ).execute()
+    except Exception as exc:
+        log.exception("patch_break_schedule failed")
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    return {"updated": True, **value}
+
+
 # ── Zone Tasks ─────────────────────────────────────────────────────────────────
 
 @router.get(
