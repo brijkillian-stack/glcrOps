@@ -34,6 +34,7 @@ export interface WeekMeta {
   week_start: string;      // "YYYY-MM-DD"
   week_ending: string;     // "YYYY-MM-DD"
   status: WeekStatus;
+  schedule_path: string | null;
 }
 
 /** Per-night coverage snapshot — mirrors NightPlanningSnapshot */
@@ -536,5 +537,52 @@ export async function patchNightNote(
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`patchNightNote ${res.status}: ${body}`);
+  }
+}
+
+// ── Week / schedule management ────────────────────────────────────────────────
+
+/** Upload (or re-upload) a schedule xlsx, linking it to the given week. */
+export async function uploadScheduleForWeek(
+  weekId: string,
+  file: File,
+): Promise<{ uploaded: boolean; filename: string; week_ending: string | null }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(
+    `${BASE}/v1/planning/weeks/upload?week_id=${encodeURIComponent(weekId)}`,
+    { method: "POST", body: form },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`uploadSchedule ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+
+/** Remove (unlink) the schedule from a week. Pass removeFromStorage=true to also delete the file. */
+export async function deleteWeekSchedule(
+  weekId: string,
+  removeFromStorage = false,
+): Promise<void> {
+  const qs = removeFromStorage ? "?remove_from_storage=true" : "";
+  const res = await fetch(`${BASE}/v1/planning/weeks/${weekId}/schedule${qs}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`deleteWeekSchedule ${res.status}: ${body}`);
+  }
+}
+
+/** Permanently delete a week and all associated data. */
+export async function deleteWeek(weekId: string): Promise<void> {
+  const res = await fetch(
+    `${BASE}/v1/planning/weeks/${weekId}?confirm=DELETE`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`deleteWeek ${res.status}: ${body}`);
   }
 }

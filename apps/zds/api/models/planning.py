@@ -18,11 +18,12 @@ class WeekMeta(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id:           str
-    label:        str
-    week_start:   str  # YYYY-MM-DD; derived as week_ending − 6 days
-    week_ending:  str  # YYYY-MM-DD; canonical week key
-    status:       str  # "draft" | "published" | "archived"
+    id:            str
+    label:         str
+    week_start:    str            # YYYY-MM-DD; derived as week_ending − 6 days
+    week_ending:   str            # YYYY-MM-DD; canonical week key
+    status:        str            # "draft" | "published" | "archived"
+    schedule_path: Optional[str] = None  # linked ADP export filename
 
 
 class NightPlanningSnapshot(BaseModel):

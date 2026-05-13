@@ -248,11 +248,12 @@ class PlanningService:
             week_start = ""
 
         week_meta = WeekMeta(
-            id          = week_dict.get("id", week_id),
-            label       = week_dict.get("label", ""),
-            week_start  = week_start,
-            week_ending = week_ending,
-            status      = week_dict.get("status", "draft"),
+            id            = week_dict.get("id", week_id),
+            label         = week_dict.get("label", ""),
+            week_start    = week_start,
+            week_ending   = week_ending,
+            status        = week_dict.get("status", "draft"),
+            schedule_path = week_dict.get("schedule_path") or None,
         )
 
         # ── Fatigue index ─────────────────────────────────────────────────

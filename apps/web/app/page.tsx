@@ -61,8 +61,12 @@ export default function LaunchpadPage() {
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   // ── Live data from Forge API ───────────────────────────────────────────────
-  const { data: weeks, error, isLoading } = useSWR(
+  const { data: weeks, error, isLoading, mutate: reloadWeeks } = useSWR(
     "forge:weeks",
     () => fetchWeeks(12),
     { revalidateOnFocus: true, refreshInterval: 60_000 }
@@ -86,9 +90,32 @@ export default function LaunchpadPage() {
     if (file) handleFileUpload(file);
   }, []);
 
-  function handleFileUpload(file: File) {
-    // TODO: POST to /api/forge/v1/weeks/upload
-    console.log("Uploading:", file.name);
+  async function handleFileUpload(file: File) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setUploadResult({ ok: false, message: "Only .xlsx or .xls files are supported." });
+      setTimeout(() => setUploadResult(null), 4000);
+      return;
+    }
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/forge/v1/planning/weeks/upload", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.detail?.detail ?? json?.detail ?? "Upload failed");
+      const msg = json.week_ending
+        ? `Linked to week ending ${json.week_ending}`
+        : json.message ?? "Uploaded successfully";
+      setUploadResult({ ok: true, message: msg });
+      reloadWeeks();
+      setTimeout(() => setUploadResult(null), 5000);
+    } catch (err) {
+      setUploadResult({ ok: false, message: err instanceof Error ? err.message : "Upload failed" });
+      setTimeout(() => setUploadResult(null), 5000);
+    } finally {
+      setUploading(false);
+    }
   }
 
   const onPointerEnterZone = useCallback((e: React.PointerEvent) => {
@@ -176,14 +203,22 @@ export default function LaunchpadPage() {
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
             className="w-16 h-16 rounded-2xl bg-white shadow-card flex items-center justify-center text-gray-400"
           >
-            <div className={isPencilHover ? "text-[#C9A84C]" : "text-gray-400"}><PencilIcon /></div>
+            {uploading
+              ? <div className="w-6 h-6 border-2 border-gray-200 border-t-[#C9A84C] rounded-full animate-spin" />
+              : <div className={isPencilHover ? "text-[#C9A84C]" : "text-gray-400"}><PencilIcon /></div>
+            }
           </motion.div>
 
           <div className="text-center">
             <p className="text-[15px] font-semibold text-gray-700">
-              {isPencilHover ? "Tap to upload with Pencil" : isDragOver ? "Drop to import" : "Drop Excel schedule or tap to upload"}
+              {uploading ? "Uploading…" : isPencilHover ? "Tap to upload with Pencil" : isDragOver ? "Drop to import" : "Drop Excel schedule or tap to upload"}
             </p>
-            <p className="text-[13px] text-gray-400 mt-1">ADP / Kronos export · .xlsx or .xls</p>
+            <p className="text-[13px] text-gray-400 mt-1">
+              {uploadResult
+                ? <span className={uploadResult.ok ? "text-emerald-600" : "text-red-500"}>{uploadResult.message}</span>
+                : "ADP / Kronos export · .xlsx or .xls"
+              }
+            </p>
           </div>
 
           <AnimatePresence>

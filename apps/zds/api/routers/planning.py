@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from ..core.dependencies import get_planning_service, get_placement_service
 from ..models.planning import WeeklyPlanningOverviewResponse
@@ -234,3 +234,176 @@ async def get_weekly_planning_overview(
         content=overview.model_dump(),
         headers={"Cache-Control": _CACHE_CONTROL},
     )
+
+
+# ── Schedule upload ───────────────────────────────────────────────────────────
+
+@router.post(
+    "/weeks/upload",
+    summary="Upload an ADP/Kronos schedule xlsx and link it to the matching week",
+    status_code=200,
+)
+async def upload_schedule(
+    file: UploadFile = File(...),
+    week_id: str | None = Query(None, description="Pin upload to a specific week ID (skips filename parsing)"),
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Accept a .xlsx schedule upload, store it in Supabase Storage,
+    and update the matching week row's schedule_path.
+
+    If week_id is provided the file is always linked to that week (used for
+    re-uploads from the Week Overview).  Otherwise the week is matched by
+    parsing the week_ending date from the filename, or created if missing.
+    """
+    import re
+    from shared import storage as _storage
+
+    filename = file.filename or "schedule.xlsx"
+    data     = await file.read()
+
+    # Upload to Supabase Storage
+    try:
+        _storage.upload_schedule(filename, data)
+    except Exception as exc:
+        log.exception("Storage upload failed for %s", filename)
+        raise HTTPException(status_code=503, detail={"error": "upload_failed", "detail": str(exc)})
+
+    # Parse week_ending from filename.
+    # Matches patterns like "5-28-26", "05-28-2026", "2026-05-28"
+    week_ending: str | None = None
+    # ISO format YYYY-MM-DD
+    m = re.search(r"(20\d\d)-(\d{2})-(\d{2})", filename)
+    if m:
+        week_ending = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    else:
+        # Short US format M-D-YY or MM-DD-YY
+        m2 = re.search(r"(\d{1,2})-(\d{1,2})-(\d{2,4})", filename)
+        if m2:
+            month, day, year = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+            if year < 100:
+                year += 2000
+            week_ending = f"{year:04d}-{month:02d}-{day:02d}"
+
+    if not week_ending:
+        # File uploaded successfully but no week could be matched — return info only
+        return {"uploaded": True, "filename": filename, "week_id": None, "week_ending": None,
+                "message": "File uploaded but could not parse week_ending from filename."}
+
+    # Find or create the week row
+    try:
+        res = placement_service.supabase.table("weeks") \
+            .select("id, schedule_path") \
+            .eq("week_ending", week_ending) \
+            .execute()
+        rows = res.data or []
+    except Exception as exc:
+        log.exception("weeks lookup failed for %s", week_ending)
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    if rows:
+        week_id = rows[0]["id"]
+        placement_service.supabase.table("weeks") \
+            .update({"schedule_path": filename}) \
+            .eq("id", week_id) \
+            .execute()
+    else:
+        # Create the week
+        import datetime
+        we = datetime.date.fromisoformat(week_ending)
+        ws = we - datetime.timedelta(days=6)
+        new_row = placement_service.supabase.table("weeks").insert({
+            "week_ending":    week_ending,
+            "label":          f"Week ending {week_ending}",
+            "status":         "draft",
+            "schedule_path":  filename,
+        }).execute()
+        week_id = (new_row.data or [{}])[0].get("id")
+
+    # Bust cache
+    try:
+        await placement_service.invalidate_week(week_id)
+    except Exception:
+        pass
+
+    return {"uploaded": True, "filename": filename, "week_id": week_id, "week_ending": week_ending}
+
+
+# ── Delete schedule link ──────────────────────────────────────────────────────
+
+@router.delete(
+    "/weeks/{week_id}/schedule",
+    summary="Unlink (and optionally delete from Storage) the schedule for a week",
+)
+async def delete_week_schedule(
+    week_id: str,
+    remove_from_storage: bool = False,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Clear schedule_path on the week row. Optionally remove from Supabase Storage."""
+    try:
+        # Get current schedule_path first
+        res = placement_service.supabase.table("weeks") \
+            .select("schedule_path") \
+            .eq("id", week_id) \
+            .single() \
+            .execute()
+        current_path = (res.data or {}).get("schedule_path")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    if remove_from_storage and current_path:
+        try:
+            from shared import storage as _storage
+            _storage.delete_schedule(current_path)
+        except Exception as exc:
+            log.warning("Storage delete failed for %s: %s", current_path, exc)
+
+    try:
+        placement_service.supabase.table("weeks") \
+            .update({"schedule_path": None}) \
+            .eq("id", week_id) \
+            .execute()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    try:
+        await placement_service.invalidate_week(week_id)
+    except Exception:
+        pass
+
+    return {"week_id": week_id, "schedule_path": None, "removed_from_storage": remove_from_storage and bool(current_path)}
+
+
+# ── Delete week ───────────────────────────────────────────────────────────────
+
+@router.delete(
+    "/weeks/{week_id}",
+    summary="Permanently delete a week and all associated data",
+)
+async def delete_week(
+    week_id: str,
+    confirm: str = "",
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Hard-delete a week row. Cascades to nights, zone_assignments, overlaps, etc.
+    Requires confirm='DELETE' query param to prevent accidents.
+    """
+    if confirm != "DELETE":
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "confirmation_required",
+                    "detail": "Pass ?confirm=DELETE to permanently delete this week."},
+        )
+
+    try:
+        placement_service.supabase.table("weeks").delete().eq("id", week_id).execute()
+    except Exception as exc:
+        log.exception("delete_week(%s) failed", week_id)
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    try:
+        await placement_service.invalidate_week(week_id)
+    except Exception:
+        pass
+
+    return {"week_id": week_id, "deleted": True}

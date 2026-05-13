@@ -15,6 +15,9 @@ import {
   patchWeekStatus,
   patchNightNote,
   runEngineForNight,
+  uploadScheduleForWeek,
+  deleteWeekSchedule,
+  deleteWeek,
   type WeeklyPlanningOverviewResponse,
   type NightPlanningSnapshot,
   type EngineRunResult,
@@ -37,6 +40,10 @@ function RRIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill=
 function NoteIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 1h6a1 1 0 011 1v6L7 10H2a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" strokeWidth="1"/><path d="M3 3.5h4M3 5.5h2.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>; }
 function FlagIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 1v8M2 1h5l-1.5 2.5L7 6H2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
 function ChevronRightIcon() { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function UploadIcon()  { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3.5 3.5L6 1l2.5 2.5M2 9v1.5a.5.5 0 00.5.5h7a.5.5 0 00.5-.5V9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function UnlinkIcon()  { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 7.5l3-3M3 5.5l-.5.5a2.12 2.12 0 003 3l.5-.5M9 6.5l.5-.5a2.12 2.12 0 00-3-3l-.5.5M2 2l8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>; }
+function TrashIcon()   { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4 3l.5 7h3L8 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function FileIcon()    { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 1h5l2 2v8a1 1 0 01-1 1H3a1 1 0 01-1-1V2a1 1 0 011-1zM7 1v3h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
 
 // ── Week Overview ─────────────────────────────────────────────────────────────
 
@@ -66,8 +73,67 @@ export default function WeekOverviewPage() {
   const [noteValue, setNoteValue] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
 
+  // Schedule management state
+  const scheduleUploadRef = useRef<HTMLInputElement>(null);
+  const [scheduleUploading, setScheduleUploading] = useState(false);
+  const [scheduleMsg, setScheduleMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [scheduleDeleting, setScheduleDeleting] = useState(false);
+
+  // Delete week state
+  const [deleteWeekStep, setDeleteWeekStep] = useState<"idle" | "confirm">("idle");
+  const [deleteWeekInput, setDeleteWeekInput] = useState("");
+  const [deleteWeekLoading, setDeleteWeekLoading] = useState(false);
+
   const weekStatus = overview?.week.status ?? "draft";
   const isPublished = weekStatus === "published";
+
+  async function handleScheduleUpload(file: File) {
+    setScheduleUploading(true);
+    setScheduleMsg(null);
+    try {
+      const result = await uploadScheduleForWeek(weekId, file);
+      setScheduleMsg({ ok: true, text: `Linked: ${result.filename}` });
+      globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setScheduleMsg({ ok: false, text: msg });
+    } finally {
+      setScheduleUploading(false);
+      if (scheduleUploadRef.current) scheduleUploadRef.current.value = "";
+    }
+  }
+
+  async function handleScheduleDelete() {
+    if (scheduleDeleting) return;
+    setScheduleDeleting(true);
+    setScheduleMsg(null);
+    try {
+      await deleteWeekSchedule(weekId, false);
+      setScheduleMsg({ ok: true, text: "Schedule unlinked" });
+      globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to unlink schedule";
+      setScheduleMsg({ ok: false, text: msg });
+    } finally {
+      setScheduleDeleting(false);
+    }
+  }
+
+  async function handleDeleteWeek() {
+    if (deleteWeekInput !== "DELETE" || deleteWeekLoading) return;
+    setDeleteWeekLoading(true);
+    try {
+      await deleteWeek(weekId);
+      router.replace("/");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete week";
+      setScheduleMsg({ ok: false, text: msg });
+      setDeleteWeekStep("idle");
+      setDeleteWeekInput("");
+    } finally {
+      setDeleteWeekLoading(false);
+    }
+  }
 
   async function handlePublish() {
     if (publishLoading) return;
@@ -200,6 +266,131 @@ export default function WeekOverviewPage() {
       {/* Metrics strip */}
       <div className="bg-[#1A2340] border-t border-white/[0.08] px-6 pb-4">
         <WeekMetricsStrip overview={overview} fillRate={weekFillRate} />
+      </div>
+
+      {/* Schedule management bar */}
+      <div className="px-6 py-3 bg-white border-b border-gray-100">
+        {/* Hidden file input */}
+        <input
+          ref={scheduleUploadRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleScheduleUpload(file);
+          }}
+        />
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* File info */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className={cn(
+              "flex items-center gap-1.5 text-[12px] font-medium",
+              overview.week.schedule_path ? "text-gray-600" : "text-gray-400"
+            )}>
+              <FileIcon />
+              {overview.week.schedule_path
+                ? <span className="truncate max-w-[200px]" title={overview.week.schedule_path}>{overview.week.schedule_path}</span>
+                : "No schedule linked"}
+            </span>
+            {scheduleMsg && (
+              <span className={cn(
+                "text-[11px] font-medium",
+                scheduleMsg.ok ? "text-emerald-600" : "text-red-500"
+              )}>
+                {scheduleMsg.text}
+              </span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => scheduleUploadRef.current?.click()}
+              disabled={scheduleUploading}
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold
+                         bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+            >
+              {scheduleUploading
+                ? <span className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                : <UploadIcon />}
+              {overview.week.schedule_path ? "Re-upload" : "Upload"}
+            </button>
+
+            {overview.week.schedule_path && (
+              <button
+                onClick={handleScheduleDelete}
+                disabled={scheduleDeleting}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold
+                           bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+              >
+                {scheduleDeleting
+                  ? <span className="w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
+                  : <UnlinkIcon />}
+                Unlink
+              </button>
+            )}
+
+            {/* Delete week — danger zone */}
+            {deleteWeekStep === "idle" && (
+              <button
+                onClick={() => setDeleteWeekStep("confirm")}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold
+                           text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <TrashIcon />
+                Delete Week
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Delete week confirmation */}
+        <AnimatePresence>
+          {deleteWeekStep !== "idle" && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2.5 p-3 rounded-xl bg-red-50 border border-red-200 flex flex-col gap-2">
+                <p className="text-[12px] text-red-700 font-medium">
+                  ⚠️ This permanently deletes the week and all nights, assignments, and overlaps. Type <strong>DELETE</strong> to confirm.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={deleteWeekInput}
+                    onChange={(e) => setDeleteWeekInput(e.target.value)}
+                    placeholder="Type DELETE to confirm"
+                    className="flex-1 h-8 px-2.5 rounded-lg text-[12px] border border-red-300
+                               bg-white text-red-700 placeholder:text-red-300 outline-none
+                               focus:border-red-500 font-mono"
+                  />
+                  <button
+                    onClick={handleDeleteWeek}
+                    disabled={deleteWeekInput !== "DELETE" || deleteWeekLoading}
+                    className="h-8 px-3 rounded-lg text-[12px] font-semibold bg-red-600 text-white
+                               hover:bg-red-700 disabled:opacity-40 transition-colors"
+                  >
+                    {deleteWeekLoading ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteWeekStep("idle"); setDeleteWeekInput(""); }}
+                    className="h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-gray-500
+                               border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <main className="flex-1 px-6 py-6 overflow-hidden">

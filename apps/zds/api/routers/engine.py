@@ -122,7 +122,22 @@ def _run_engine_sync(week_id: str, target_night_id: Optional[str] = None) -> dic
     log.info("Running fill engine [scope=%s week=%s night=%s]",
              scope, week_id, target_night_id or "—")
 
-    engine_result = run_fill_engine()
+    # Look up the week's linked schedule file so the engine runs on the
+    # correct ADP export rather than whatever file happens to be newest.
+    schedule_file: Optional[str] = None
+    try:
+        from shared.db import get_client as _get_db
+        _sb = _get_db()
+        _wk = _sb.table("weeks").select("schedule_path").eq("id", week_id).single().execute()
+        schedule_file = (_wk.data or {}).get("schedule_path") or None
+        if schedule_file:
+            log.info("Engine will use schedule file: %s", schedule_file)
+        else:
+            log.warning("Week %s has no schedule_path — engine will auto-detect", week_id)
+    except Exception as exc:
+        log.warning("Could not read schedule_path for week %s: %s", week_id, exc)
+
+    engine_result = run_fill_engine(schedule_file=schedule_file)
 
     if engine_result.get("error"):
         return {
