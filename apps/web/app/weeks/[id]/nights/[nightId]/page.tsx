@@ -179,6 +179,55 @@ export default function DailyPlannerPage() {
     }
   }
 
+  // ── Fill Default Tasks ────────────────────────────────────────────────────
+  const [fillingDefaults, setFillingDefaults] = useState(false);
+
+  async function handleFillAllDefaults() {
+    if (fillingDefaults || !data?.placements.length) return;
+    setFillingDefaults(true);
+    try {
+      const [zoneTasks, rrTasks, auxTasks] = await Promise.all([
+        fetchZoneTasks("zone"),
+        fetchZoneTasks("restroom"),
+        fetchZoneTasks("auxiliary"),
+      ]);
+      const catalogByType: Record<string, ZoneTask[]> = {
+        zone: zoneTasks,
+        restroom: rrTasks,
+        auxiliary: auxTasks,
+      };
+      const catMap: Record<string, string> = { zone: "zone", restroom: "rr", auxiliary: "aux" };
+
+      const patches: Promise<void>[] = [];
+      for (const p of data.placements) {
+        const catalogue = catalogByType[p.zone_type] ?? [];
+        const wantedCat = catMap[p.zone_type] ?? "zone";
+        const defaults = catalogue
+          .filter(
+            (t) =>
+              (t.category === wantedCat || t.category === "sweep") &&
+              (t.target_codes.length === 0 || t.target_codes.includes(p.zone_id))
+          )
+          .map((t) => t.name);
+        const current = p.tasks ?? [];
+        const toAdd = defaults.filter((n) => !current.includes(n));
+        if (toAdd.length > 0) {
+          patches.push(
+            patchSlotTasks(nightId, p.slot_id, [...current, ...toAdd]).then(() => {})
+          );
+        }
+      }
+      if (patches.length > 0) {
+        await Promise.all(patches);
+        refresh();
+      }
+    } catch (err) {
+      console.error("fillAllDefaults failed:", err);
+    } finally {
+      setFillingDefaults(false);
+    }
+  }
+
   // TM roster — cached by SWR, refreshes every 10 min
   const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
     revalidateOnFocus: false,
@@ -200,17 +249,20 @@ export default function DailyPlannerPage() {
   const breakWaves = useMemo((): BreakWave[] => {
     const placements = data?.placements ?? [];
 
-    // Accumulate TMs by group
+    // Accumulate TMs by group — TMs with no group default to "1"
     const groupedTMs: Record<string, { tm_ids: string[]; tm_names: string[] }> = {
       "1": { tm_ids: [], tm_names: [] },
       "2": { tm_ids: [], tm_names: [] },
       "3": { tm_ids: [], tm_names: [] },
     };
+    const seen = new Set<string>();  // prevent duplicates (same TM, multiple slots)
     for (const p of placements) {
-      if (p.tm_id && p.tm_name && p.group && p.group in groupedTMs) {
-        groupedTMs[p.group].tm_ids.push(p.tm_id);
-        groupedTMs[p.group].tm_names.push(p.tm_name);
-      }
+      if (!p.tm_id || !p.tm_name) continue;
+      if (seen.has(p.tm_id)) continue;
+      seen.add(p.tm_id);
+      const grp = p.group && p.group in groupedTMs ? p.group : "1";
+      groupedTMs[grp].tm_ids.push(p.tm_id);
+      groupedTMs[grp].tm_names.push(p.tm_name);
     }
 
     return (["1", "2", "3"] as GroupId[]).map((waveId) => ({
@@ -400,6 +452,31 @@ export default function DailyPlannerPage() {
                 <path d="M4 3L2 5.5 4 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Undo
+            </button>
+
+            {/* Fill Default Tasks */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                fillingDefaults
+                  ? "bg-purple-500/20 text-purple-300 cursor-wait"
+                  : "bg-white/10 text-white/80 hover:bg-white/20",
+              )}
+              onClick={handleFillAllDefaults}
+              disabled={fillingDefaults}
+              title="Fill default tasks for all zones without clearing custom ones"
+            >
+              {fillingDefaults ? (
+                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <rect x="2" y="2" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+                  <path d="M4 6.5h5M4 4.5h3M4 8.5h4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+                  <circle cx="10.5" cy="2.5" r="2" fill="currentColor" stroke="none"/>
+                  <path d="M10 2.5h1M10.5 2v1" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                </svg>
+              )}
+              {fillingDefaults ? "Filling…" : "Fill Tasks"}
             </button>
 
             {/* Re-up button (fills remaining gaps) */}
@@ -1936,7 +2013,7 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
 
 interface BreakWavesViewProps {
   waves: BreakWave[];
-  onMoveTM: (tmId: string, tmName: string, fromWave: GroupId, toWave: GroupId) => Promise<void>;
+  onMoveTM: (tmId: string, tmName: string, fromWave: GroupId, toWave: GroupId, fromGroup?: GroupId) => Promise<void>;
   lastSynced: string | null;
   onRefresh: () => void;
 }
@@ -1949,16 +2026,16 @@ const WAVE_COLORS: Record<GroupId, string> = {
 };
 
 function BreakWavesView({ waves, onMoveTM, lastSynced, onRefresh }: BreakWavesViewProps) {
-  const [dragging, setDragging] = useState<{ tmId: string; tmName: string; fromWave: GroupId } | null>(null);
+  const [dragging, setDragging] = useState<{ tmId: string; tmName: string; fromWave: GroupId; fromGroup: GroupId } | null>(null);
   const [dropTarget, setDropTarget] = useState<GroupId | null>(null);
 
-  function handleDragStart(tmId: string, tmName: string, fromWave: GroupId) {
-    setDragging({ tmId, tmName, fromWave });
+  function handleDragStart(tmId: string, tmName: string, fromWave: GroupId, fromGroup: GroupId) {
+    setDragging({ tmId, tmName, fromWave, fromGroup });
   }
 
   function handleDrop(toWave: GroupId) {
     if (dragging && dragging.fromWave !== toWave) {
-      onMoveTM(dragging.tmId, dragging.tmName, dragging.fromWave, toWave);
+      onMoveTM(dragging.tmId, dragging.tmName, dragging.fromWave, toWave, dragging.fromGroup);
     }
     setDragging(null);
     setDropTarget(null);
@@ -2036,7 +2113,7 @@ interface BreakGroupRowProps {
   grpSlot: BreakGroupSlot;
   waveId: GroupId;
   draggingTmId: string | null;
-  onDragStart: (tmId: string, tmName: string, fromWave: GroupId) => void;
+  onDragStart: (tmId: string, tmName: string, fromWave: GroupId, fromGroup: GroupId) => void;
 }
 
 function BreakGroupRow({ grpSlot, waveId, draggingTmId, onDragStart }: BreakGroupRowProps) {
@@ -2067,7 +2144,7 @@ function BreakGroupRow({ grpSlot, waveId, draggingTmId, onDragStart }: BreakGrou
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.15 }}
               draggable
-              onDragStart={() => onDragStart(grpSlot.tm_ids[i], name, waveId)}
+              onDragStart={() => onDragStart(grpSlot.tm_ids[i], name, waveId, grpSlot.group)}
               className={cn(
                 "flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white",
                 "border border-gray-100 cursor-grab active:cursor-grabbing",

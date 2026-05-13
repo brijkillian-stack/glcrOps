@@ -258,21 +258,30 @@ export function useNightPlacements(nightId: string) {
 
   /**
    * Optimistically move a TM between break waves.
-   * Finds the TM's group in the source wave automatically, then moves them to
-   * the same group in the target wave (preserving their group assignment).
+   * Finds the TM's group in the source wave automatically (or uses the
+   * provided fromGroup shortcut when the caller already knows it).
    * Also reflects in Daily Planner (same key).
    */
   async function moveBreakTM(
     tmId: string,
     tmName: string,
     fromWave: GroupId,
-    toWave: GroupId
+    toWave: GroupId,
+    fromGroup?: GroupId,  // caller can supply this to skip the break_waves lookup
   ) {
     if (!data || fromWave === toWave) return;
 
-    // Locate which group this TM belongs to in the source wave
-    const srcWave = data.break_waves.find((w) => w.wave === fromWave);
-    const tmGroup = srcWave?.groups.find((g) => g.tm_ids.includes(tmId))?.group ?? null;
+    // Prefer caller-supplied group; fall back to scanning data.break_waves then placements
+    let tmGroup: GroupId | null = fromGroup ?? null;
+    if (!tmGroup) {
+      const srcWave = data.break_waves.find((w) => w.wave === fromWave);
+      tmGroup = srcWave?.groups.find((g) => g.tm_ids.includes(tmId))?.group ?? null;
+    }
+    if (!tmGroup) {
+      // Last resort: look up group from zone placements
+      const placement = data.placements.find((p) => p.tm_id === tmId);
+      tmGroup = (placement?.group as GroupId | null) ?? "1";
+    }
 
     const optimistic: NightPlacements = {
       ...data,

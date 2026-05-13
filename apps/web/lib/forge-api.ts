@@ -161,7 +161,7 @@ export function getNightPrintUrl(nightId: string, format: "html" | "pdf") {
 
 // ── Zone Tasks ────────────────────────────────────────────────────────────────
 
-export type TaskCategory = "zone" | "rr" | "aux" | "overlap_am" | "overlap_pm";
+export type TaskCategory = "zone" | "rr" | "aux" | "overlap_am" | "overlap_pm" | "sweep";
 
 export interface ZoneTask {
   id: string;
