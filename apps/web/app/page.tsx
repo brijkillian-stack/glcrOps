@@ -1,24 +1,27 @@
-      {/* New Week Modal */}
-      <AnimatePresence>
-        {showNewWeekModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <motion.div initial={{ opacity: 0, scale: 0.96, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 20 }} className="bg-white rounded-3xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-              <div className="px-6 py-5 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#007AFF]/10 flex items-center justify-center"><CalendarIcon /></div>
-                  <div><div className="font-semibold text-lg">Create New Week</div><div className="text-sm text-gray-500">Start a fresh planning cycle</div></div>
-                </div>
-              </div>
-              <div className="p-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Week Ending Date</label>
-                <input type="date" value={newWeekDate} onChange={(e) => setNewWeekDate(e.target.value)} className="w-full h-11 px-4 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#007AFF]" />
-                <p className="text-[11px] text-gray-400 mt-1.5">This will create a draft week. You can upload the schedule later.</p>
-              </div>
-              <div className="px-6 py-4 border-t bg-gray-50 flex gap-3 justify-end">
-                <button onClick={() => { setShowNewWeekModal(false); setNewWeekDate(""); }} className="h-10 px-5 rounded-2xl text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
-                <button onClick={handleCreateNewWeek} disabled={!newWeekDate || creatingWeek} className="h-10 px-6 rounded-2xl bg-[#007AFF] text-white text-sm font-semibold disabled:opacity-50">{creatingWeek ? "Creating…" : "Create Draft Week"}</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+// WeekRow with Mini FillRing
+function WeekRow({ week, index, onOpen, onContextMenu, onLongPressStart, onLongPressEnd }: any) {
+  const lastUpdated = week.updated_at ? relativeTime(week.updated_at) : week.created_at ? relativeTime(week.created_at) : null;
+  const statusColor = week.status === "published" ? "#34C759" : week.status === "draft" ? "#FF9500" : "#94A3B8";
+  const miniRate = week.status === "published" ? 0.92 : week.status === "draft" ? 0.45 : 0;
+
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} onClick={onOpen} className="card flex items-center gap-4 px-4 py-3.5 cursor-pointer no-select active:shadow-card-press active:scale-[0.99] transition-all duration-100">
+      <div className="relative flex items-center justify-center shrink-0">
+        <FillRing rate={miniRate} size={42} strokeWidth={4.5} />
+        <div className="absolute inset-0 flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: statusColor }} /></div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-[15px] font-semibold text-gray-900 truncate">{week.label || `Week ending ${formatWeekEnding(week.week_ending)}`}</span>
+          <StatusPill status={week.status} />
+        </div>
+        <div className="flex items-center gap-3 text-[12px] text-gray-400">
+          <span>{formatWeekEnding(week.week_ending)}</span>
+          {lastUpdated && <span className="flex items-center gap-1"><ClockIcon />{lastUpdated}</span>}
+          {week.schedule_path ? <span className="flex items-center gap-1 text-emerald-600">📄 <span className="truncate max-w-[120px]">{week.schedule_path}</span></span> : <span className="text-gray-300">No schedule</span>}
+        </div>
+      </div>
+      <span className="text-gray-300 shrink-0"><ChevronRightIcon /></span>
+    </motion.div>
+  );
+}
