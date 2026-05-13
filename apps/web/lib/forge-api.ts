@@ -549,7 +549,7 @@ export async function patchNightNote(
 export async function uploadScheduleForWeek(
   weekId: string,
   file: File,
-): Promise<{ uploaded: boolean; filename: string; week_ending: string | null }> {
+): Promise<{ uploaded: boolean; filename: string; week_ending: string | null; message?: string }> {
   const arrayBuf = await file.arrayBuffer();
   const bytes = new Uint8Array(arrayBuf);
   // btoa on large files needs chunking to avoid call-stack overflow
