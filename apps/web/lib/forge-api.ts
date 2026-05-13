@@ -212,9 +212,11 @@ export function overlapPositionLabel(
     .replace(/^AMOL(\d+)$/, "AM OL $1");
 }
 
-/** Fetch PM + AM overlap assignments for a single night. */
+/** Fetch PM + AM overlap assignments for a single night.
+ *  Always bypasses Next.js + browser HTTP caches so SWR revalidation
+ *  after a mutation always returns fresh data. */
 export async function fetchNightOverlaps(nightId: string): Promise<OverlapSlot[]> {
-  return get<OverlapSlot[]>(`/v1/nights/${nightId}/overlaps`);
+  return get<OverlapSlot[]>(`/v1/nights/${nightId}/overlaps`, { cache: "no-store" });
 }
 
 /** Update the task description on an overlap slot. */

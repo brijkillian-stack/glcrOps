@@ -177,7 +177,9 @@ async def get_night_overlaps(
     from fastapi.responses import JSONResponse
     return JSONResponse(
         content=rows,
-        headers={"Cache-Control": _CACHE_CONTROL},
+        # Overlaps are mutated by the UI in real time — tell the browser never
+        # to cache this endpoint so SWR revalidation always hits the server.
+        headers={"Cache-Control": "no-store"},
     )
 
 

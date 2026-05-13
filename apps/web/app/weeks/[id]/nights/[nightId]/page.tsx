@@ -2673,22 +2673,31 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
   async function handleAssign(overlap: OverlapSlot, tm: ActiveTM | null) {
     setSaving(overlap.id);
     const tmId = tm?.id ?? null;
-    mutate(
-      (prev) => prev?.map((o) =>
+    const optimistic = (prev: OverlapSlot[] | undefined) =>
+      (prev ?? []).map((o) =>
         o.id === overlap.id
           ? { ...o, tm_id: tmId, tm_name: tm?.display_name ?? "", is_filled: tmId !== null }
           : o
-      ),
-      false,
-    );
+      );
     setPickerOverlap(null);
     try {
-      await patchOverlapTM(nightId, overlap.id, tmId);
+      await mutate(
+        async (prev) => {
+          await patchOverlapTM(nightId, overlap.id, tmId);
+          // Return the optimistic shape — SWR will then revalidate from server
+          return optimistic(prev);
+        },
+        {
+          optimisticData: optimistic,
+          rollbackOnError: true,
+          revalidate: true,
+          populateCache: true,
+        },
+      );
     } catch (err) {
       console.error("patchOverlapTM failed:", err);
     } finally {
       setSaving(null);
-      mutate();
     }
   }
 
@@ -2696,20 +2705,28 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
     if (!editTaskOverlap) return;
     setSavingTask(true);
     const newTask = editTaskValue.trim();
-    mutate(
-      (prev) => prev?.map((o) =>
+    const optimistic = (prev: OverlapSlot[] | undefined) =>
+      (prev ?? []).map((o) =>
         o.id === editTaskOverlap.id ? { ...o, task: newTask } : o
-      ),
-      false,
-    );
+      );
     try {
-      await patchOverlapTask(nightId, editTaskOverlap.id, newTask);
+      await mutate(
+        async (prev) => {
+          await patchOverlapTask(nightId, editTaskOverlap.id, newTask);
+          return optimistic(prev);
+        },
+        {
+          optimisticData: optimistic,
+          rollbackOnError: true,
+          revalidate: true,
+          populateCache: true,
+        },
+      );
     } catch (err) {
       console.error("patchOverlapTask failed:", err);
     } finally {
       setSavingTask(false);
       setEditTaskOverlap(null);
-      mutate();
     }
   }
 
