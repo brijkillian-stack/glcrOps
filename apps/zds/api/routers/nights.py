@@ -619,3 +619,87 @@ async def post_trail_entry(
         raise _unavailable(str(exc))
 
     return row or {"recorded": True}
+
+
+# ── Sweeper assignments ───────────────────────────────────────────────────────
+
+class SweeperPayload(BaseModel):
+    tm_id:   Optional[str] = None
+    tm_name: str = ""
+
+
+@router.get(
+    "/{night_id}/sweepers",
+    summary="Get sweeper slot assignments for a night",
+)
+async def get_sweepers(
+    night_id: str,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return both sweeper slots (main = 5/8/HL, sr = 9/10/SR) for the night."""
+    try:
+        res = placement_service.supabase.table("night_sweepers") \
+            .select("id,slot,tm_id,tm_name,updated_at") \
+            .eq("night_id", night_id) \
+            .execute()
+        rows = {r["slot"]: r for r in (res.data or [])}
+        return [
+            {"slot": "main", "label": "Sweeper 5/8/HL", **rows.get("main", {"tm_id": None, "tm_name": ""})},
+            {"slot": "sr",   "label": "Sweeper 9/10/SR", **rows.get("sr",   {"tm_id": None, "tm_name": ""})},
+        ]
+    except Exception as exc:
+        log.exception("get_sweepers(%s) raised", night_id)
+        raise _unavailable(str(exc))
+
+
+@router.patch(
+    "/{night_id}/sweepers/{slot}",
+    summary="Assign or clear a sweeper slot",
+)
+async def patch_sweeper(
+    night_id: str,
+    slot: str,
+    payload: SweeperPayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Upsert a sweeper assignment. Pass tm_id=null to clear."""
+    if slot not in ("main", "sr"):
+        raise HTTPException(status_code=400, detail="slot must be 'main' or 'sr'")
+    try:
+        res = placement_service.supabase.table("night_sweepers") \
+            .upsert(
+                {"night_id": night_id, "slot": slot, "tm_id": payload.tm_id, "tm_name": payload.tm_name},
+                on_conflict="night_id,slot",
+            ) \
+            .execute()
+        return (res.data or [{}])[0]
+    except Exception as exc:
+        log.exception("patch_sweeper(%s, %s) raised", night_id, slot)
+        raise _unavailable(str(exc))
+
+
+# ── Night note ────────────────────────────────────────────────────────────────
+
+class NightNotePayload(BaseModel):
+    note: Optional[str] = None
+
+
+@router.patch(
+    "/{night_id}/note",
+    summary="Set or clear the supervisor note for a night",
+)
+async def patch_night_note(
+    night_id: str,
+    payload: NightNotePayload,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Update the notes column on the nights row."""
+    try:
+        res = placement_service.supabase.table("nights") \
+            .update({"notes": payload.note}) \
+            .eq("id", night_id) \
+            .execute()
+        return {"night_id": night_id, "note": payload.note, "updated": True}
+    except Exception as exc:
+        log.exception("patch_night_note(%s) raised", night_id)
+        raise _unavailable(str(exc))

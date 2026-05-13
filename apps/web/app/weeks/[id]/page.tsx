@@ -13,6 +13,7 @@ import {
   coveragePctToRate,
   getWeekPrintUrl,
   patchWeekStatus,
+  patchNightNote,
   runEngineForNight,
   type WeeklyPlanningOverviewResponse,
   type NightPlanningSnapshot,
@@ -29,6 +30,13 @@ function UserPlusIcon() { return <svg width="13" height="13" viewBox="0 0 13 13"
 function PrintIcon() { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="2" y="5" width="9" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M4 5V2h5v3M4 8h5M4 10h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>; }
 function EngineIcon() { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="2.5" stroke="currentColor" strokeWidth="1.2"/><path d="M6.5 1v1.5M6.5 10v1.5M1 6.5h1.5M10 6.5h1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>; }
 function OpenIcon() { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M7.5 2h3v3M10.5 2l-5 5M5 3H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>; }
+function CheckIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function BroomIcon() { return <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 9l5-5M8 2L6.5 3.5M3 8.5C2 9.5 1 10 1 10s.5-1 1.5-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><circle cx="7.5" cy="2.5" r="1" stroke="currentColor" strokeWidth="1"/></svg>; }
+function ZoneIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1" width="3.5" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1"/><rect x="5.5" y="1" width="3.5" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1"/><rect x="1" y="5.5" width="3.5" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1"/><rect x="5.5" y="5.5" width="3.5" height="3.5" rx="0.6" stroke="currentColor" strokeWidth="1"/></svg>; }
+function RRIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2h6v4a3 3 0 01-6 0V2z" stroke="currentColor" strokeWidth="1"/><path d="M4 8.5V10M6 8.5V10M3 10h4" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>; }
+function NoteIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 1h6a1 1 0 011 1v6L7 10H2a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" strokeWidth="1"/><path d="M3 3.5h4M3 5.5h2.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>; }
+function FlagIcon() { return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 1v8M2 1h5l-1.5 2.5L7 6H2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function ChevronRightIcon() { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
 
 // ── Week Overview ─────────────────────────────────────────────────────────────
 
@@ -46,7 +54,6 @@ export default function WeekOverviewPage() {
   const [ctxNight, setCtxNight] = useState<NightPlanningSnapshot | null>(null);
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | undefined>();
   const [publishLoading, setPublishLoading] = useState(false);
-  const [hoveredNight, setHoveredNight] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Engine state
@@ -54,7 +61,11 @@ export default function WeekOverviewPage() {
   const [engineToast, setEngineToast] = useState<{ result: EngineRunResult } | null>(null);
   const engineToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync published state from server
+  // Note editing state — keyed by night_id
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteValue, setNoteValue] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+
   const weekStatus = overview?.week.status ?? "draft";
   const isPublished = weekStatus === "published";
 
@@ -64,7 +75,6 @@ export default function WeekOverviewPage() {
     setPublishLoading(true);
     try {
       await patchWeekStatus(weekId, nextStatus);
-      // Bust SWR cache so header badge and status update immediately
       globalMutate(`forge:week:${weekId}`);
     } catch (err) {
       console.error("patchWeekStatus failed:", err);
@@ -95,6 +105,19 @@ export default function WeekOverviewPage() {
     }
   }, [engineNightId, weekId]);
 
+  async function saveNote(nightId: string) {
+    setNoteSaving(true);
+    try {
+      await patchNightNote(nightId, noteValue.trim() || null);
+      globalMutate(`forge:week:${weekId}`);
+    } catch (err) {
+      console.error("patchNightNote failed:", err);
+    } finally {
+      setNoteSaving(false);
+      setEditingNoteId(null);
+    }
+  }
+
   function openCtx(e: React.MouseEvent, night: NightPlanningSnapshot) {
     e.preventDefault();
     setCtxNight(night);
@@ -104,9 +127,9 @@ export default function WeekOverviewPage() {
   const ctxActions: ContextAction[] = ctxNight
     ? [
         { label: "Open Planner", icon: <OpenIcon />, onClick: () => router.push(`/weeks/${weekId}/nights/${ctxNight.night_id}`) },
-        { label: "Print Night", icon: <PrintIcon />, onClick: () => window.open(`/api/forge/v1/print/night/${ctxNight.night_id}.pdf`, "_blank") },
-        { label: "Run Engine", icon: <EngineIcon />, onClick: () => handleRunEngineForNight(ctxNight.night_id), disabled: !!engineNightId },
-        { label: "Assign TMs…", icon: <UserPlusIcon />, onClick: () => router.push(`/weeks/${weekId}/nights/${ctxNight.night_id}`) },
+        { label: "Print Night",  icon: <PrintIcon />, onClick: () => window.open(`/api/forge/v1/print/night/${ctxNight.night_id}.pdf`, "_blank") },
+        { label: "Run Engine",   icon: <EngineIcon />, onClick: () => handleRunEngineForNight(ctxNight.night_id), disabled: !!engineNightId },
+        { label: "Assign TMs…",  icon: <UserPlusIcon />, onClick: () => router.push(`/weeks/${weekId}/nights/${ctxNight.night_id}`) },
       ]
     : [];
 
@@ -126,9 +149,6 @@ export default function WeekOverviewPage() {
     );
   }
 
-  // Compute fill rate as the average of per-night coverage_pct (which uses
-  // per-day target capacity on the backend, not raw slot counts).
-  // Only in-rotation nights count; convert 0-100 → 0-1 for FillRing.
   const inRotationNights = overview.nights.filter((n) => n.in_rotation);
   const weekFillRate = inRotationNights.length > 0
     ? inRotationNights.reduce((s, n) => s + n.coverage_pct, 0) / inRotationNights.length / 100
@@ -185,33 +205,6 @@ export default function WeekOverviewPage() {
       <main className="flex-1 px-6 py-6 overflow-hidden">
         <h2 className="section-header text-gray-500 mb-4">Nights this week</h2>
 
-        {/* Planning notes */}
-        <AnimatePresence>
-          {overview.planning_notes.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="flex flex-wrap gap-2 mb-4"
-            >
-              {overview.planning_notes.slice(0, 3).map((note, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium",
-                    note.note_kind === "gap" && "bg-red-50 text-red-600",
-                    note.note_kind === "override" && "bg-orange-50 text-orange-600",
-                    note.note_kind === "overlap" && "bg-blue-50 text-blue-600",
-                    note.note_kind === "info" && "bg-gray-100 text-gray-600",
-                  )}
-                >
-                  <span className="font-semibold">{note.day_name}:</span>
-                  {note.note_text}
-                </div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory -mx-1 px-1">
           {overview.nights.map((night, i) => (
             <DayCard
@@ -219,15 +212,20 @@ export default function WeekOverviewPage() {
               night={night}
               index={i}
               weekId={weekId}
-              isHovered={hoveredNight === night.night_id}
-              onHover={(id) => setHoveredNight(id)}
-              onHoverEnd={() => setHoveredNight(null)}
+              engineRunning={engineNightId === night.night_id}
+              editingNote={editingNoteId === night.night_id}
+              noteValue={editingNoteId === night.night_id ? noteValue : (night.note ?? "")}
+              noteSaving={noteSaving}
               onContextMenu={(e) => openCtx(e, night)}
               onLongPressStart={(e) => {
                 longPressTimer.current = setTimeout(() => openCtx(e, night), 500);
               }}
               onLongPressEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
               onOpen={() => router.push(`/weeks/${weekId}/nights/${night.night_id}`)}
+              onNoteEdit={() => { setEditingNoteId(night.night_id); setNoteValue(night.note ?? ""); }}
+              onNoteChange={setNoteValue}
+              onNoteSave={() => saveNote(night.night_id)}
+              onNoteCancel={() => setEditingNoteId(null)}
             />
           ))}
         </div>
@@ -240,7 +238,7 @@ export default function WeekOverviewPage() {
         anchorPos={ctxPos}
       />
 
-      {/* ── Engine Run Toast ─────────────────────────────────────── */}
+      {/* Engine Run Toast */}
       <AnimatePresence>
         {engineToast && (
           <motion.div
@@ -272,38 +270,14 @@ export default function WeekOverviewPage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className={cn(
-                  "text-[13px] font-semibold leading-snug",
-                  engineToast.result.success ? "text-white" : "text-red-200"
-                )}>
+                <div className={cn("text-[13px] font-semibold", engineToast.result.success ? "text-white" : "text-red-200")}>
                   {engineToast.result.success ? "Engine run complete" : "Engine run failed"}
                 </div>
-                <div className={cn(
-                  "text-[12px] mt-0.5 leading-snug",
-                  engineToast.result.success ? "text-white/60" : "text-red-300/80"
-                )}>
-                  {engineToast.result.success
-                    ? engineToast.result.message
-                    : engineToast.result.error ?? "Unknown error"}
+                <div className={cn("text-[12px] mt-0.5", engineToast.result.success ? "text-white/60" : "text-red-300/80")}>
+                  {engineToast.result.success ? engineToast.result.message : engineToast.result.error ?? "Unknown error"}
                 </div>
-                {engineToast.result.success && engineToast.result.fill_rate > 0 && (
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-400 rounded-full transition-all duration-700"
-                        style={{ width: `${engineToast.result.fill_rate}%` }}
-                      />
-                    </div>
-                    <span className="text-[11px] text-white/50 shrink-0">
-                      {engineToast.result.fill_rate.toFixed(0)}% filled
-                    </span>
-                  </div>
-                )}
               </div>
-              <button
-                onClick={() => setEngineToast(null)}
-                className="shrink-0 text-white/30 hover:text-white/70 transition-colors mt-0.5"
-              >
+              <button onClick={() => setEngineToast(null)} className="shrink-0 text-white/30 hover:text-white/70 mt-0.5">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
@@ -350,21 +324,43 @@ interface DayCardProps {
   night: NightPlanningSnapshot;
   index: number;
   weekId: string;
-  isHovered: boolean;
-  onHover: (id: string) => void;
-  onHoverEnd: () => void;
+  engineRunning: boolean;
+  editingNote: boolean;
+  noteValue: string;
+  noteSaving: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onLongPressStart: (e: React.PointerEvent) => void;
   onLongPressEnd: () => void;
   onOpen: () => void;
+  onNoteEdit: () => void;
+  onNoteChange: (v: string) => void;
+  onNoteSave: () => void;
+  onNoteCancel: () => void;
 }
 
-function DayCard({ night, index, isHovered, onHover, onHoverEnd, onContextMenu, onLongPressStart, onLongPressEnd, onOpen }: DayCardProps) {
-  const [doubleTapMode, setDoubleTapMode] = useState<"compact" | "expanded">("compact");
-  const lastTap = useRef(0);
-
-  const fillRate = coveragePctToRate(night.coverage_pct);
+function DayCard({
+  night, index, engineRunning,
+  editingNote, noteValue, noteSaving,
+  onContextMenu, onLongPressStart, onLongPressEnd,
+  onOpen, onNoteEdit, onNoteChange, onNoteSave, onNoteCancel,
+}: DayCardProps) {
+  const fillRate    = coveragePctToRate(night.coverage_pct);
   const accentColor = fillRate >= 0.9 ? "#34C759" : fillRate >= 0.75 ? "#FF9500" : "#FF3B30";
+
+  // Operational gap = how many TMs short of target (not raw DB rows)
+  const target = night.target_capacity ?? 0;
+  const opGap  = Math.max(0, target - night.filled_slots);
+
+  // Sweeper pills
+  const sweepersComplete = night.sweeper_main_filled && night.sweeper_sr_filled;
+  const sweepersPartial  = night.sweeper_main_filled || night.sweeper_sr_filled;
+  const missingCount     = (night.sweeper_main_filled ? 0 : 1) + (night.sweeper_sr_filled ? 0 : 1);
+
+  // Flags
+  const flags: { text: string; color: string }[] = [];
+  if (opGap > 0)                             flags.push({ text: `${opGap} gap${opGap !== 1 ? "s" : ""}`, color: "text-red-500" });
+  if (night.override_count > 0)              flags.push({ text: `${night.override_count} override${night.override_count !== 1 ? "s" : ""}`, color: "text-orange-500" });
+  if (night.multi_area_overlap_count > 0)    flags.push({ text: `${night.multi_area_overlap_count} overlap${night.multi_area_overlap_count !== 1 ? "s" : ""}`, color: "text-blue-500" });
 
   return (
     <motion.div
@@ -375,27 +371,20 @@ function DayCard({ night, index, isHovered, onHover, onHoverEnd, onContextMenu, 
       onPointerDown={onLongPressStart}
       onPointerUp={onLongPressEnd}
       onPointerCancel={onLongPressEnd}
-      onMouseEnter={() => onHover(night.night_id)}
-      onMouseLeave={onHoverEnd}
-      onClick={() => {
-        const isDoubleTap = Date.now() - lastTap.current < 300;
-        lastTap.current = Date.now();
-        if (isDoubleTap) {
-          setDoubleTapMode((m) => (m === "compact" ? "expanded" : "compact"));
-        } else {
-          onOpen();
-        }
+      className="relative snap-start shrink-0 w-52 rounded-3xl bg-white shadow-card cursor-pointer no-select
+                 transition-shadow duration-200 overflow-hidden flex flex-col"
+      onClick={(e) => {
+        // Don't navigate if clicking the note area or its buttons
+        if ((e.target as HTMLElement).closest("[data-note-area]")) return;
+        onOpen();
       }}
-      className={cn(
-        "relative snap-start shrink-0 rounded-3xl bg-white shadow-card cursor-pointer no-select",
-        "transition-all duration-200 overflow-hidden",
-        doubleTapMode === "expanded" ? "w-64" : "w-44"
-      )}
-      style={{ boxShadow: isHovered ? "0 8px 28px rgba(0,0,0,0.12), 0 0 0 2px #007AFF22" : undefined }}
     >
-      <div className="h-1.5 w-full" style={{ backgroundColor: accentColor }} />
+      {/* Accent bar */}
+      <div className="h-[5px] w-full shrink-0" style={{ backgroundColor: accentColor }} />
 
-      <div className="p-4 flex flex-col gap-3">
+      <div className="p-4 flex flex-col gap-3 flex-1">
+
+        {/* Day + date */}
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">{night.day_name}</div>
           <div className="text-[13px] text-gray-500 mt-0.5">
@@ -403,67 +392,148 @@ function DayCard({ night, index, isHovered, onHover, onHoverEnd, onContextMenu, 
           </div>
         </div>
 
+        {/* Fill ring + counts */}
         <div className="flex items-center gap-3">
-          <FillRing rate={fillRate} size={56} strokeWidth={5} />
+          <FillRing rate={fillRate} size={52} strokeWidth={5} />
           <div>
-            <div className="text-[13px] font-semibold text-gray-700">{night.filled_slots} filled</div>
-            <div className="text-[12px] text-gray-400">{night.gap_count} open</div>
+            <div className="text-[13px] font-semibold text-gray-700">
+              {night.filled_slots} / {target}
+            </div>
+            <div className="text-[11px] text-gray-400">filled</div>
           </div>
         </div>
 
-        {night.reoptimize_recommended && (
-          <div className="flex items-center gap-1.5 bg-red-50 rounded-lg px-2.5 py-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-            <span className="text-[11px] font-semibold text-red-500">
-              {night.gap_count} gap{night.gap_count !== 1 ? "s" : ""}
-            </span>
+        {/* Sweeper pill */}
+        <div className={cn(
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold w-fit",
+          sweepersComplete
+            ? "bg-emerald-50 text-emerald-600"
+            : sweepersPartial
+            ? "bg-amber-50 text-amber-600"
+            : "bg-red-50 text-red-500"
+        )}>
+          <BroomIcon />
+          {sweepersComplete
+            ? <><CheckIcon /> Sweepers</>
+            : missingCount === 2
+            ? "Missing Sweepers"
+            : "Missing Sweeper"}
+        </div>
+
+        {/* Coverage breakdown */}
+        <div className="flex gap-2">
+          {night.zone_total > 0 && (
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <ZoneIcon />
+              <span className={night.zone_filled < night.zone_total ? "text-orange-500 font-medium" : "text-gray-500"}>
+                {night.zone_filled}/{night.zone_total}
+              </span>
+              <span>zones</span>
+            </div>
+          )}
+          {night.rr_total > 0 && (
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <RRIcon />
+              <span className={night.rr_filled < night.rr_total ? "text-orange-500 font-medium" : "text-gray-500"}>
+                {night.rr_filled}/{night.rr_total}
+              </span>
+              <span>RR</span>
+            </div>
+          )}
+        </div>
+
+        {/* Flags */}
+        {flags.length > 0 && (
+          <div className="border-t border-gray-100 pt-2.5 flex flex-col gap-1">
+            <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-300 mb-0.5">
+              <FlagIcon />
+              Flags
+            </div>
+            {flags.map((f, i) => (
+              <div key={i} className={cn("text-[11px] font-medium flex items-center gap-1.5", f.color)}>
+                <span className="w-1 h-1 rounded-full bg-current" />
+                {f.text}
+              </div>
+            ))}
           </div>
         )}
 
-        <AnimatePresence>
-          {doubleTapMode === "expanded" && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="text-[12px] text-gray-400 overflow-hidden space-y-1"
+        {/* Note section */}
+        <div
+          data-note-area="true"
+          className="border-t border-gray-100 pt-2.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-300 mb-1.5">
+            <NoteIcon />
+            Note
+          </div>
+          {editingNote ? (
+            <div className="flex flex-col gap-1.5">
+              <textarea
+                autoFocus
+                value={noteValue}
+                onChange={(e) => onNoteChange(e.target.value)}
+                placeholder="Add a note…"
+                rows={3}
+                className="w-full text-[12px] text-gray-700 bg-gray-50 rounded-xl px-2.5 py-2
+                           border border-gray-200 outline-none focus:border-[#C9A84C] resize-none
+                           placeholder:text-gray-300"
+              />
+              <div className="flex gap-1.5">
+                <button
+                  onClick={onNoteSave}
+                  disabled={noteSaving}
+                  className="flex-1 h-7 rounded-lg bg-[#C9A84C] text-white text-[11px] font-semibold
+                             hover:bg-[#b8953f] disabled:opacity-50 transition-colors"
+                >
+                  {noteSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={onNoteCancel}
+                  className="flex-1 h-7 rounded-lg bg-gray-100 text-gray-500 text-[11px] font-semibold
+                             hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : night.note ? (
+            <p
+              className="text-[12px] text-gray-500 leading-snug cursor-text hover:text-gray-700"
+              onClick={onNoteEdit}
             >
-              {night.override_count > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                  {night.override_count} override{night.override_count !== 1 ? "s" : ""}
-                </div>
-              )}
-              {night.multi_area_overlap_count > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                  {night.multi_area_overlap_count} overlap{night.multi_area_overlap_count !== 1 ? "s" : ""}
-                </div>
-              )}
-              <div className="text-[11px]">{night.total_slots} total slots</div>
-            </motion.div>
+              {night.note}
+            </p>
+          ) : (
+            <button
+              onClick={onNoteEdit}
+              className="text-[11px] text-gray-300 hover:text-gray-400 transition-colors"
+            >
+              + Add note…
+            </button>
           )}
-        </AnimatePresence>
+        </div>
+
       </div>
 
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.14 }}
-            className="absolute bottom-3 left-3 right-3 flex justify-center"
-          >
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpen(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#007AFF] text-white
-                         text-[12px] font-semibold shadow-md hover:bg-[#0056CC] transition-colors no-select"
-            >
-              <UserPlusIcon />
-              Open Planner
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Open planner footer — always visible */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+        className="flex items-center justify-between px-4 py-3 border-t border-gray-100
+                   text-[12px] font-semibold text-[#007AFF] hover:bg-blue-50
+                   transition-colors no-select shrink-0"
+      >
+        <span>Open Planner</span>
+        <ChevronRightIcon />
+      </button>
+
+      {/* Engine running spinner overlay */}
+      {engineRunning && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-3xl">
+          <div className="w-6 h-6 border-2 border-gray-200 border-t-[#C9A84C] rounded-full animate-spin" />
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -479,7 +549,7 @@ function WeekOverviewSkeleton({ onBack }: { onBack: () => void }) {
       <div className="bg-[#1A2340] border-t border-white/[0.08] h-14" />
       <div className="px-6 py-6 flex gap-4 overflow-hidden">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="w-44 h-52 rounded-3xl shimmer-bg shrink-0" style={{ animationDelay: `${i * 0.06}s` }} />
+          <div key={i} className="w-52 h-80 rounded-3xl shimmer-bg shrink-0" style={{ animationDelay: `${i * 0.06}s` }} />
         ))}
       </div>
     </div>

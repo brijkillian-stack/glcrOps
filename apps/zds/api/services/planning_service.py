@@ -130,6 +130,32 @@ class PlanningService:
             target       = _TARGET_CAPACITY.get(day_name, _DEFAULT_TARGET)
             coverage_pct = min((filled_slots / target * 100.0) if target else 0.0, 100.0)
 
+            # ── Zone / RR breakdown ───────────────────────────────────
+            zone_total  = sum(1 for a in assignments if a.get("slot_type") == "zone")
+            zone_filled = sum(1 for a in assignments if a.get("slot_type") == "zone" and a.get("tm_id") not in (None, "", "null"))
+            rr_total    = sum(1 for a in assignments if a.get("slot_type") == "rr")
+            rr_filled   = sum(1 for a in assignments if a.get("slot_type") == "rr"   and a.get("tm_id") not in (None, "", "null"))
+
+            # ── Sweeper status ─────────────────────────────────────────
+            sweeper_main_filled = False
+            sweeper_sr_filled   = False
+            try:
+                sw_res = self.placement.supabase.table("night_sweepers") \
+                    .select("slot,tm_id") \
+                    .eq("night_id", nid) \
+                    .execute()
+                for sw in (sw_res.data or []):
+                    if sw.get("tm_id"):
+                        if sw["slot"] == "main":
+                            sweeper_main_filled = True
+                        elif sw["slot"] == "sr":
+                            sweeper_sr_filled = True
+            except Exception as exc:
+                log.warning("sweeper fetch(%s) failed: %s", nid, exc)
+
+            # ── Night note ─────────────────────────────────────────────
+            night_note = night.get("notes")
+
             # Gather TM ids for fatigue index.
             for a in assignments:
                 tid = a.get("tm_id")
@@ -200,9 +226,17 @@ class PlanningService:
                 filled_slots             = filled_slots,
                 gap_count                = gap_count,
                 coverage_pct             = round(coverage_pct, 1),
+                target_capacity          = target,
+                zone_total               = zone_total,
+                zone_filled              = zone_filled,
+                rr_total                 = rr_total,
+                rr_filled                = rr_filled,
+                sweeper_main_filled      = sweeper_main_filled,
+                sweeper_sr_filled        = sweeper_sr_filled,
                 multi_area_overlap_count = len(overlaps),
                 override_count           = override_count,
                 reoptimize_recommended   = in_rot and gap_count > 0,
+                note                     = night_note,
             ))
 
         # ── Week metadata ─────────────────────────────────────────────────

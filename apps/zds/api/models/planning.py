@@ -39,12 +39,26 @@ class NightPlanningSnapshot(BaseModel):
     total_slots:             int    # all zone_assignment rows for this night
     filled_slots:            int    # rows where tm_id is not null/empty
     gap_count:               int    # total_slots − filled_slots
-    coverage_pct:            float  # filled / total * 100; 0 if total == 0
+    coverage_pct:            float  # filled / target * 100; 0 if target == 0
+    target_capacity:         int    # per-day staffing target (operational denominator)
+
+    # ── Zone / RR breakdown ───────────────────────────────────────────
+    zone_total:              int = 0
+    zone_filled:             int = 0
+    rr_total:                int = 0
+    rr_filled:               int = 0
+
+    # ── Sweepers ─────────────────────────────────────────────────────
+    sweeper_main_filled:     bool = False   # "Sweeper 5/8/HL" assigned
+    sweeper_sr_filled:       bool = False   # "Sweeper 9/10/SR" assigned
 
     # ── Overlaps + overrides ──────────────────────────────────────────
     multi_area_overlap_count: int   # rows from get_night_overlaps()
     override_count:           int   # active slot_assignment overrides
     reoptimize_recommended:   bool  # True when gap_count > 0
+
+    # ── Supervisor note ───────────────────────────────────────────────
+    note:                    Optional[str] = None
 
 
 class WeekMetrics(BaseModel):

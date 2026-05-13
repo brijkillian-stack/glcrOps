@@ -47,10 +47,23 @@ export interface NightPlanningSnapshot {
   filled_slots: number;
   gap_count: number;
   coverage_pct: number;    // 0–100 (percent, NOT 0–1)
+  target_capacity: number; // per-day operational staffing target
+
+  // Zone / RR breakdown
+  zone_total: number;
+  zone_filled: number;
+  rr_total: number;
+  rr_filled: number;
+
+  // Sweeper slots
+  sweeper_main_filled: boolean;  // "Sweeper 5/8/HL"
+  sweeper_sr_filled: boolean;    // "Sweeper 9/10/SR"
 
   multi_area_overlap_count: number;
   override_count: number;
   reoptimize_recommended: boolean;
+
+  note: string | null;
 }
 
 /** Aggregated week metrics — mirrors WeekMetrics */
@@ -471,5 +484,57 @@ export async function addTrailEntry(
     }
   } catch (err) {
     console.warn("addTrailEntry failed (best-effort):", err);
+  }
+}
+
+// ── Sweeper assignments ───────────────────────────────────────────────────────
+
+export type SweeperSlot = "main" | "sr";
+
+export interface SweeperAssignment {
+  slot: SweeperSlot;
+  label: string;   // "Sweeper 5/8/HL" | "Sweeper 9/10/SR"
+  tm_id: string | null;
+  tm_name: string;
+}
+
+/** Fetch both sweeper slots for a night. */
+export async function fetchNightSweepers(nightId: string): Promise<SweeperAssignment[]> {
+  return get<SweeperAssignment[]>(`/v1/nights/${nightId}/sweepers`);
+}
+
+/** Assign or clear a sweeper slot. Pass tmId=null to clear. */
+export async function patchSweeperSlot(
+  nightId: string,
+  slot: SweeperSlot,
+  tmId: string | null,
+  tmName: string,
+): Promise<void> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/sweepers/${slot}`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ tm_id: tmId, tm_name: tmName }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`patchSweeperSlot ${res.status}: ${body}`);
+  }
+}
+
+// ── Night note ────────────────────────────────────────────────────────────────
+
+/** Set or clear the supervisor note for a night. */
+export async function patchNightNote(
+  nightId: string,
+  note: string | null,
+): Promise<void> {
+  const res = await fetch(`${BASE}/v1/nights/${nightId}/note`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ note }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`patchNightNote ${res.status}: ${body}`);
   }
 }
