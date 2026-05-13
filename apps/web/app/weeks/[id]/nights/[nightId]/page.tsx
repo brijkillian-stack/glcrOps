@@ -228,8 +228,8 @@ export default function DailyPlannerPage() {
     }
   }
 
-  // TM roster — cached by SWR, refreshes every 10 min
-  const { data: tmRoster } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
+  // TM roster — cached by SWR, refreshes every 10 min (default [] prevents undefined in picker)
+  const { data: tmRoster = [] } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
     revalidateOnFocus: false,
     dedupingInterval: 600_000,
   });
@@ -2529,9 +2529,11 @@ interface OverlapCardProps {
   onCardClick: (e: React.MouseEvent, slot: OverlapSlot) => void;
   onPointerEnter: (key: string) => void;
   onPointerLeave: () => void;
+  /** Called when user taps a slot that has no DB row yet (seeding fallback). */
+  onNullClick?: (position: number, win: "pm" | "am") => void;
 }
 
-function OverlapCard({ slot, index, window: win, saving, pencilHover, onCardClick, onPointerEnter, onPointerLeave }: OverlapCardProps) {
+function OverlapCard({ slot, index, window: win, saving, pencilHover, onCardClick, onPointerEnter, onPointerLeave, onNullClick }: OverlapCardProps) {
   const position = index + 1;
   const label    = overlapPositionLabel(position, win);
   const isEmpty  = !slot?.tm_id;
@@ -2540,19 +2542,28 @@ function OverlapCard({ slot, index, window: win, saving, pencilHover, onCardClic
   const isHover  = pencilHover === hoverKey;
   const initials = slot?.tm_name?.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2) ?? "";
 
-  // No DB row yet — engine hasn't run for this position
+  // No DB row yet — seeding usually prevents this, but show a clickable "add" card
   if (!slot) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="card rounded-2xl overflow-hidden opacity-40"
+        onClick={() => onNullClick?.(position, win)}
+        className={cn(
+          "card rounded-2xl overflow-hidden opacity-60",
+          onNullClick ? "cursor-pointer hover:opacity-80 transition-opacity" : ""
+        )}
       >
         <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
         <div className="p-3 flex flex-col gap-2">
           <div className="text-[13px] font-bold text-gray-400">{label}</div>
-          <div className="text-[11px] text-gray-300 italic">No engine data</div>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M5 2v6M2 5h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Tap to assign
+          </div>
         </div>
       </motion.div>
     );
@@ -2702,6 +2713,18 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
     }
   }
 
+  /** Tap on a null slot (no DB row): force-refresh to seed the row, then open picker. */
+  const handleNullSlotClick = useCallback(async (position: number, win: "pm" | "am") => {
+    // Force-fetch — the backend seeds any missing rows on this call
+    const freshData = await mutate();
+    const seeded = freshData?.find(
+      (o) => o.overlap_window === win && o.position === position
+    );
+    if (seeded) {
+      setPickerOverlap(seeded);
+    }
+  }, [mutate]);
+
   const openCtx = useCallback((e: React.MouseEvent, slot: OverlapSlot) => {
     e.preventDefault();
     setCtxOverlap(slot);
@@ -2778,6 +2801,7 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
               onCardClick={openCtx}
               onPointerEnter={handlePointerEnter}
               onPointerLeave={handlePointerLeave}
+              onNullClick={handleNullSlotClick}
             />
           ))}
         </div>
@@ -2798,6 +2822,7 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
               onCardClick={openCtx}
               onPointerEnter={handlePointerEnter}
               onPointerLeave={handlePointerLeave}
+              onNullClick={handleNullSlotClick}
             />
           ))}
         </div>
@@ -2905,7 +2930,7 @@ function OverlapPickerSheet({ overlap, tms, onSelect, onClear, onClose }: Overla
   }, [isOpen, overlap?.id]);
 
   const q = query.toLowerCase();
-  const filtered = tms.filter((tm) => !q || tm.display_name.toLowerCase().includes(q));
+  const filtered = (tms ?? []).filter((tm) => !q || tm.display_name.toLowerCase().includes(q));
 
   const label = overlap ? overlapPositionLabel(overlap.position, overlap.overlap_window) : "";
 

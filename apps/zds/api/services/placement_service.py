@@ -409,6 +409,33 @@ class PlacementService:
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
+
+        # ── Seed any missing positions ────────────────────────────────────────
+        # Ensure all 12 slots (6 PM + 6 AM) exist in overlap_assignments so
+        # the frontend always has a row ID to PATCH — even before the engine runs.
+        try:
+            existing_res = (
+                self.supabase.table("overlap_assignments")
+                .select("overlap_window, position")
+                .eq("night_id", night_id)
+                .execute()
+            )
+            existing = {
+                (r["overlap_window"], r["position"])
+                for r in (existing_res.data or [])
+            }
+            to_seed = [
+                {"night_id": night_id, "overlap_window": win, "position": pos,
+                 "tm_id": None, "is_filled": False, "task": None}
+                for win in ("pm", "am")
+                for pos in range(1, 7)
+                if (win, pos) not in existing
+            ]
+            if to_seed:
+                self.supabase.table("overlap_assignments").insert(to_seed).execute()
+        except Exception as seed_exc:
+            log.warning("get_night_overlaps(%s) seed failed: %s", night_id, seed_exc)
+
         try:
             res = (
                 self.supabase.table("overlap_assignments")
