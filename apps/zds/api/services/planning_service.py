@@ -42,6 +42,7 @@ from ..models.planning import (
 log = logging.getLogger(__name__)
 
 PLANNING_TTL = 15   # seconds; intentionally short for a live planning tool
+PLANNING_CACHE_VER = "v2"  # bump when WeekMeta/NightPlanningSnapshot shape changes
 
 # ── Per-day target capacity (Brian's spec 5/12/26) ────────────────────────────
 # "100% fill rate" is defined against these targets, not against the raw slot
@@ -81,7 +82,7 @@ class PlanningService:
         Returns None when the week doesn't exist (caller raises 404).
         Result is cached for PLANNING_TTL seconds.
         """
-        cache_key = f"zds:planning:week:{week_id}"
+        cache_key = f"zds:planning:week:{week_id}:{PLANNING_CACHE_VER}"
         cached = await self.placement.cache.get(cache_key)
         if cached is not None:
             try:
@@ -305,4 +306,4 @@ class PlanningService:
         PlacementService.invalidate_week() does NOT clear the planning cache
         because PlanningService sits above it and owns its own namespace.
         """
-        await self.placement.cache.delete(f"zds:planning:week:{week_id}")
+        await self.placement.cache.delete(f"zds:planning:week:{week_id}:{PLANNING_CACHE_VER}")

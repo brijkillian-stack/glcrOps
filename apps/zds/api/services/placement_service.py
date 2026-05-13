@@ -100,6 +100,7 @@ class PlacementService:
 
     # ── TTL constants ────────────────────────────────────────────────────
     WEEK_TTL        = 60    # seconds; short — week status changes during editing
+    WEEK_CACHE_VER  = "v2"  # bump when weeks table schema changes (clears stale cached dicts)
     NIGHT_TTL       = 30    # seconds; nights change frequently during pre-shift
     TASK_TTL        = 600   # seconds; canonical tasks change rarely
     TM_TTL          = 600   # seconds; roster changes are infrequent
@@ -130,7 +131,7 @@ class PlacementService:
 
     async def get_week(self, week_id: str) -> Optional[dict]:
         """Fetch one week row by id.  Uses self.supabase directly — no legacy db module."""
-        key = f"zds:week:{week_id}"
+        key = f"zds:week:{week_id}:{self.WEEK_CACHE_VER}"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
@@ -514,7 +515,7 @@ class PlacementService:
 
     async def invalidate_week(self, week_id: str) -> None:
         await self.cache.delete_many([
-            f"zds:week:{week_id}",
+            f"zds:week:{week_id}:{self.WEEK_CACHE_VER}",
             f"zds:week:{week_id}:nights",
             f"zds:week:{week_id}:assignments",
             f"zds:weeks:recent",

@@ -16,7 +16,7 @@ class WeekRow(BaseModel):
     week_ending: str          # ISO date string "YYYY-MM-DD"
     label: str
     status: str               # "draft" | "published" | "archived"
-    schedule_path: Optional[str] = ""
+    schedule_path: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

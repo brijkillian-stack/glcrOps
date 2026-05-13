@@ -268,7 +268,23 @@ async def upload_schedule(
         log.exception("Storage upload failed for %s", filename)
         raise HTTPException(status_code=503, detail={"error": "upload_failed", "detail": str(exc)})
 
-    # Parse week_ending from filename.
+    # ── Fast path: week_id explicitly provided (re-upload from Week Overview) ──
+    if week_id:
+        try:
+            placement_service.supabase.table("weeks") \
+                .update({"schedule_path": filename}) \
+                .eq("id", week_id) \
+                .execute()
+        except Exception as exc:
+            log.exception("schedule_path update failed for week %s", week_id)
+            raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+        try:
+            await placement_service.invalidate_week(week_id)
+        except Exception:
+            pass
+        return {"uploaded": True, "filename": filename, "week_id": week_id, "week_ending": None}
+
+    # ── Slow path: parse week_ending from filename ────────────────────────────
     # Matches patterns like "5-28-26", "05-28-2026", "2026-05-28"
     week_ending: str | None = None
     # ISO format YYYY-MM-DD
@@ -301,31 +317,30 @@ async def upload_schedule(
         raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
 
     if rows:
-        week_id = rows[0]["id"]
+        resolved_week_id = rows[0]["id"]
         placement_service.supabase.table("weeks") \
             .update({"schedule_path": filename}) \
-            .eq("id", week_id) \
+            .eq("id", resolved_week_id) \
             .execute()
     else:
         # Create the week
         import datetime
         we = datetime.date.fromisoformat(week_ending)
-        ws = we - datetime.timedelta(days=6)
         new_row = placement_service.supabase.table("weeks").insert({
             "week_ending":    week_ending,
             "label":          f"Week ending {week_ending}",
             "status":         "draft",
             "schedule_path":  filename,
         }).execute()
-        week_id = (new_row.data or [{}])[0].get("id")
+        resolved_week_id = (new_row.data or [{}])[0].get("id")
 
     # Bust cache
     try:
-        await placement_service.invalidate_week(week_id)
+        await placement_service.invalidate_week(resolved_week_id)
     except Exception:
         pass
 
-    return {"uploaded": True, "filename": filename, "week_id": week_id, "week_ending": week_ending}
+    return {"uploaded": True, "filename": filename, "week_id": resolved_week_id, "week_ending": week_ending}
 
 
 # ── Delete schedule link ──────────────────────────────────────────────────────
