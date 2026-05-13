@@ -205,7 +205,7 @@ export default function DailyPlannerPage() {
         const defaults = catalogue
           .filter(
             (t) =>
-              (t.category === wantedCat || t.category === "sweep") &&
+              t.category === wantedCat &&           // never auto-fill sweep tasks
               (t.target_codes.length === 0 || t.target_codes.includes(p.zone_id))
           )
           .map((t) => t.name);
@@ -1675,9 +1675,10 @@ function CoveragePickerSheet({
 // ── Task Picker Sheet ─────────────────────────────────────────────────────────
 
 const CATEGORY_TABS: { id: string; label: string; cats: string[] }[] = [
-  { id: "zone",   label: "Zone",    cats: ["zone", "rr", "aux", "sweep"] },
-  { id: "am",     label: "AM",      cats: ["overlap_am"] },
-  { id: "pm",     label: "PM",      cats: ["overlap_pm"] },
+  { id: "zone",    label: "Zone",    cats: ["zone", "rr", "aux"] },
+  { id: "sweep",   label: "Sweep",   cats: ["sweep"] },
+  { id: "am",      label: "AM",      cats: ["overlap_am"] },
+  { id: "pm",      label: "PM",      cats: ["overlap_pm"] },
 ];
 
 interface TaskPickerSheetProps {
@@ -1774,8 +1775,9 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
     const defaults = allTasks
       .filter(
         (t) =>
-          t.target_codes.length === 0 ||         // universal task for this slot type
-          t.target_codes.includes(slot.zone_id)  // specifically targets this zone
+          t.category !== "sweep" &&              // sweepers are always manually assigned
+          (t.target_codes.length === 0 ||        // universal task for this slot type
+           t.target_codes.includes(slot.zone_id)) // specifically targets this zone
       )
       .map((t) => t.name);
     setSelected((prev) => new Set([...defaults, ...prev]));
