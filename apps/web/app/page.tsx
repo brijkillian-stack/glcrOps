@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 "use client";
 
 export const dynamic = 'force-dynamic';
@@ -207,7 +206,16 @@ export default function LaunchpadPage() {
 }
 
 // WeekRow with Mini FillRing
-function WeekRow({ week, index, onOpen, onContextMenu, onLongPressStart, onLongPressEnd }: any) {
+interface WeekRowProps {
+  week: WeekRow;
+  index: number;
+  onOpen: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  onLongPressStart: (e: React.PointerEvent) => void;
+  onLongPressEnd: () => void;
+}
+
+function WeekRow({ week, index, onOpen, onContextMenu, onLongPressStart, onLongPressEnd }: WeekRowProps) {
   const lastUpdated = week.updated_at ? relativeTime(week.updated_at) : week.created_at ? relativeTime(week.created_at) : null;
   const statusColor = week.status === "published" ? "#34C759" : week.status === "draft" ? "#FF9500" : "#94A3B8";
   const miniRate = week.status === "published" ? 0.92 : week.status === "draft" ? 0.45 : 0;
@@ -244,13 +252,3 @@ function relativeTime(iso: string): string {
   if (m < 2) return "Just now"; if (m < 60) return `${m}m ago`; if (h < 24) return `${h}h ago`; if (d < 7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-=======
-interface WeekRowProps {
-  week: WeekRow;
-  index: number;
-  onOpen: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onLongPressStart: (e: React.PointerEvent) => void;
-  onLongPressEnd: () => void;
-}
->>>>>>> 9ba3991668b0d95ad13421366013a2c561d95c83
