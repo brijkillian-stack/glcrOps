@@ -2,28 +2,14 @@
 
 Run locally:
 
-    uvicorn apps.zds.api.main:app --reload --port 8001
+    uvicorn api.main:app --reload --port 8001
 
-The app intentionally keeps the surface small for now: a `/health`
-ping, a versioned print router, and warmup of shared singletons at
-startup. As the unified data layer lands, additional routers (auth,
-nights, weeks, annotations) will hang off this same `app` object.
 """
 
 from __future__ import annotations
 
 import logging
-import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
-
-# Ensure the monorepo root is on sys.path so the top-level `shared` package
-# is importable regardless of how uvicorn is invoked (e.g. on Render the CWD
-# is /opt/render/project/src but Python may not add it to sys.path automatically
-# when the app is run as a package string like "apps.zds.api.main:app").
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

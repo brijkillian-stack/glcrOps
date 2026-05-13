@@ -569,7 +569,9 @@ async def upload_schedule(
     """
     import base64
     import re
-    from shared import storage as _storage
+
+    _SCHEDULES_BUCKET = "schedules"
+    _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     filename = payload.get("filename") or "schedule.xlsx"
     raw_b64  = payload.get("data") or ""
@@ -578,9 +580,17 @@ async def upload_schedule(
     except Exception:
         raise HTTPException(status_code=400, detail={"error": "bad_payload", "detail": "data must be valid base64"})
 
-    # Upload to Supabase Storage
+    # Upload to Supabase Storage directly via service-role client
     try:
-        _storage.upload_schedule(filename, data)
+        sb = placement_service.supabase
+        # Upsert: remove old file first if it exists, then upload fresh
+        try:
+            sb.storage.from_(_SCHEDULES_BUCKET).remove([filename])
+        except Exception:
+            pass
+        sb.storage.from_(_SCHEDULES_BUCKET).upload(
+            filename, data, {"content-type": _XLSX_MIME}
+        )
     except Exception as exc:
         log.exception("Storage upload failed for %s", filename)
         raise HTTPException(status_code=503, detail={"error": "upload_failed", "detail": str(exc)})
@@ -685,8 +695,7 @@ async def delete_week_schedule(
 
     if remove_from_storage and current_path:
         try:
-            from shared import storage as _storage
-            _storage.delete_schedule(current_path)
+            placement_service.supabase.storage.from_("schedules").remove([current_path])
         except Exception as exc:
             log.warning("Storage delete failed for %s: %s", current_path, exc)
 

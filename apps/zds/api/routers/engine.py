@@ -126,9 +126,7 @@ def _run_engine_sync(week_id: str, target_night_id: Optional[str] = None) -> dic
     # correct ADP export rather than whatever file happens to be newest.
     schedule_file: Optional[str] = None
     try:
-        from shared.db import get_client as _get_db
-        _sb = _get_db()
-        _wk = _sb.table("weeks").select("schedule_path").eq("id", week_id).single().execute()
+        _wk = placement_service.supabase.table("weeks").select("schedule_path").eq("id", week_id).single().execute()
         schedule_file = (_wk.data or {}).get("schedule_path") or None
         if schedule_file:
             log.info("Engine will use schedule file: %s", schedule_file)
