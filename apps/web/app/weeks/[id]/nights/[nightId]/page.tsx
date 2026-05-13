@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, fetchNightOverlaps, patchOverlapTM, patchOverlapTask, overlapPositionLabel, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry, type OverlapSlot } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, fetchNightOverlaps, patchOverlapTM, patchOverlapTask, overlapPositionLabel, fetchTabConfig, DEFAULT_TASK_TABS, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry, type OverlapSlot, type TaskTab } from "@/lib/forge-api";
 import { mutate as globalMutate } from "swr";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
@@ -1757,13 +1757,6 @@ function CoveragePickerSheet({
 
 // ── Task Picker Sheet ─────────────────────────────────────────────────────────
 
-const CATEGORY_TABS: { id: string; label: string; cats: string[] }[] = [
-  { id: "zone",    label: "Zone",    cats: ["zone", "rr", "aux"] },
-  { id: "sweep",   label: "Sweep",   cats: ["sweep"] },
-  { id: "am",      label: "AM",      cats: ["overlap_am"] },
-  { id: "pm",      label: "PM",      cats: ["overlap_pm"] },
-];
-
 interface TaskPickerSheetProps {
   slot: TMAssignment | null;
   nightId: string;
@@ -1777,6 +1770,13 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
   const [saving, setSaving] = useState(false);
   const [customInput, setCustomInput] = useState("");
   const customInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab config — fetched from DB, falls back to defaults if unavailable
+  const { data: categoryTabs = DEFAULT_TASK_TABS } = useSWR(
+    "forge:tab_config",
+    fetchTabConfig,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
 
   // Fetch ALL tasks for this slot type when the sheet opens (no slot_key filter)
   const { data: allTasks = [] } = useSWR(
@@ -1795,7 +1795,7 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
   useEffect(() => {
     if (slot && slot.slot_id !== prevSlotId.current) {
       prevSlotId.current = slot.slot_id;
-      setActiveTab("zone");
+      setActiveTab(categoryTabs[0]?.id ?? "zone");
       setCustomInput("");
       setDefaultsApplied(false);
       if (slot.tasks !== null) {
@@ -1827,7 +1827,7 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
   const customTasks = [...selected].filter((name) => !catalogueNames.has(name));
 
   const tabTasks = allTasks.filter((t) => {
-    const tab = CATEGORY_TABS.find((tb) => tb.id === activeTab);
+    const tab = categoryTabs.find((tb) => tb.id === activeTab);
     return tab ? tab.cats.includes(t.category) : false;
   });
 
@@ -1954,7 +1954,7 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
             {/* Segmented tab control */}
             <div className="px-5 pb-3 shrink-0">
               <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                {CATEGORY_TABS.map((tab) => (
+                {categoryTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * (Future tabs for Break Schedule, Zone Config, etc.)
  */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import useSWR from "swr";
 import { GlcrHeader } from "@/components/ui/GlcrHeader";
 import {
@@ -18,8 +18,11 @@ import {
   createZoneTask,
   patchZoneTask,
   deleteZoneTask,
+  fetchTabConfig,
+  patchTabConfig,
   type ZoneTask,
   type TaskCategory,
+  type TaskTab,
 } from "@/lib/forge-api";
 import { cn } from "@/lib/utils";
 
@@ -104,8 +107,9 @@ function CategoryPill({ cat }: { cat: string }) {
 // ── Top-level tabs ────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "tasks",  label: "Tasks" },
-  { id: "breaks", label: "Break Schedule" },
+  { id: "tasks",     label: "Tasks" },
+  { id: "tab_config", label: "Task Tabs" },
+  { id: "breaks",    label: "Break Schedule" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -145,8 +149,9 @@ export default function ControlPanelPage() {
       </div>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-6">
-        {activeTab === "tasks"  && <TasksTab />}
-        {activeTab === "breaks" && <BreaksTab />}
+        {activeTab === "tasks"      && <TasksTab />}
+        {activeTab === "tab_config" && <TabConfigTab />}
+        {activeTab === "breaks"     && <BreaksTab />}
       </main>
     </div>
   );
@@ -618,6 +623,267 @@ function TaskRow({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Tab Config Tab
+// ══════════════════════════════════════════════════════════════════════════════
+
+const ALL_CATS: { id: TaskCategory; label: string; color: string }[] = [
+  { id: "zone",       label: "Zone",         color: "#007AFF" },
+  { id: "rr",         label: "Restroom",     color: "#34C759" },
+  { id: "aux",        label: "Aux",          color: "#FF9500" },
+  { id: "sweep",      label: "Sweep",        color: "#C9A84C" },
+  { id: "overlap_am", label: "AM Overlap",   color: "#AF52DE" },
+  { id: "overlap_pm", label: "PM Overlap",   color: "#FF3B30" },
+];
+
+function TabConfigTab() {
+  const { data: savedTabs, mutate, isLoading } = useSWR(
+    "control:tab_config",
+    fetchTabConfig,
+    { revalidateOnFocus: true },
+  );
+
+  // Local working copy — editable before saving
+  const [tabs, setTabs] = useState<TaskTab[]>([]);
+  const [dirty, setDirty]   = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  // Sync local state when DB data loads (only if not currently editing)
+  useEffect(() => {
+    if (savedTabs && !dirty) {
+      setTabs(savedTabs.map((t) => ({ ...t, cats: [...t.cats] })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedTabs]);
+
+  function markDirty() { setDirty(true); setSuccess(false); }
+
+  function moveTab(idx: number, dir: -1 | 1) {
+    const next = [...tabs];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setTabs(next);
+    markDirty();
+  }
+
+  function updateLabel(idx: number, label: string) {
+    const next = [...tabs];
+    next[idx] = { ...next[idx], label };
+    setTabs(next);
+    markDirty();
+  }
+
+  function toggleCat(tabIdx: number, cat: TaskCategory) {
+    const next = tabs.map((t, i) => {
+      if (i !== tabIdx) return t;
+      const cats = t.cats.includes(cat)
+        ? t.cats.filter((c) => c !== cat)
+        : [...t.cats, cat];
+      return { ...t, cats };
+    });
+    setTabs(next);
+    markDirty();
+  }
+
+  function addTab() {
+    const newTab: TaskTab = {
+      id:    `tab_${Date.now()}`,
+      label: "New Tab",
+      cats:  [],
+    };
+    setTabs([...tabs, newTab]);
+    markDirty();
+  }
+
+  function removeTab(idx: number) {
+    if (tabs.length <= 1) return;
+    if (!confirm(`Remove the "${tabs[idx].label}" tab?`)) return;
+    setTabs(tabs.filter((_, i) => i !== idx));
+    markDirty();
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await patchTabConfig(tabs);
+      await mutate();
+      setDirty(false);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleReset() {
+    if (!savedTabs) return;
+    setTabs(savedTabs.map((t) => ({ ...t, cats: [...t.cats] })));
+    setDirty(false);
+    setError(null);
+  }
+
+  if (isLoading && !savedTabs) {
+    return (
+      <div className="flex flex-col gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-28 rounded-2xl shimmer-bg" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Explanation */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
+        <div className="text-[13px] font-semibold text-gray-700 mb-1">Task Picker Tabs</div>
+        <div className="text-[12px] text-gray-400 leading-relaxed">
+          Configure which tabs appear in the day planner task picker and which task categories each tab shows.
+          Drag tabs up/down to reorder. Changes take effect immediately after saving.
+        </div>
+      </div>
+
+      {/* Error / success banners */}
+      {error && (
+        <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-3"><XIcon /></button>
+        </div>
+      )}
+      {success && (
+        <div className="px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-medium">
+          Tab configuration saved — the day planner will pick it up on next load.
+        </div>
+      )}
+
+      {/* Tab cards */}
+      <div className="flex flex-col gap-3">
+        {tabs.map((tab, idx) => (
+          <div
+            key={tab.id}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+          >
+            {/* Tab header */}
+            <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-50">
+              {/* Move arrows */}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button
+                  onClick={() => moveTab(idx, -1)}
+                  disabled={idx === 0}
+                  className="w-6 h-5 rounded flex items-center justify-center text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                >
+                  <svg width="10" height="7" viewBox="0 0 10 7" fill="none">
+                    <path d="M1 6l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => moveTab(idx, 1)}
+                  disabled={idx === tabs.length - 1}
+                  className="w-6 h-5 rounded flex items-center justify-center text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                >
+                  <svg width="10" height="7" viewBox="0 0 10 7" fill="none">
+                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Tab position badge */}
+              <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-gray-400 flex items-center justify-center shrink-0">
+                {idx + 1}
+              </span>
+
+              {/* Label input */}
+              <input
+                type="text"
+                value={tab.label}
+                onChange={(e) => updateLabel(idx, e.target.value)}
+                className="flex-1 h-8 px-3 rounded-lg border border-gray-200 text-[13px] font-semibold focus:outline-none focus:border-[#1A2340] bg-gray-50"
+                placeholder="Tab name…"
+              />
+
+              {/* Remove button */}
+              <button
+                onClick={() => removeTab(idx)}
+                disabled={tabs.length <= 1}
+                title="Remove tab"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:bg-red-50 hover:text-red-400 disabled:opacity-20 transition-colors"
+              >
+                <TrashIcon />
+              </button>
+            </div>
+
+            {/* Category checkboxes */}
+            <div className="px-4 py-3 flex flex-wrap gap-2">
+              {ALL_CATS.map((cat) => {
+                const checked = tab.cats.includes(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => toggleCat(idx, cat.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] font-semibold transition-all border",
+                      checked
+                        ? "text-white border-transparent"
+                        : "bg-white border-gray-200 text-gray-400 hover:border-gray-300",
+                    )}
+                    style={checked ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
+                  >
+                    {checked && (
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {cat.label}
+                  </button>
+                );
+              })}
+              {tab.cats.length === 0 && (
+                <span className="text-[11px] text-gray-300 italic self-center">No categories — tasks won't appear on this tab</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add tab */}
+      <button
+        onClick={addTab}
+        className="flex items-center justify-center gap-2 h-11 rounded-2xl border-2 border-dashed border-gray-200 text-[13px] font-semibold text-gray-400 hover:border-gray-300 hover:text-gray-500 transition-colors"
+      >
+        <PlusIcon /> Add Tab
+      </button>
+
+      {/* Save / Reset bar */}
+      {dirty && (
+        <div className="sticky bottom-4 flex items-center justify-between gap-3 bg-[#1A2340] text-white px-5 py-3 rounded-2xl shadow-xl">
+          <span className="text-[13px] font-medium text-white/70">You have unsaved changes</span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleReset}
+              className="h-9 px-4 rounded-xl text-white/60 hover:text-white text-[13px] transition-colors"
+            >
+              Reset
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="h-9 px-5 rounded-xl bg-[#C9A84C] text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-[#b8973d] transition-colors"
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

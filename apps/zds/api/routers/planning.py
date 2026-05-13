@@ -68,6 +68,75 @@ def _planning_unavailable(detail: str) -> HTTPException:
 # Endpoints
 # ═════════════════════════════════════════════════════════════════════════════
 
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+_DEFAULT_TAB_CONFIG = [
+    {"id": "zone",  "label": "Zone",  "cats": ["zone", "rr", "aux"]},
+    {"id": "sweep", "label": "Sweep", "cats": ["sweep"]},
+    {"id": "am",    "label": "AM",    "cats": ["overlap_am"]},
+    {"id": "pm",    "label": "PM",    "cats": ["overlap_pm"]},
+]
+
+
+@router.get(
+    "/settings/tab_config",
+    summary="Get task picker tab configuration",
+)
+async def get_tab_config(
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Return the ordered list of task picker tabs and which categories each tab shows.
+    Falls back to the default config if the DB row is missing.
+    """
+    try:
+        res = placement_service.supabase.table("zds_settings") \
+            .select("value") \
+            .eq("key", "task_tab_config") \
+            .single() \
+            .execute()
+        return (res.data or {}).get("value", _DEFAULT_TAB_CONFIG)
+    except Exception:
+        return _DEFAULT_TAB_CONFIG
+
+
+@router.patch(
+    "/settings/tab_config",
+    summary="Update task picker tab configuration",
+)
+async def patch_tab_config(
+    body: dict,
+    placement_service: PlacementService = Depends(get_placement_service),
+):
+    """Upsert the task_tab_config setting.  Body: { tabs: [...] }"""
+    tabs = body.get("tabs")
+    if not isinstance(tabs, list):
+        raise HTTPException(status_code=400, detail={"error": "invalid_body", "detail": "Expected { tabs: [...] }"})
+
+    VALID_CATS = {"zone", "rr", "aux", "sweep", "overlap_am", "overlap_pm"}
+    for tab in tabs:
+        if not isinstance(tab, dict) or not tab.get("id") or not tab.get("label"):
+            raise HTTPException(status_code=400, detail={"error": "invalid_tab", "detail": "Each tab needs id and label"})
+        for cat in tab.get("cats", []):
+            if cat not in VALID_CATS:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"error": "invalid_category", "detail": f"Unknown category: {cat!r}"},
+                )
+
+    try:
+        placement_service.supabase.table("zds_settings").upsert(
+            {"key": "task_tab_config", "value": tabs},
+            on_conflict="key",
+        ).execute()
+    except Exception as exc:
+        log.exception("patch_tab_config failed")
+        raise HTTPException(status_code=503, detail={"error": "db_error", "detail": str(exc)})
+
+    return {"updated": True, "tabs": tabs}
+
+
+# ── Zone Tasks ─────────────────────────────────────────────────────────────────
+
 @router.get(
     "/tasks",
     summary="Zone task catalogue",

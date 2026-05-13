@@ -163,6 +163,39 @@ export function getNightPrintUrl(nightId: string, format: "html" | "pdf") {
 
 export type TaskCategory = "zone" | "rr" | "aux" | "overlap_am" | "overlap_pm" | "sweep";
 
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export interface TaskTab {
+  id:    string;
+  label: string;
+  cats:  TaskCategory[];
+}
+
+export const DEFAULT_TASK_TABS: TaskTab[] = [
+  { id: "zone",  label: "Zone",  cats: ["zone", "rr", "aux"] },
+  { id: "sweep", label: "Sweep", cats: ["sweep"] },
+  { id: "am",    label: "AM",    cats: ["overlap_am"] },
+  { id: "pm",    label: "PM",    cats: ["overlap_pm"] },
+];
+
+export async function fetchTabConfig(): Promise<TaskTab[]> {
+  try {
+    return await get<TaskTab[]>("/v1/planning/settings/tab_config", { cache: "no-store" });
+  } catch {
+    return DEFAULT_TASK_TABS;
+  }
+}
+
+export async function patchTabConfig(tabs: TaskTab[]): Promise<{ updated: boolean; tabs: TaskTab[] }> {
+  const res = await fetch(`${BASE}/v1/planning/settings/tab_config`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ tabs }),
+  });
+  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`patchTabConfig ${res.status}: ${b}`); }
+  return res.json();
+}
+
 export interface ZoneTask {
   id: string;
   name: string;
