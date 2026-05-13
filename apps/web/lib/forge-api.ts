@@ -542,16 +542,30 @@ export async function patchNightNote(
 
 // ── Week / schedule management ────────────────────────────────────────────────
 
-/** Upload (or re-upload) a schedule xlsx, linking it to the given week. */
+/** Upload (or re-upload) a schedule xlsx, linking it to the given week.
+ *  Sends base64-encoded JSON instead of multipart to avoid python-multipart
+ *  dependency issues on the FastAPI side.
+ */
 export async function uploadScheduleForWeek(
   weekId: string,
   file: File,
 ): Promise<{ uploaded: boolean; filename: string; week_ending: string | null }> {
-  const form = new FormData();
-  form.append("file", file);
+  const arrayBuf = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuf);
+  // btoa on large files needs chunking to avoid call-stack overflow
+  let binary = "";
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  const b64 = btoa(binary);
   const res = await fetch(
     `${BASE}/v1/planning/weeks/upload?week_id=${encodeURIComponent(weekId)}`,
-    { method: "POST", body: form },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, data: b64 }),
+    },
   );
   if (!res.ok) {
     const body = await res.text().catch(() => "");

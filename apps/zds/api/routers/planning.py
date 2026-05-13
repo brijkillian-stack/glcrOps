@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ..core.dependencies import get_planning_service, get_placement_service
 from ..models.planning import WeeklyPlanningOverviewResponse
@@ -244,22 +244,31 @@ async def get_weekly_planning_overview(
     status_code=200,
 )
 async def upload_schedule(
-    file: UploadFile = File(...),
+    payload: dict = Body(...),
     week_id: str | None = Query(None, description="Pin upload to a specific week ID (skips filename parsing)"),
     placement_service: PlacementService = Depends(get_placement_service),
 ):
-    """Accept a .xlsx schedule upload, store it in Supabase Storage,
-    and update the matching week row's schedule_path.
+    """Accept a .xlsx schedule upload as base64-encoded JSON body.
+
+    Body shape: { "filename": "...", "data": "<base64>" }
 
     If week_id is provided the file is always linked to that week (used for
     re-uploads from the Week Overview).  Otherwise the week is matched by
     parsing the week_ending date from the filename, or created if missing.
+
+    Using JSON/base64 instead of multipart avoids the python-multipart
+    dependency check that FastAPI performs at route registration time.
     """
+    import base64
     import re
     from shared import storage as _storage
 
-    filename = file.filename or "schedule.xlsx"
-    data     = await file.read()
+    filename = payload.get("filename") or "schedule.xlsx"
+    raw_b64  = payload.get("data") or ""
+    try:
+        data = base64.b64decode(raw_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "bad_payload", "detail": "data must be valid base64"})
 
     # Upload to Supabase Storage
     try:
