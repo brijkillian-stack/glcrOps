@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * (Future tabs for Break Schedule, Zone Config, etc.)
  */
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { GlcrHeader } from "@/components/ui/GlcrHeader";
 import {
@@ -260,6 +260,7 @@ function TasksTab() {
   }
 
   const [filterCat,    setFilterCat]    = useState<string>("all");
+  const [search,       setSearch]       = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editingId,    setEditingId]    = useState<string | null>(null);
   const [addingNew,    setAddingNew]    = useState(false);
@@ -267,6 +268,14 @@ function TasksTab() {
   const [deletingId,   setDeletingId]   = useState<string | null>(null);
   const [error,        setError]        = useState<string | null>(null);
   const [reordering,   setReordering]   = useState(false);
+  const [toast,        setToast]        = useState<string | null>(null);
+  const toastTimer                      = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(msg: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  }
 
   // Unified edit form (used for both edit and create)
   const [editState, setEditState] = useState<EditState>(EMPTY_EDIT);
@@ -280,8 +289,10 @@ function TasksTab() {
     if (tasks && !reordering) setLocalOrder(tasks);
   }, [tasks, reordering]);
 
+  const q = search.trim().toLowerCase();
   const filtered = localOrder.filter((t) => {
     if (!showInactive && t.active === false) return false;
+    if (q && !t.name.toLowerCase().includes(q) && !(t.code ?? "").toLowerCase().includes(q)) return false;
     if (filterCat !== "all" && t.category !== filterCat) return false;
     return true;
   });
@@ -334,6 +345,7 @@ function TasksTab() {
       await mutate();
       bustTaskCache();
       setEditingId(null);
+      showToast("Task saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -348,6 +360,7 @@ function TasksTab() {
       await deleteZoneTask(task.id);
       await mutate();
       bustTaskCache();
+      showToast("Task archived");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -361,6 +374,7 @@ function TasksTab() {
       await patchZoneTask(task.id, { active: true });
       await mutate();
       bustTaskCache();
+      showToast("Task restored");
     } finally {
       setSavingId(null);
     }
@@ -376,6 +390,7 @@ function TasksTab() {
       bustTaskCache();
       setEditState(EMPTY_EDIT);
       setAddingNew(false);
+      showToast("Task created");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -431,8 +446,8 @@ function TasksTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Controls row */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Row 1: category filter pills */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFilterCat("all")}
@@ -447,18 +462,38 @@ function TasksTab() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none">
-            <input type="checkbox" checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#1A2340]" />
-            Show archived
-          </label>
-          <button
-            onClick={() => { setAddingNew(true); setEditState(EMPTY_EDIT); }}
-            className="flex items-center gap-1.5 h-8 px-4 rounded-xl text-[13px] font-semibold bg-[#1A2340] text-white hover:bg-[#2a3a60] active:scale-95 transition-all duration-100 no-select">
-            <PlusIcon /> Add Task
-          </button>
+      </div>
+
+      {/* Row 2: search + controls */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tasks…"
+            className="w-full h-8 pl-8 pr-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340] bg-white"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+              <XIcon />
+            </button>
+          )}
         </div>
+        <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none ml-auto">
+          <input type="checkbox" checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#1A2340]" />
+          Show archived
+        </label>
+        <button
+          onClick={() => { setAddingNew(true); setEditingId(null); setEditState(EMPTY_EDIT); }}
+          className="flex items-center gap-1.5 h-8 px-4 rounded-xl text-[13px] font-semibold bg-[#1A2340] text-white hover:bg-[#2a3a60] active:scale-95 transition-all duration-100 no-select">
+          <PlusIcon /> Add Task
+        </button>
       </div>
 
       {/* Error banner */}
@@ -469,16 +504,16 @@ function TasksTab() {
         </div>
       )}
 
-      {/* New / Edit task form */}
-      {(addingNew || editingId) && (
+      {/* New task form — appears at top */}
+      {addingNew && (
         <TaskEditForm
           state={editState}
-          isNew={addingNew}
-          saving={savingId === "new" || (editingId != null && savingId === editingId)}
+          isNew={true}
+          saving={savingId === "new"}
           onChange={setField}
           onToggleDay={toggleDay}
-          onSave={editingId ? () => { const t = tasks?.find(t => t.id === editingId); if (t) saveEdit(t); } : handleCreate}
-          onCancel={() => { setAddingNew(false); setEditingId(null); setError(null); }}
+          onSave={handleCreate}
+          onCancel={() => { setAddingNew(false); setError(null); }}
         />
       )}
 
@@ -493,11 +528,11 @@ function TasksTab() {
 
       {!isLoading && filtered.length === 0 && (
         <div className="text-center py-16 text-gray-400 text-sm">
-          {showInactive ? "No tasks found." : "No active tasks in this category."}
+          {q ? `No tasks matching "${search}".` : showInactive ? "No tasks found." : "No active tasks in this category."}
         </div>
       )}
 
-      {/* Task groups */}
+      {/* Task groups — edit form opens inline below the edited row */}
       {activeCats.map((catId) => {
         const rows = grouped[catId];
         if (!rows?.length) return null;
@@ -514,28 +549,50 @@ function TasksTab() {
               </span>
               <span className="ml-auto text-[10px] text-gray-300 font-medium">drag to reorder</span>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div>
               {rows.map((task, rowIdx) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  idx={rowIdx}
-                  isEditing={editingId === task.id}
-                  isSaving={savingId === task.id}
-                  isDeleting={deletingId === task.id}
-                  onStartEdit={() => { setAddingNew(false); startEdit(task); }}
-                  onCancelEdit={cancelEdit}
-                  onDelete={() => handleDelete(task)}
-                  onRestore={() => handleRestore(task)}
-                  onDragStart={() => onDragStart(rowIdx)}
-                  onDragOver={(e) => onDragOver(e, rowIdx)}
-                  onDrop={() => onDrop(rows)}
-                />
+                <React.Fragment key={task.id}>
+                  <TaskRow
+                    task={task}
+                    idx={rowIdx}
+                    isEditing={editingId === task.id}
+                    isSaving={savingId === task.id}
+                    isDeleting={deletingId === task.id}
+                    onStartEdit={() => { setAddingNew(false); startEdit(task); }}
+                    onCancelEdit={cancelEdit}
+                    onDelete={() => handleDelete(task)}
+                    onRestore={() => handleRestore(task)}
+                    onDragStart={() => onDragStart(rowIdx)}
+                    onDragOver={(e) => onDragOver(e, rowIdx)}
+                    onDrop={() => onDrop(rows)}
+                  />
+                  {editingId === task.id && (
+                    <div className="border-t border-[#C9A84C]/20 bg-amber-50/20">
+                      <TaskEditForm
+                        state={editState}
+                        isNew={false}
+                        saving={savingId === task.id}
+                        onChange={setField}
+                        onToggleDay={toggleDay}
+                        onSave={() => saveEdit(task)}
+                        onCancel={() => { setEditingId(null); setError(null); }}
+                      />
+                    </div>
+                  )}
+                  {rowIdx < rows.length - 1 && <div className="border-b border-gray-50" />}
+                </React.Fragment>
               ))}
             </div>
           </div>
         );
       })}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-2xl bg-[#1A2340] text-white text-[13px] font-medium shadow-xl pointer-events-none select-none">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -733,8 +790,8 @@ function TaskRow({ task, isEditing, isSaving, isDeleting, onStartEdit, onCancelE
         {task.name}
       </span>
 
-      {/* Reporting badges (shown on non-hover, compact) */}
-      <div className="flex items-center gap-1.5 shrink-0 opacity-70 group-hover:opacity-0 transition-opacity">
+      {/* Reporting badges — always visible */}
+      <div className="flex items-center gap-1.5 shrink-0">
         {task.labor_category && (
           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
             style={{ color: laborColor(task.labor_category), backgroundColor: `${laborColor(task.labor_category)}18` }}>
@@ -750,13 +807,13 @@ function TaskRow({ task, isEditing, isSaving, isDeleting, onStartEdit, onCancelE
           </span>
         )}
         {task.code && (
-          <span className="text-[10px] font-mono text-gray-400">{task.code}</span>
+          <span className="text-[10px] font-mono text-gray-300">{task.code}</span>
         )}
         <CategoryPill cat={task.category ?? ""} />
       </div>
 
-      {/* Actions — shown on hover */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      {/* Actions — always visible */}
+      <div className="flex items-center gap-1 shrink-0 ml-1">
         {inactive ? (
           <button onClick={onRestore} disabled={isSaving} title="Restore"
             className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-500 hover:bg-emerald-50 disabled:opacity-50 transition-colors">
@@ -765,11 +822,14 @@ function TaskRow({ task, isEditing, isSaving, isDeleting, onStartEdit, onCancelE
         ) : (
           <>
             <button onClick={onStartEdit} title="Edit"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-[#1A2340] transition-colors">
+              className={cn(
+                "w-7 h-7 rounded-lg flex items-center justify-center transition-colors",
+                isEditing ? "bg-[#1A2340] text-white" : "text-gray-300 hover:bg-gray-100 hover:text-[#1A2340]"
+              )}>
               <PencilIcon />
             </button>
             <button onClick={onDelete} disabled={isDeleting} title="Archive"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 transition-colors">
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 transition-colors">
               {isDeleting ? <span className="text-[10px]">…</span> : <TrashIcon />}
             </button>
           </>
