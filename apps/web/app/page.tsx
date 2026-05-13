@@ -329,6 +329,23 @@ function WeekRow({ week, index, onOpen, onContextMenu, onLongPressStart, onLongP
               {lastUpdated}
             </span>
           )}
+          {week.schedule_path ? (
+            <span className="flex items-center gap-1 text-emerald-600">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M4 6.5L6.5 4M3 4.5L2 5.5a2.121 2.121 0 003 3l1-1M7 5.5l1-1a2.121 2.121 0 00-3-3L4 2.5"
+                      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+              <span className="truncate max-w-[120px]">{week.schedule_path}</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-gray-300">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M4 6.5L6.5 4M3 4.5L2 5.5a2.121 2.121 0 003 3l1-1M7 5.5l1-1a2.121 2.121 0 00-3-3L4 2.5M1 1l8 8"
+                      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+              No schedule
+            </span>
+          )}
         </div>
       </div>
 
