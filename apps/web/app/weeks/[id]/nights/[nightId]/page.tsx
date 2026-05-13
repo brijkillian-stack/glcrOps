@@ -1592,7 +1592,7 @@ function CoveragePickerSheet({
 // ── Task Picker Sheet ─────────────────────────────────────────────────────────
 
 const CATEGORY_TABS: { id: string; label: string; cats: string[] }[] = [
-  { id: "zone",   label: "Zone",    cats: ["zone", "rr", "aux"] },
+  { id: "zone",   label: "Zone",    cats: ["zone", "rr", "aux", "sweep"] },
   { id: "am",     label: "AM",      cats: ["overlap_am"] },
   { id: "pm",     label: "PM",      cats: ["overlap_pm"] },
 ];

@@ -18,9 +18,11 @@ import {
   uploadScheduleForWeek,
   deleteWeekSchedule,
   deleteWeek,
+  fetchNightPlacements,
   type WeeklyPlanningOverviewResponse,
   type NightPlanningSnapshot,
   type EngineRunResult,
+  type SlimPlacement,
 } from "@/lib/forge-api";
 import { cn } from "@/lib/utils";
 import { mutate as globalMutate } from "swr";
@@ -553,23 +555,146 @@ function DayCard({
   if (night.override_count > 0)              flags.push({ text: `${night.override_count} override${night.override_count !== 1 ? "s" : ""}`, color: "text-orange-500" });
   if (night.multi_area_overlap_count > 0)    flags.push({ text: `${night.multi_area_overlap_count} overlap${night.multi_area_overlap_count !== 1 ? "s" : ""}`, color: "text-blue-500" });
 
+  // ── Card flip on 2s hover ────────────────────────────────────────────
+  const [isFlipped, setIsFlipped]     = useState(false);
+  const [flipSlots, setFlipSlots]     = useState<SlimPlacement[] | null>(null);
+  const [flipLoading, setFlipLoading] = useState(false);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleMouseEnter() {
+    hoverTimer.current = setTimeout(async () => {
+      if (!flipSlots) {
+        setFlipLoading(true);
+        try {
+          const slots = await fetchNightPlacements(night.night_id);
+          setFlipSlots(slots);
+        } finally {
+          setFlipLoading(false);
+        }
+      }
+      setIsFlipped(true);
+    }, 2000);
+  }
+
+  function handleMouseLeave() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setIsFlipped(false);
+  }
+
+  // Back-face slot groups (only filled slots)
+  const filledSlots    = (flipSlots ?? []).filter(s => s.tm_name);
+  const backZones      = filledSlots.filter(s => s.zone_type === "zone");
+  const backRRs        = filledSlots.filter(s => s.zone_type === "restroom");
+  const backAux        = filledSlots.filter(s => s.zone_type === "auxiliary");
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-      onContextMenu={onContextMenu}
-      onPointerDown={onLongPressStart}
-      onPointerUp={onLongPressEnd}
-      onPointerCancel={onLongPressEnd}
-      className="relative snap-start shrink-0 w-52 rounded-3xl bg-white shadow-card cursor-pointer no-select
-                 transition-shadow duration-200 overflow-hidden flex flex-col"
-      onClick={(e) => {
-        // Don't navigate if clicking the note area or its buttons
-        if ((e.target as HTMLElement).closest("[data-note-area]")) return;
-        onOpen();
-      }}
+      className="snap-start shrink-0 w-52"
+      style={{ perspective: "1000px" }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
+      <div
+        style={{
+          transformStyle: "preserve-3d",
+          transition: "transform 0.45s cubic-bezier(0.4,0,0.2,1)",
+          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          position: "relative",
+        }}
+      >
+
+      {/* ── BACK face ─────────────────────────────────────── */}
+      <div
+        style={{
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
+          transform: "rotateY(180deg)",
+          position: "absolute",
+          top: 0, left: 0, right: 0, bottom: 0,
+        }}
+        className="rounded-3xl overflow-hidden flex flex-col bg-[#0F1E38] shadow-card"
+      >
+        <div className="h-[5px] w-full shrink-0" style={{ backgroundColor: accentColor }} />
+        <div className="px-3 pt-3 pb-1 flex-1 overflow-y-auto">
+          <div className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">
+            {night.day_name} · Assignments
+          </div>
+          {flipLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-white/10 border-t-white/50 rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {backZones.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Zones</div>
+                  {backZones.map(s => (
+                    <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
+                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
+                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {backRRs.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Restrooms</div>
+                  {backRRs.map(s => (
+                    <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
+                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
+                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {backAux.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Aux</div>
+                  {backAux.map(s => (
+                    <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
+                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
+                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!flipLoading && filledSlots.length === 0 && (
+                <p className="text-[11px] text-white/25 py-4 text-center">No assignments yet</p>
+              )}
+            </>
+          )}
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          className="flex items-center justify-between px-4 py-3 border-t border-white/10
+                     text-[12px] font-semibold text-blue-400 hover:bg-white/5
+                     transition-colors no-select shrink-0"
+        >
+          <span>Open Planner</span>
+          <ChevronRightIcon />
+        </button>
+      </div>
+
+      {/* ── FRONT face ────────────────────────────────────── */}
+      <div
+        style={{
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
+        }}
+        onContextMenu={onContextMenu}
+        onPointerDown={onLongPressStart}
+        onPointerUp={onLongPressEnd}
+        onPointerCancel={onLongPressEnd}
+        className="relative rounded-3xl bg-white shadow-card cursor-pointer no-select
+                   transition-shadow duration-200 overflow-hidden flex flex-col"
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest("[data-note-area]")) return;
+          onOpen();
+        }}
+      >
       {/* Accent bar */}
       <div className="h-[5px] w-full shrink-0" style={{ backgroundColor: accentColor }} />
 
@@ -725,6 +850,9 @@ function DayCard({
           <div className="w-6 h-6 border-2 border-gray-200 border-t-[#C9A84C] rounded-full animate-spin" />
         </div>
       )}
+      </div>{/* end FRONT face */}
+
+      </div>{/* end flip inner */}
     </motion.div>
   );
 }

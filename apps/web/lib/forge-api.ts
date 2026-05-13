@@ -589,6 +589,26 @@ export async function deleteWeekSchedule(
   }
 }
 
+// ── Week overview card flip ───────────────────────────────────────────────────
+
+/** Minimal placement shape needed for the week overview card flip back side. */
+export interface SlimPlacement {
+  slot_id: string;
+  zone_id: string;
+  zone_label: string;
+  zone_type: "zone" | "restroom" | "auxiliary";
+  tm_id: string | null;
+  tm_name: string | null;
+}
+
+/** Fetch zone placements for a night — used by the week overview card flip.
+ *  Returns only the placements array from NightPlacementsResponse.
+ */
+export async function fetchNightPlacements(nightId: string): Promise<SlimPlacement[]> {
+  const data = await get<{ placements: SlimPlacement[] }>(`/v1/nights/${nightId}/placements`);
+  return data.placements ?? [];
+}
+
 /** Permanently delete a week and all associated data. */
 export async function deleteWeek(weekId: string): Promise<void> {
   const res = await fetch(

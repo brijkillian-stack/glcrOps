@@ -364,7 +364,7 @@ class PlacementService:
             wanted_cat = cat_map.get(slot_type)
             tasks = [
                 t for t in tasks
-                if t["category"] in ("overlap_am", "overlap_pm")
+                if t["category"] in ("overlap_am", "overlap_pm", "sweep")
                 or t["category"] == wanted_cat
             ]
 

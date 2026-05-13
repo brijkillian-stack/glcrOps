@@ -140,19 +140,39 @@ class PlanningService:
             # ── Sweeper status ─────────────────────────────────────────
             sweeper_main_filled = False
             sweeper_sr_filled   = False
-            try:
-                sw_res = self.placement.supabase.table("night_sweepers") \
-                    .select("slot,tm_id") \
-                    .eq("night_id", nid) \
-                    .execute()
-                for sw in (sw_res.data or []):
-                    if sw.get("tm_id"):
-                        if sw["slot"] == "main":
-                            sweeper_main_filled = True
-                        elif sw["slot"] == "sr":
-                            sweeper_sr_filled = True
-            except Exception as exc:
-                log.warning("sweeper fetch(%s) failed: %s", nid, exc)
+
+            # Primary: scan zone_assignments (zone / rr / aux cards) for
+            # rows where is_sweeper=True — these are the actual sweeper
+            # positions in the deployment grid.  sweeper_route "sr" maps
+            # to Sweeper 9/10/SR; anything else (including "main" or null)
+            # maps to Sweeper 5/8/HL (main route).
+            for a in assignments:
+                if not a.get("is_sweeper"):
+                    continue
+                if a.get("tm_id") in (None, "", "null"):
+                    continue
+                route = (a.get("sweeper_route") or "").lower()
+                if route == "sr":
+                    sweeper_sr_filled = True
+                else:
+                    sweeper_main_filled = True
+
+            # Fallback: also check the dedicated night_sweepers table
+            # (populated by the manual Sweeper panel in the Daily Planner).
+            if not (sweeper_main_filled and sweeper_sr_filled):
+                try:
+                    sw_res = self.placement.supabase.table("night_sweepers") \
+                        .select("slot,tm_id") \
+                        .eq("night_id", nid) \
+                        .execute()
+                    for sw in (sw_res.data or []):
+                        if sw.get("tm_id"):
+                            if sw["slot"] == "main":
+                                sweeper_main_filled = True
+                            elif sw["slot"] == "sr":
+                                sweeper_sr_filled = True
+                except Exception as exc:
+                    log.warning("sweeper fetch(%s) failed: %s", nid, exc)
 
             # ── Night note ─────────────────────────────────────────────
             night_note = night.get("notes")
