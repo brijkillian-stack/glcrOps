@@ -457,8 +457,8 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
-    async def patch_overlap_tm(self, overlap_id: str, tm_id: Optional[str]) -> dict:
-        """Update the tm_id on a single overlap_assignments row.
+    async def patch_overlap_tm(self, overlap_id: str, tm_id: Optional[str], task: Optional[str] = None) -> dict:
+        """Update the tm_id (and optionally task) on a single overlap_assignments row.
 
         Sets is_filled=True when tm_id is provided, False when clearing.
         Invalidates the night's overlaps cache.
@@ -468,6 +468,8 @@ class PlacementService:
             "tm_id":     tm_id,
             "is_filled": tm_id is not None,
         }
+        if task is not None:
+            payload["task"] = task
         try:
             res = (
                 self.supabase.table("overlap_assignments")
@@ -636,6 +638,31 @@ class PlacementService:
                     "note":       None,
                     "break_wave": row.get("group_num"),
                 })
+
+        if not tms:
+            # Fallback: build list from zone_assignments so the Schedule tab
+            # is populated even before break waves have been computed.
+            try:
+                za_res = (
+                    self.supabase.table("zone_assignments")
+                    .select("entities(id, display_name)")
+                    .eq("night_id", night_id)
+                    .execute()
+                )
+                for row in (za_res.data or []):
+                    entity = row.get("entities") or {}
+                    za_tm_id = entity.get("id") or ""
+                    if za_tm_id and za_tm_id not in seen:
+                        seen.add(za_tm_id)
+                        tms.append({
+                            "tm_id":      za_tm_id,
+                            "tm_name":    entity.get("display_name") or "",
+                            "status":     "present",
+                            "note":       None,
+                            "break_wave": None,
+                        })
+            except Exception as exc:
+                log.warning("get_night_schedule zone_assignments fallback(%s) failed: %s", night_id, exc)
 
         if not tms:
             return tms

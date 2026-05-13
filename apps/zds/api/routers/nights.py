@@ -187,6 +187,7 @@ async def get_night_overlaps(
 
 class AssignOverlapTMPayload(BaseModel):
     tm_id: Optional[str] = None   # None = clear the slot
+    task:  Optional[str] = None   # None = leave task unchanged
 
 
 @router.patch(
@@ -213,6 +214,7 @@ async def patch_overlap_assignment(
         row = await placement_service.patch_overlap_tm(
             overlap_id=overlap_id,
             tm_id=payload.tm_id,
+            task=payload.task,
         )
     except Exception as exc:
         log.exception("patch_overlap_tm(%s) raised", overlap_id)

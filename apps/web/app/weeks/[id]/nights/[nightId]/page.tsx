@@ -9,7 +9,7 @@ import { FillRing } from "@/components/ui/FillRing";
 import { ContextMenu, type ContextAction } from "@/components/ui/ContextMenu";
 import { SyncBar } from "@/components/ui/SyncBar";
 import { useNightPlacements, useRealtimeSync, type TMAssignment, type BreakWave, type BreakGroupSlot, type GroupId } from "@/lib/sync";
-import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, fetchNightOverlaps, patchOverlapTM, overlapPositionLabel, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry, type OverlapSlot } from "@/lib/forge-api";
+import { fetchActiveTMs, fetchZoneTasks, fetchWeekOverview, patchSlotTasks, patchWeekStatus, runEngineForNight, fetchNightSchedule, fetchNightTrail, setTMStatus, addTrailEntry, fetchNightOverlaps, patchOverlapTM, patchOverlapTask, overlapPositionLabel, type ActiveTM, type ZoneTask, type EngineRunResult, type ScheduledTM, type TMStatus, type TrailEntry, type OverlapSlot } from "@/lib/forge-api";
 import { mutate as globalMutate } from "swr";
 import { cn, groupColor, zoneAccentColor, rrSideTint } from "@/lib/utils";
 import { formatBreakTime } from "@/lib/shift-date";
@@ -483,7 +483,13 @@ export default function DailyPlannerPage() {
             <button
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium
                          bg-white/10 text-white/80 hover:bg-white/20 transition-colors no-select"
-              onClick={() => setActiveSection("breaks")}
+              onClick={() => {
+                if (data?.date) {
+                  window.open(`/view/day/${data.date}`, "_blank");
+                } else {
+                  setActiveSection("breaks");
+                }
+              }}
             >
               <WaveIcon />
               Break Waves
@@ -2435,13 +2441,134 @@ function TrailView({ nightId }: { nightId: string }) {
 }
 
 
+// ── Overlap Card (top-level to prevent remount-on-every-render) ───────────────
+
+interface OverlapCardProps {
+  slot: OverlapSlot | null;
+  index: number;
+  window: "pm" | "am";
+  saving: string | null;
+  pencilHover: string | null;
+  onCardClick: (e: React.MouseEvent, slot: OverlapSlot) => void;
+  onPointerEnter: (key: string) => void;
+  onPointerLeave: () => void;
+}
+
+function OverlapCard({ slot, index, window: win, saving, pencilHover, onCardClick, onPointerEnter, onPointerLeave }: OverlapCardProps) {
+  const position = index + 1;
+  const label    = overlapPositionLabel(position, win);
+  const isEmpty  = !slot?.tm_id;
+  const isSaving = slot ? saving === slot.id : false;
+  const hoverKey = `${win}-${position}`;
+  const isHover  = pencilHover === hoverKey;
+  const initials = slot?.tm_name?.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2) ?? "";
+
+  // No DB row yet — engine hasn't run for this position
+  if (!slot) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        className="card rounded-2xl overflow-hidden opacity-40"
+      >
+        <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
+        <div className="p-3 flex flex-col gap-2">
+          <div className="text-[13px] font-bold text-gray-400">{label}</div>
+          <div className="text-[11px] text-gray-300 italic">No engine data</div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      onClick={(e) => onCardClick(e, slot)}
+      onContextMenu={(e) => onCardClick(e, slot)}
+      onPointerEnter={() => onPointerEnter(hoverKey)}
+      onPointerLeave={onPointerLeave}
+      className={cn(
+        "card rounded-2xl overflow-hidden cursor-pointer no-select",
+        "transition-all duration-150",
+        isHover && "shadow-card-hover ring-2 ring-[#C9A84C]/40",
+        isEmpty && "opacity-75",
+      )}
+    >
+      {/* Gold accent bar */}
+      <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
+
+      <div className="p-3 flex flex-col gap-2.5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-1">
+          <div className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
+            {label}
+            <span className="text-gray-300 shrink-0 mt-0.5"><ChevronRightIcon /></span>
+          </div>
+          {isSaving && (
+            <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
+            </svg>
+          )}
+        </div>
+
+        {/* TM info */}
+        <div className="flex items-center gap-2">
+          {isEmpty ? <EmptySlotIcon /> : <UserIcon initials={initials} />}
+          <div className="min-w-0">
+            <div className={cn(
+              "text-[13px] font-semibold truncate",
+              isEmpty ? "text-gray-300 italic" : "text-gray-800"
+            )}>
+              {slot.tm_name || "Unassigned"}
+            </div>
+          </div>
+        </div>
+
+        {/* Task */}
+        {slot.task && (
+          <ul className="flex flex-col gap-0.5">
+            {slot.task.split(/[,;]/).map((t, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
+                <TaskDotIcon />
+                <span className="truncate">{t.trim()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Pencil hover overlay */}
+      <AnimatePresence>
+        {isHover && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-[#C9A84C]/05 pointer-events-none
+                       flex items-end justify-end p-2"
+          >
+            <span className="text-[10px] font-semibold text-[#C9A84C] bg-[#C9A84C]/10
+                             px-2 py-0.5 rounded-full">
+              Edit
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+
 // ── Overlaps View ─────────────────────────────────────────────────────────────
 
 function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: ActiveTM[] }) {
   const { data: overlaps, mutate } = useSWR(
     `forge:overlaps:${nightId}`,
     () => fetchNightOverlaps(nightId),
-    { revalidateOnFocus: true, refreshInterval: 30_000 },
+    { revalidateOnFocus: false, refreshInterval: 60_000 },
   );
 
   const [pickerOverlap, setPickerOverlap]   = useState<OverlapSlot | null>(null);
@@ -2449,6 +2576,11 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
   const [ctxPos, setCtxPos]                 = useState<{ x: number; y: number } | undefined>();
   const [pencilHover, setPencilHover]       = useState<string | null>(null);
   const [saving, setSaving]                 = useState<string | null>(null);
+
+  // Task edit modal state
+  const [editTaskOverlap, setEditTaskOverlap] = useState<OverlapSlot | null>(null);
+  const [editTaskValue, setEditTaskValue]     = useState("");
+  const [savingTask, setSavingTask]           = useState(false);
 
   async function handleAssign(overlap: OverlapSlot, tm: ActiveTM | null) {
     setSaving(overlap.id);
@@ -2472,16 +2604,48 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
     }
   }
 
-  function openCtx(e: React.MouseEvent, slot: OverlapSlot) {
+  async function handleSaveTask() {
+    if (!editTaskOverlap) return;
+    setSavingTask(true);
+    const newTask = editTaskValue.trim();
+    mutate(
+      (prev) => prev?.map((o) =>
+        o.id === editTaskOverlap.id ? { ...o, task: newTask } : o
+      ),
+      false,
+    );
+    try {
+      await patchOverlapTask(nightId, editTaskOverlap.id, newTask);
+    } catch (err) {
+      console.error("patchOverlapTask failed:", err);
+    } finally {
+      setSavingTask(false);
+      setEditTaskOverlap(null);
+      mutate();
+    }
+  }
+
+  const openCtx = useCallback((e: React.MouseEvent, slot: OverlapSlot) => {
     e.preventDefault();
     setCtxOverlap(slot);
     setCtxPos({ x: e.clientX, y: e.clientY });
-  }
+  }, []);
+
+  const handlePointerEnter = useCallback((key: string) => setPencilHover(key), []);
+  const handlePointerLeave = useCallback(() => setPencilHover(null), []);
 
   const ctxActions: ContextAction[] = ctxOverlap ? [
     {
       label: "Assign TM",
       onClick: () => { setPickerOverlap(ctxOverlap); setCtxOverlap(null); },
+    },
+    {
+      label: "Edit Task",
+      onClick: () => {
+        setEditTaskValue(ctxOverlap.task ?? "");
+        setEditTaskOverlap(ctxOverlap);
+        setCtxOverlap(null);
+      },
     },
     ...(ctxOverlap.tm_id ? [{
       label: "Clear TM",
@@ -2517,112 +2681,6 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
     );
   }
 
-  function OverlapCard({ slot, index, window: win }: { slot: OverlapSlot | null; index: number; window: "pm" | "am" }) {
-    const position = index + 1;
-    const label    = overlapPositionLabel(position, win);
-    const isEmpty  = !slot?.tm_id;
-    const isSaving = slot ? saving === slot.id : false;
-    const isHover  = slot ? pencilHover === `${win}-${position}` : false;
-    const initials = slot?.tm_name?.split(" ").map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2) ?? "";
-
-    // No DB row yet — engine hasn't run for this position
-    if (!slot) {
-      return (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="card rounded-2xl overflow-hidden opacity-40"
-        >
-          <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
-          <div className="p-3 flex flex-col gap-2">
-            <div className="text-[13px] font-bold text-gray-400">{label}</div>
-            <div className="text-[11px] text-gray-300 italic">No engine data</div>
-          </div>
-        </motion.div>
-      );
-    }
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: index * 0.03, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        onClick={(e) => openCtx(e, slot)}
-        onContextMenu={(e) => openCtx(e, slot)}
-        onPointerEnter={() => setPencilHover(`${win}-${position}`)}
-        onPointerLeave={() => setPencilHover(null)}
-        className={cn(
-          "card rounded-2xl overflow-hidden cursor-pointer no-select",
-          "transition-all duration-150",
-          isHover && "shadow-card-hover ring-2 ring-[#C9A84C]/40",
-          isEmpty && "opacity-75",
-        )}
-      >
-        {/* Gold accent bar */}
-        <div className="h-[5px] w-full" style={{ backgroundColor: "#C9A84C" }} />
-
-        <div className="p-3 flex flex-col gap-2.5">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-1">
-            <div className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
-              {label}
-              <span className="text-gray-300 shrink-0 mt-0.5"><ChevronRightIcon /></span>
-            </div>
-            {isSaving && (
-              <svg className="w-3 h-3 animate-spin text-gray-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
-              </svg>
-            )}
-          </div>
-
-          {/* TM info */}
-          <div className="flex items-center gap-2">
-            {isEmpty ? <EmptySlotIcon /> : <UserIcon initials={initials} />}
-            <div className="min-w-0">
-              <div className={cn(
-                "text-[13px] font-semibold truncate",
-                isEmpty ? "text-gray-300 italic" : "text-gray-800"
-              )}>
-                {slot.tm_name || "Unassigned"}
-              </div>
-            </div>
-          </div>
-
-          {/* Task */}
-          {slot.task && (
-            <ul className="flex flex-col gap-0.5">
-              {slot.task.split(/[,;]/).map((t, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
-                  <TaskDotIcon />
-                  <span className="truncate">{t.trim()}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Pencil hover overlay */}
-        <AnimatePresence>
-          {isHover && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-[#C9A84C]/05 pointer-events-none
-                         flex items-end justify-end p-2"
-            >
-              <span className="text-[10px] font-semibold text-[#C9A84C] bg-[#C9A84C]/10
-                               px-2 py-0.5 rounded-full">
-                Edit
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    );
-  }
-
   const pmSlots = buildWindowSlots("pm");
   const amSlots = buildWindowSlots("am");
 
@@ -2633,7 +2691,17 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
         <h2 className="section-header">PM Overlaps</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {pmSlots.map((slot, i) => (
-            <OverlapCard key={slot?.id ?? `pm-${i}`} slot={slot} index={i} window="pm" />
+            <OverlapCard
+              key={slot?.id ?? `pm-${i}`}
+              slot={slot}
+              index={i}
+              window="pm"
+              saving={saving}
+              pencilHover={pencilHover}
+              onCardClick={openCtx}
+              onPointerEnter={handlePointerEnter}
+              onPointerLeave={handlePointerLeave}
+            />
           ))}
         </div>
       </section>
@@ -2643,7 +2711,17 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
         <h2 className="section-header">AM Overlaps</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {amSlots.map((slot, i) => (
-            <OverlapCard key={slot?.id ?? `am-${i}`} slot={slot} index={i} window="am" />
+            <OverlapCard
+              key={slot?.id ?? `am-${i}`}
+              slot={slot}
+              index={i}
+              window="am"
+              saving={saving}
+              pencilHover={pencilHover}
+              onCardClick={openCtx}
+              onPointerEnter={handlePointerEnter}
+              onPointerLeave={handlePointerLeave}
+            />
           ))}
         </div>
       </section>
@@ -2664,6 +2742,64 @@ function OverlapsView({ nightId, tmRoster }: { nightId: string; tmRoster: Active
         onClear={() => pickerOverlap && handleAssign(pickerOverlap, null)}
         onClose={() => setPickerOverlap(null)}
       />
+
+      {/* Edit Task Modal */}
+      <AnimatePresence>
+        {editTaskOverlap && (
+          <motion.div
+            key="task-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setEditTaskOverlap(null); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 12 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 flex flex-col gap-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div>
+                <h3 className="text-[15px] font-bold text-gray-900">Edit Task</h3>
+                <p className="text-[12px] text-gray-400 mt-0.5">
+                  {overlapPositionLabel(editTaskOverlap.position, editTaskOverlap.overlap_window)}
+                  {editTaskOverlap.tm_name ? ` · ${editTaskOverlap.tm_name}` : ""}
+                </p>
+              </div>
+              <textarea
+                autoFocus
+                rows={3}
+                value={editTaskValue}
+                onChange={(e) => setEditTaskValue(e.target.value)}
+                placeholder="e.g. Sweep Main, and Zone 3"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px]
+                           text-gray-800 placeholder-gray-300 resize-none focus:outline-none
+                           focus:ring-2 focus:ring-[#C9A84C]/40 focus:border-[#C9A84C]"
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setEditTaskOverlap(null)}
+                  className="h-8 px-4 rounded-lg text-[12px] font-medium bg-gray-100 text-gray-600
+                             hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTask}
+                  disabled={savingTask}
+                  className="h-8 px-4 rounded-lg text-[12px] font-semibold bg-[#C9A84C] text-white
+                             hover:bg-[#b8943e] transition-colors disabled:opacity-50 disabled:cursor-wait"
+                >
+                  {savingTask ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
