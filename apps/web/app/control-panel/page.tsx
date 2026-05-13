@@ -265,8 +265,6 @@ function TasksTab() {
   const [localOrder, setLocalOrder]   = useState<ZoneTask[]>([]);
   const dragSrcIdx                    = useRef<number | null>(null);
   const dragOverIdx                   = useRef<number | null>(null);
-  const newNameRef                    = useRef<HTMLInputElement>(null);
-
   // Keep localOrder in sync with fetched tasks (but not while reordering)
   useEffect(() => {
     if (tasks && !reordering) setLocalOrder(tasks);
@@ -442,7 +440,7 @@ function TasksTab() {
             Show archived
           </label>
           <button
-            onClick={() => { setAddingNew(true); setEditState(EMPTY_EDIT); setTimeout(() => newNameRef.current?.focus(), 50); }}
+            onClick={() => { setAddingNew(true); setEditState(EMPTY_EDIT); }}
             className="flex items-center gap-1.5 h-8 px-4 rounded-xl text-[13px] font-semibold bg-[#1A2340] text-white hover:bg-[#2a3a60] active:scale-95 transition-all duration-100 no-select">
             <PlusIcon /> Add Task
           </button>
@@ -467,7 +465,6 @@ function TasksTab() {
           onToggleDay={toggleDay}
           onSave={editingId ? () => { const t = tasks?.find(t => t.id === editingId); if (t) saveEdit(t); } : handleCreate}
           onCancel={() => { setAddingNew(false); setEditingId(null); setError(null); }}
-          newNameRef={newNameRef}
         />
       )}
 
@@ -539,10 +536,9 @@ interface TaskEditFormProps {
   onToggleDay: (day: DayCode) => void;
   onSave: () => void;
   onCancel: () => void;
-  newNameRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-function TaskEditForm({ state, isNew, saving, onChange, onToggleDay, onSave, onCancel, newNameRef }: TaskEditFormProps) {
+function TaskEditForm({ state, isNew, saving, onChange, onToggleDay, onSave, onCancel }: TaskEditFormProps) {
   const inputCls = "w-full h-9 px-3 rounded-xl border border-gray-200 text-[13px] focus:outline-none focus:border-[#1A2340] bg-white";
   const selectCls = "w-full h-9 px-2 rounded-xl border border-gray-200 text-[13px] bg-white focus:outline-none focus:border-[#1A2340]";
   const labelCls = "block text-[11px] font-semibold text-gray-400 mb-1 uppercase tracking-wide";
@@ -559,7 +555,7 @@ function TaskEditForm({ state, isNew, saving, onChange, onToggleDay, onSave, onC
         <div className="flex flex-wrap gap-3">
           <div className="flex-1 min-w-[200px]">
             <label className={labelCls}>Name *</label>
-            <input ref={newNameRef} type="text" value={state.name}
+            <input type="text" value={state.name}
               onChange={(e) => onChange("name", e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancel(); }}
               placeholder="Task name…" className={inputCls} autoFocus={isNew} />
