@@ -228,6 +228,27 @@ export default function DailyPlannerPage() {
     }
   }
 
+  // ── Clear All Tasks ───────────────────────────────────────────────────────
+  const [clearingTasks, setClearingTasks] = useState(false);
+
+  async function handleClearAllTasks() {
+    if (clearingTasks || !data?.placements.length) return;
+    setClearingTasks(true);
+    try {
+      const patches = data.placements
+        .filter((p) => (p.tasks ?? []).length > 0)
+        .map((p) => patchSlotTasks(nightId, p.slot_id, []).then(() => {}));
+      if (patches.length > 0) {
+        await Promise.all(patches);
+        refresh();
+      }
+    } catch (err) {
+      console.error("clearAllTasks failed:", err);
+    } finally {
+      setClearingTasks(false);
+    }
+  }
+
   // TM roster — cached by SWR, refreshes every 10 min (default [] prevents undefined in picker)
   const { data: tmRoster = [] } = useSWR("forge:tms:active", () => fetchActiveTMs(), {
     revalidateOnFocus: false,
@@ -477,6 +498,29 @@ export default function DailyPlannerPage() {
                 </svg>
               )}
               {fillingDefaults ? "Filling…" : "Fill Tasks"}
+            </button>
+
+            {/* Clear All Tasks */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors no-select",
+                clearingTasks
+                  ? "bg-red-500/20 text-red-300 cursor-wait"
+                  : "bg-white/10 text-white/80 hover:bg-red-500/20 hover:text-red-300",
+              )}
+              onClick={handleClearAllTasks}
+              disabled={clearingTasks}
+              title="Clear all tasks from every slot"
+            >
+              {clearingTasks ? (
+                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <path d="M2 3h9M5 3V2h3v1M3 3l.6 7.5h5.8L10 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M5.5 5.5v3M7.5 5.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+              )}
+              {clearingTasks ? "Clearing…" : "Clear Tasks"}
             </button>
 
             {/* Re-up button (fills remaining gaps) */}
