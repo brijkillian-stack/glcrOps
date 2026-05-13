@@ -653,12 +653,12 @@ export default function DailyPlannerPage() {
                 </div>
               </section>
 
-              {/* Restrooms strip */}
+              {/* Restrooms — 2-row grid, matches zone card width */}
               <section>
                 <h2 className="section-header">Restrooms</h2>
-                <div className="flex gap-2.5 overflow-x-auto pb-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                   {restrooms.map((slot, i) => (
-                    <RestroomPill
+                    <SlotCard
                       key={slot.slot_id}
                       slot={slot}
                       index={i}
@@ -668,12 +668,12 @@ export default function DailyPlannerPage() {
                 </div>
               </section>
 
-              {/* Auxiliary row */}
+              {/* Auxiliary — grid layout matching restrooms */}
               <section>
                 <h2 className="section-header">Auxiliary</h2>
-                <div className="flex gap-2.5 flex-wrap">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                   {auxiliary.map((slot, i) => (
-                    <RestroomPill
+                    <SlotCard
                       key={slot.slot_id}
                       slot={slot}
                       index={i}
@@ -925,19 +925,17 @@ function ZoneCard({
       onPointerEnter={onPencilEnter}
       onPointerLeave={onPencilLeave}
       className={cn(
-        "card rounded-2xl overflow-hidden cursor-pointer no-select",
+        "card flex flex-col rounded-2xl overflow-hidden cursor-pointer no-select h-full",
         "transition-all duration-150",
         isPencilHover && "shadow-card-hover ring-2 ring-[#C9A84C]/40",
         isEmpty && "opacity-75"
       )}
     >
-      {/* 5px color accent top bar (from mockup #4) */}
-      <div
-        className="h-[5px] w-full"
-        style={{ backgroundColor: accent }}
-      />
+      {/* 5px color accent top bar */}
+      <div className="h-[5px] w-full shrink-0" style={{ backgroundColor: accent }} />
 
-      <div className="p-3 flex flex-col gap-2.5">
+      {/* Card body — flex-col flex-1 so all cards in a row share the same height */}
+      <div className="p-3 flex flex-col gap-2.5 flex-1">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -979,28 +977,23 @@ function ZoneCard({
           </div>
         </div>
 
-        {/* Regular tasks — up to 3 shown, "+N more" overflow */}
+        {/* Regular tasks — all shown, no truncation */}
         {regularTasks.length > 0 && (
           <ul className="flex flex-col gap-0.5">
-            {regularTasks.slice(0, 3).map((t, i) => (
+            {regularTasks.map((t, i) => (
               <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-snug">
                 <TaskDotIcon />
                 <span className="truncate">{t}</span>
               </li>
             ))}
-            {regularTasks.length > 3 && (
-              <li className="text-[10px] font-semibold text-gray-400 pl-3">
-                +{regularTasks.length - 3} more
-              </li>
-            )}
           </ul>
         )}
 
         {/* Coverage tasks — "and Zone/Restroom X" — bold, centered, separated */}
         {coverageTasks.length > 0 && (
           <div className={cn(
-            "flex flex-col gap-0.5 pt-1.5",
-            regularTasks.length > 0 && "border-t border-gray-100 mt-0.5"
+            "flex flex-col gap-0.5 pt-1.5 mt-auto",
+            regularTasks.length > 0 && "border-t border-gray-100"
           )}>
             {coverageTasks.map((t, i) => (
               <div key={i} className="text-[11.5px] font-bold text-gray-700 text-center
@@ -1013,7 +1006,7 @@ function ZoneCard({
 
         {/* Status badges row */}
         {(slot.is_override || slot.is_locked) && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-auto">
             {slot.is_locked && (
               <div className="flex items-center gap-1">
                 <svg width="10" height="10" viewBox="0 0 13 13" fill="none" className="text-[#C9A84C]">
@@ -1064,9 +1057,11 @@ function ZoneCard({
   );
 }
 
-// ── Restroom Pill ─────────────────────────────────────────────────────────────
+// ── Slot Card (Restroom + Aux) ────────────────────────────────────────────────
+// Shows zone label, side badge, TM name, tasks — left accent bar style.
+// h-full so all cards in a grid row match the tallest card.
 
-function RestroomPill({
+function SlotCard({
   slot,
   index,
   onContextMenu,
@@ -1075,59 +1070,103 @@ function RestroomPill({
   index: number;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const accent  = zoneAccentColor(slot.zone_id);  // zone-family — matches print
-  const bgTint  = rrSideTint(slot.rr_side);       // whisper pink/blue for mens/womens
-  const sideLabel = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
+  const accent     = zoneAccentColor(slot.zone_id);
+  const bgTint     = rrSideTint(slot.rr_side);
+  const sideLabel  = slot.rr_side === "mens" ? "Men's" : slot.rr_side === "womens" ? "Women's" : null;
+  const isEmpty    = !slot.tm_id;
+  const regularTasks  = (slot.tasks ?? []).filter((t) => !isCoverageTask(t));
+  const coverageTasks = (slot.tasks ?? []).filter((t) => isCoverageTask(t));
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.03 }}
       onClick={onContextMenu}
       onContextMenu={onContextMenu}
-      className="card flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl
-                 cursor-pointer no-select shrink-0 min-w-[160px]"
+      className={cn(
+        "card flex gap-2.5 px-3 py-2.5 rounded-2xl cursor-pointer no-select h-full",
+        "transition-all duration-150 hover:shadow-card-hover",
+        isEmpty && "opacity-75",
+      )}
       style={{ backgroundColor: bgTint !== "transparent" ? bgTint : undefined }}
     >
-      {/* Zone-family left accent bar */}
+      {/* Zone-family left accent bar — stretches full card height */}
       <div
-        className="w-1.5 rounded-full min-h-[32px] shrink-0"
+        className="w-1.5 rounded-full shrink-0 self-stretch"
         style={{ backgroundColor: accent }}
       />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <div className="text-[12px] font-semibold text-gray-700 truncate">{slot.zone_label}</div>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1 flex flex-col gap-1">
+        {/* Label row */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[12px] font-semibold text-gray-700 leading-tight">
+            {slot.zone_label}
+          </span>
           {sideLabel && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
-                  style={{
-                    backgroundColor: `${accent}22`,
-                    color: accent,
-                  }}>
+            <span
+              className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 leading-tight"
+              style={{ backgroundColor: `${accent}22`, color: accent }}
+            >
               {sideLabel}
             </span>
           )}
+          {slot.is_locked && (
+            <svg width="10" height="10" viewBox="0 0 13 13" fill="none" className="text-[#C9A84C] shrink-0">
+              <rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          )}
         </div>
-        <div className={cn("text-[11px] truncate", slot.tm_id ? "text-gray-500" : "text-gray-300 italic")}>
+
+        {/* TM name */}
+        <div className={cn(
+          "text-[12px] leading-tight",
+          isEmpty ? "text-gray-300 italic font-normal" : "text-gray-700 font-medium",
+        )}>
           {slot.tm_name ?? "Unassigned"}
         </div>
+
+        {/* Tasks */}
+        {regularTasks.length > 0 && (
+          <ul className="flex flex-col gap-0.5 mt-1">
+            {regularTasks.map((t, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-[10.5px] text-gray-500 leading-snug">
+                <TaskDotIcon />
+                <span className="truncate">{t}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Coverage tasks */}
+        {coverageTasks.length > 0 && (
+          <div className={cn(
+            "flex flex-col gap-0.5 mt-1 pt-1",
+            regularTasks.length > 0 && "border-t border-gray-100"
+          )}>
+            {coverageTasks.map((t, i) => (
+              <div key={i} className="text-[10.5px] font-bold text-gray-700 text-center leading-snug">
+                {t}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      {slot.is_locked && (
-        <div title="Locked">
-          <svg width="11" height="11" viewBox="0 0 13 13" fill="none" className="text-[#C9A84C] shrink-0">
-            <rect x="2" y="6" width="9" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-        </div>
-      )}
+
+      {/* Avatar — top-aligned */}
       {slot.tm_initials && (
-        <div className="shrink-0">
+        <div className="shrink-0 self-start">
           <UserIcon initials={slot.tm_initials} />
         </div>
       )}
     </motion.div>
   );
 }
+
+// Keep RestroomPill as an alias so existing call-sites compile without changes
+const RestroomPill = SlotCard;
 
 
 // ── TM Picker Sheet ───────────────────────────────────────────────────────────
