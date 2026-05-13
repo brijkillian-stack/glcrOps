@@ -484,7 +484,7 @@ class PlacementService:
         await self.cache.set(key, rows, ttl=self.NIGHT_TTL)
         return rows
 
-    async def patch_overlap_tm(self, overlap_id: str, tm_id: Optional[str], task: Optional[str] = None) -> dict:
+    async def patch_overlap_tm(self, overlap_id: str, tm_id: Optional[str], task: Optional[str] = None, night_id: Optional[str] = None) -> dict:
         """Update the tm_id (and optionally task) on a single overlap_assignments row.
 
         Sets is_filled=True when tm_id is provided, False when clearing.
@@ -509,9 +509,12 @@ class PlacementService:
             log.warning("patch_overlap_tm(%s, %s) failed: %s", overlap_id, tm_id, exc)
             raise
 
-        night_id = row.get("night_id")
-        if night_id:
-            await self.cache.delete(f"zds:night:{night_id}:overlaps")
+        # night_id may come from the caller (URL path) or the returned row.
+        # Prefer the caller-supplied value because supabase .update() doesn't
+        # always return all columns, so row.get("night_id") can be None.
+        nid = night_id or row.get("night_id")
+        if nid:
+            await self.cache.delete(f"zds:night:{nid}:overlaps")
 
         return row
 

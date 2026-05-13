@@ -215,6 +215,7 @@ async def patch_overlap_assignment(
             overlap_id=overlap_id,
             tm_id=payload.tm_id,
             task=payload.task,
+            night_id=night_id,
         )
     except Exception as exc:
         log.exception("patch_overlap_tm(%s) raised", overlap_id)
