@@ -1782,7 +1782,7 @@ function TaskPickerSheet({ slot, nightId, onClose, onSaved }: TaskPickerSheetPro
   const { data: allTasks = [] } = useSWR(
     slot ? `forge:tasks:${slot.zone_type}` : null,
     () => fetchZoneTasks(slot!.zone_type),
-    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+    { revalidateOnFocus: true, dedupingInterval: 30_000 },
   );
 
   // Local selected state — initialised from slot.tasks when sheet opens

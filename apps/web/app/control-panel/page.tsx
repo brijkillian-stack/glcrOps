@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  */
 
 import { useState, useRef, useEffect } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { GlcrHeader } from "@/components/ui/GlcrHeader";
 import {
   fetchAllZoneTasks,
@@ -248,6 +248,16 @@ function TasksTab() {
     fetchAllZoneTasks,
     { revalidateOnFocus: true },
   );
+  const { mutate: globalMutate } = useSWRConfig();
+
+  /** Bust every "forge:tasks:*" key so the night page sees changes immediately. */
+  function bustTaskCache() {
+    globalMutate(
+      (key) => typeof key === "string" && key.startsWith("forge:tasks:"),
+      undefined,
+      { revalidate: true },
+    );
+  }
 
   const [filterCat,    setFilterCat]    = useState<string>("all");
   const [showInactive, setShowInactive] = useState(false);
@@ -322,6 +332,7 @@ function TasksTab() {
     try {
       await patchZoneTask(task.id, buildPatch(editState));
       await mutate();
+      bustTaskCache();
       setEditingId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -336,6 +347,7 @@ function TasksTab() {
     try {
       await deleteZoneTask(task.id);
       await mutate();
+      bustTaskCache();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -348,6 +360,7 @@ function TasksTab() {
     try {
       await patchZoneTask(task.id, { active: true });
       await mutate();
+      bustTaskCache();
     } finally {
       setSavingId(null);
     }
@@ -360,6 +373,7 @@ function TasksTab() {
     try {
       await createZoneTask(buildPatch(editState) as any);
       await mutate();
+      bustTaskCache();
       setEditState(EMPTY_EDIT);
       setAddingNew(false);
     } catch (err) {
@@ -406,7 +420,7 @@ function TasksTab() {
     // Persist — fire-and-forget, mutate to confirm
     setReordering(true);
     reorderZoneTasks(newOrder.map((t) => t.id))
-      .then(() => mutate())
+      .then(() => { mutate(); bustTaskCache(); })
       .catch((e) => setError(e.message))
       .finally(() => setReordering(false));
   }
