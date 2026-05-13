@@ -157,7 +157,7 @@ class PlanningService:
                 else:
                     sweeper_main_filled = True
 
-            # Fallback: also check the dedicated night_sweepers table
+            # Fallback 1: dedicated night_sweepers table
             # (populated by the manual Sweeper panel in the Daily Planner).
             if not (sweeper_main_filled and sweeper_sr_filled):
                 try:
@@ -173,6 +173,29 @@ class PlanningService:
                                 sweeper_sr_filled = True
                 except Exception as exc:
                     log.warning("sweeper fetch(%s) failed: %s", nid, exc)
+
+            # Fallback 2: scan custom_tasks arrays on filled zone assignments.
+            # Covers the common case where a TM was given a sweeper task via
+            # the task picker rather than through the dedicated Sweeper panel.
+            # SR sweeper: task name contains "sr" or "9/10" or "9 / 10".
+            # Main sweeper: any other task name containing "sweep".
+            if not (sweeper_main_filled and sweeper_sr_filled):
+                for a in assignments:
+                    if a.get("tm_id") in (None, "", "null"):
+                        continue
+                    for task in (a.get("custom_tasks") or []):
+                        t = task.lower().strip()
+                        if "sweep" not in t:
+                            continue
+                        is_sr = "sr" in t or "9/10" in t or "9 / 10" in t
+                        if is_sr:
+                            sweeper_sr_filled = True
+                        else:
+                            sweeper_main_filled = True
+                        if sweeper_main_filled and sweeper_sr_filled:
+                            break
+                    if sweeper_main_filled and sweeper_sr_filled:
+                        break
 
             # ── Night note ─────────────────────────────────────────────
             night_note = night.get("notes")

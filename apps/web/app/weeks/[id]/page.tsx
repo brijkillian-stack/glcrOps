@@ -573,7 +573,7 @@ function DayCard({
         }
       }
       setIsFlipped(true);
-    }, 2000);
+    }, 500);
   }
 
   function handleMouseLeave() {
@@ -617,60 +617,97 @@ function DayCard({
         }}
         className="rounded-3xl overflow-hidden flex flex-col bg-[#0F1E38] shadow-card"
       >
-        <div className="h-[5px] w-full shrink-0" style={{ backgroundColor: accentColor }} />
-        <div className="px-3 pt-3 pb-1 flex-1 overflow-y-auto">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">
-            {night.day_name} · Assignments
-          </div>
+        {/* Accent bar */}
+        <div className="h-[4px] w-full shrink-0" style={{ backgroundColor: accentColor }} />
+
+        {/* Header: day + fill stat */}
+        <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+            {night.day_name}
+          </span>
+          <span className="text-[10px] font-semibold tabular-nums"
+            style={{ color: accentColor }}>
+            {filledSlots.length} filled
+          </span>
+        </div>
+
+        {/* Scrollable assignment list */}
+        <div className="px-3 pt-2 pb-1 flex-1 overflow-y-auto space-y-2.5">
           {flipLoading ? (
-            <div className="flex items-center justify-center py-6">
+            <div className="flex items-center justify-center py-8">
               <div className="w-5 h-5 border-2 border-white/10 border-t-white/50 rounded-full animate-spin" />
             </div>
           ) : (
             <>
+              {/* Zones — 2-column grid */}
               {backZones.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Zones</div>
-                  {backZones.map(s => (
-                    <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
-                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
-                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
-                    </div>
-                  ))}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/60">Zones</span>
+                    <span className="text-[8px] text-white/25">{backZones.length}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {backZones.map(s => (
+                      <div key={s.slot_id} className="flex items-center gap-1 min-w-0">
+                        <span className="text-[8px] font-mono text-[#C9A84C]/40 shrink-0 w-5">{s.zone_id}</span>
+                        <span className="text-[10px] font-medium text-white/75 truncate leading-tight">
+                          {s.tm_name?.split(" ")[0] ?? "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Restrooms — 2-column grid */}
               {backRRs.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Restrooms</div>
-                  {backRRs.map(s => (
-                    <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
-                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
-                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
-                    </div>
-                  ))}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/60">Restrooms</span>
+                    <span className="text-[8px] text-white/25">{backRRs.length}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {backRRs.map(s => (
+                      <div key={s.slot_id} className="flex items-center gap-1 min-w-0">
+                        <span className="text-[8px] font-mono text-[#C9A84C]/40 shrink-0 w-9 leading-tight">{s.zone_id}</span>
+                        <span className="text-[10px] font-medium text-white/75 truncate leading-tight">
+                          {s.tm_name?.split(" ")[0] ?? "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Aux — single column (usually 1–2 items) */}
               {backAux.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/70 mb-1">Aux</div>
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-[#C9A84C]/60">Aux</span>
+                    <span className="text-[8px] text-white/25">{backAux.length}</span>
+                  </div>
                   {backAux.map(s => (
                     <div key={s.slot_id} className="flex items-center gap-1.5 py-0.5">
-                      <span className="text-[9px] font-mono text-white/30 w-7 shrink-0">{s.zone_id}</span>
-                      <span className="text-[11px] font-medium text-white/75 truncate">{s.tm_name}</span>
+                      <span className="text-[8px] font-mono text-[#C9A84C]/40 shrink-0 w-9">{s.zone_id}</span>
+                      <span className="text-[10px] font-medium text-white/75 truncate">
+                        {s.tm_name?.split(" ")[0] ?? "—"}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
+
               {!flipLoading && filledSlots.length === 0 && (
-                <p className="text-[11px] text-white/25 py-4 text-center">No assignments yet</p>
+                <p className="text-[11px] text-white/25 py-6 text-center">No assignments yet</p>
               )}
             </>
           )}
         </div>
+
         <button
           onClick={(e) => { e.stopPropagation(); onOpen(); }}
-          className="flex items-center justify-between px-4 py-3 border-t border-white/10
-                     text-[12px] font-semibold text-blue-400 hover:bg-white/5
+          className="flex items-center justify-between px-4 py-2.5 border-t border-white/10
+                     text-[11px] font-semibold text-blue-400 hover:bg-white/5
                      transition-colors no-select shrink-0"
         >
           <span>Open Planner</span>
