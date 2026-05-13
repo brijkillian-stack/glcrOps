@@ -6,6 +6,7 @@
 
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9   # required by FastAPI UploadFile/File at startup (0.112+)
 supabase>=2.4.0
 redis>=5.0.0
 python-dotenv>=1.0.0
