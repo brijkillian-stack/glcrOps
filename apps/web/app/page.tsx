@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 "use client";
 
 export const dynamic = 'force-dynamic';
@@ -243,3 +244,13 @@ function relativeTime(iso: string): string {
   if (m < 2) return "Just now"; if (m < 60) return `${m}m ago`; if (h < 24) return `${h}h ago`; if (d < 7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+=======
+interface WeekRowProps {
+  week: WeekRow;
+  index: number;
+  onOpen: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  onLongPressStart: (e: React.PointerEvent) => void;
+  onLongPressEnd: () => void;
+}
+>>>>>>> 9ba3991668b0d95ad13421366013a2c561d95c83
